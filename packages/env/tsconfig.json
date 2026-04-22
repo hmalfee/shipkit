@@ -1,0 +1,3 @@
+{
+  "extends": "@edumark/config/tsconfig.base.json"
+}

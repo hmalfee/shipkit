@@ -1,0 +1,32 @@
+{
+  "name": "edumark",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "type": "module",
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "check-types": "turbo check-types",
+    "dev:web": "turbo -F web dev",
+    "dev:server": "turbo -F server dev",
+    "db:push": "turbo -F @edumark/db db:push",
+    "db:studio": "turbo -F @edumark/db db:studio",
+    "db:generate": "turbo -F @edumark/db db:generate",
+    "db:migrate": "turbo -F @edumark/db db:migrate"
+  },
+  "dependencies": {
+    "@edumark/env": "workspace:*",
+    "dotenv": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@edumark/config": "workspace:*",
+    "@types/node": "^22.13.14",
+    "turbo": "^2.8.12",
+    "typescript": "catalog:"
+  },
+  "packageManager": "pnpm@10.32.1"
+}
