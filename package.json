@@ -11,6 +11,7 @@
     "build": "turbo build",
     "check-types": "turbo check-types",
     "dev:web": "turbo -F web dev",
+    "predev:server": "turbo -F server predev",
     "dev:server": "turbo -F server dev",
     "db:push": "turbo -F @edumark/db db:push",
     "db:studio": "turbo -F @edumark/db db:studio",

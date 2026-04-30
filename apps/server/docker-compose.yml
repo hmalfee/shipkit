@@ -1,0 +1,15 @@
+services:
+  db:
+    image: postgres:latest
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      # NOTE: Mount to the parent directory, not /data
+      - db_data:/var/lib/postgresql
+
+volumes:
+  db_data:
