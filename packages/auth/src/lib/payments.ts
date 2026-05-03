@@ -1,4 +1,4 @@
-import { env } from "@edumark/env/server";
+import { env } from "@mento-mark/env/server";
 import { Polar } from "@polar-sh/sdk";
 
 export const polarClient = new Polar({

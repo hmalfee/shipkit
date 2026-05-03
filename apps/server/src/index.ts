@@ -1,5 +1,5 @@
-import { auth } from "@edumark/auth";
-import { env } from "@edumark/env/server";
+import { auth } from "@mento-mark/auth";
+import { env } from "@mento-mark/env/server";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";

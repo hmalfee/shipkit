@@ -8,9 +8,9 @@
     "start": "next start"
   },
   "dependencies": {
-    "@edumark/auth": "workspace:*",
-    "@edumark/env": "workspace:*",
-    "@edumark/ui": "workspace:*",
+    "@mento-mark/auth": "workspace:*",
+    "@mento-mark/env": "workspace:*",
+    "@mento-mark/ui": "workspace:*",
     "@polar-sh/better-auth": "catalog:",
     "@tanstack/react-form": "^1.28.0",
     "babel-plugin-react-compiler": "^1.0.0",
@@ -25,7 +25,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@edumark/config": "workspace:*",
+    "@mento-mark/config": "workspace:*",
     "@tailwindcss/postcss": "^4.1.18",
     "@types/node": "^20",
     "@types/react": "catalog:",

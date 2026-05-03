@@ -1,5 +1,5 @@
 {
-  "name": "@edumark/auth",
+  "name": "@mento-mark/auth",
   "type": "module",
   "exports": {
     ".": {
@@ -11,8 +11,8 @@
   },
   "scripts": {},
   "dependencies": {
-    "@edumark/db": "workspace:*",
-    "@edumark/env": "workspace:*",
+    "@mento-mark/db": "workspace:*",
+    "@mento-mark/env": "workspace:*",
     "@polar-sh/better-auth": "catalog:",
     "@polar-sh/sdk": "^0.42.2",
     "better-auth": "catalog:",
@@ -20,7 +20,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@edumark/config": "workspace:*",
+    "@mento-mark/config": "workspace:*",
     "typescript": "catalog:"
   }
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { Toaster } from "@edumark/ui/components/sonner";
+import { Toaster } from "@mento-mark/ui/components/sonner";
 
 import { ThemeProvider } from "./theme-provider";
 

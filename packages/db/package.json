@@ -1,5 +1,5 @@
 {
-  "name": "@edumark/db",
+  "name": "@mento-mark/db",
   "type": "module",
   "exports": {
     ".": {
@@ -16,14 +16,14 @@
     "db:migrate": "drizzle-kit migrate"
   },
   "dependencies": {
-    "@edumark/env": "workspace:*",
+    "@mento-mark/env": "workspace:*",
     "dotenv": "catalog:",
     "drizzle-orm": "^0.45.1",
     "pg": "^8.17.1",
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@edumark/config": "workspace:*",
+    "@mento-mark/config": "workspace:*",
     "@types/pg": "^8.16.0",
     "drizzle-kit": "^0.31.8",
     "typescript": "catalog:"

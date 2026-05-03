@@ -1,4 +1,4 @@
-import { env } from "@edumark/env/web";
+import { env } from "@mento-mark/env/web";
 import { polarClient } from "@polar-sh/better-auth";
 import { createAuthClient } from "better-auth/react";
 

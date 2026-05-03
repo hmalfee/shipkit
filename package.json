@@ -1,5 +1,5 @@
 {
-  "name": "edumark",
+  "name": "mento-mark",
   "private": true,
   "workspaces": [
     "apps/*",
@@ -13,18 +13,18 @@
     "dev:web": "turbo -F web dev",
     "predev:server": "turbo -F server predev",
     "dev:server": "turbo -F server dev",
-    "db:push": "turbo -F @edumark/db db:push",
-    "db:studio": "turbo -F @edumark/db db:studio",
-    "db:generate": "turbo -F @edumark/db db:generate",
-    "db:migrate": "turbo -F @edumark/db db:migrate"
+    "db:push": "turbo -F @mento-mark/db db:push",
+    "db:studio": "turbo -F @mento-mark/db db:studio",
+    "db:generate": "turbo -F @mento-mark/db db:generate",
+    "db:migrate": "turbo -F @mento-mark/db db:migrate"
   },
   "dependencies": {
-    "@edumark/env": "workspace:*",
+    "@mento-mark/env": "workspace:*",
     "dotenv": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@edumark/config": "workspace:*",
+    "@mento-mark/config": "workspace:*",
     "@types/node": "^22.13.14",
     "turbo": "^2.8.12",
     "typescript": "catalog:"

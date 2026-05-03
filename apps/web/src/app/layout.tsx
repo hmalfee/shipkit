@@ -16,8 +16,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "edumark",
-  description: "edumark",
+  title: "MentoMark",
+  description: "MentoMark",
 };
 
 export default function RootLayout({

@@ -1,5 +1,5 @@
 "use client";
-import { Button } from "@edumark/ui/components/button";
+import { Button } from "@mento-mark/ui/components/button";
 
 import { authClient } from "@/lib/auth-client";
 

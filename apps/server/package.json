@@ -11,9 +11,9 @@
     "start": "node dist/index.mjs"
   },
   "dependencies": {
-    "@edumark/auth": "workspace:*",
-    "@edumark/db": "workspace:*",
-    "@edumark/env": "workspace:*",
+    "@mento-mark/auth": "workspace:*",
+    "@mento-mark/db": "workspace:*",
+    "@mento-mark/env": "workspace:*",
     "@hono/node-server": "^1.14.4",
     "better-auth": "catalog:",
     "dotenv": "catalog:",
@@ -21,7 +21,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@edumark/config": "workspace:*",
+    "@mento-mark/config": "workspace:*",
     "@types/node": "^22.13.14",
     "tsdown": "^0.21.9",
     "tsx": "^4.19.2",

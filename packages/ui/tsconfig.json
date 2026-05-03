@@ -1,10 +1,10 @@
 {
-  "extends": "@edumark/config/tsconfig.base.json",
+  "extends": "@mento-mark/config/tsconfig.base.json",
   "compilerOptions": {
     "jsx": "react-jsx",
     "lib": ["ESNext", "DOM", "DOM.Iterable"],
     "paths": {
-      "@edumark/ui/*": ["./src/*"]
+      "@mento-mark/ui/*": ["./src/*"]
     }
   },
   "include": ["src/**/*.ts", "src/**/*.tsx"],

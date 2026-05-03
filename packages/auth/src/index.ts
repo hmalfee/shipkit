@@ -1,6 +1,6 @@
-import { createDb } from "@edumark/db";
-import * as schema from "@edumark/db/schema/auth";
-import { env } from "@edumark/env/server";
+import { createDb } from "@mento-mark/db";
+import * as schema from "@mento-mark/db/schema/auth";
+import { env } from "@mento-mark/env/server";
 import { polar, checkout, portal } from "@polar-sh/better-auth";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";

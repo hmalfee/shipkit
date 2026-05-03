@@ -12,11 +12,11 @@
   },
   "iconLibrary": "lucide",
   "aliases": {
-    "components": "@edumark/ui/components",
-    "utils": "@edumark/ui/lib/utils",
-    "hooks": "@edumark/ui/hooks",
-    "lib": "@edumark/ui/lib",
-    "ui": "@edumark/ui/components"
+    "components": "@mento-mark/ui/components",
+    "utils": "@mento-mark/ui/lib/utils",
+    "hooks": "@mento-mark/ui/hooks",
+    "lib": "@mento-mark/ui/lib",
+    "ui": "@mento-mark/ui/components"
   },
   "menuColor": "default",
   "menuAccent": "subtle",

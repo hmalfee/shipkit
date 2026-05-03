@@ -1,6 +1,6 @@
-import { Button } from "@edumark/ui/components/button";
-import { Input } from "@edumark/ui/components/input";
-import { Label } from "@edumark/ui/components/label";
+import { Button } from "@mento-mark/ui/components/button";
+import { Input } from "@mento-mark/ui/components/input";
+import { Label } from "@mento-mark/ui/components/label";
 import { useForm } from "@tanstack/react-form";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";

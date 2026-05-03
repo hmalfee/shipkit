@@ -50,7 +50,7 @@ importers:
 
   .:
     dependencies:
-      '@edumark/env':
+      '@mento-mark/env':
         specifier: workspace:*
         version: link:packages/env
       dotenv:
@@ -60,7 +60,7 @@ importers:
         specifier: 'catalog:'
         version: 4.3.6
     devDependencies:
-      '@edumark/config':
+      '@mento-mark/config':
         specifier: workspace:*
         version: link:packages/config
       '@types/node':
@@ -75,13 +75,13 @@ importers:
 
   apps/server:
     dependencies:
-      '@edumark/auth':
+      '@mento-mark/auth':
         specifier: workspace:*
         version: link:../../packages/auth
-      '@edumark/db':
+      '@mento-mark/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@edumark/env':
+      '@mento-mark/env':
         specifier: workspace:*
         version: link:../../packages/env
       '@hono/node-server':
@@ -100,7 +100,7 @@ importers:
         specifier: 'catalog:'
         version: 4.3.6
     devDependencies:
-      '@edumark/config':
+      '@mento-mark/config':
         specifier: workspace:*
         version: link:../../packages/config
       '@types/node':
@@ -118,13 +118,13 @@ importers:
 
   apps/web:
     dependencies:
-      '@edumark/auth':
+      '@mento-mark/auth':
         specifier: workspace:*
         version: link:../../packages/auth
-      '@edumark/env':
+      '@mento-mark/env':
         specifier: workspace:*
         version: link:../../packages/env
-      '@edumark/ui':
+      '@mento-mark/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       '@polar-sh/better-auth':
@@ -164,7 +164,7 @@ importers:
         specifier: 'catalog:'
         version: 4.3.6
     devDependencies:
-      '@edumark/config':
+      '@mento-mark/config':
         specifier: workspace:*
         version: link:../../packages/config
       '@tailwindcss/postcss':
@@ -188,10 +188,10 @@ importers:
 
   packages/auth:
     dependencies:
-      '@edumark/db':
+      '@mento-mark/db':
         specifier: workspace:*
         version: link:../db
-      '@edumark/env':
+      '@mento-mark/env':
         specifier: workspace:*
         version: link:../env
       '@polar-sh/better-auth':
@@ -210,7 +210,7 @@ importers:
         specifier: 'catalog:'
         version: 4.3.6
     devDependencies:
-      '@edumark/config':
+      '@mento-mark/config':
         specifier: workspace:*
         version: link:../config
       typescript:
@@ -221,7 +221,7 @@ importers:
 
   packages/db:
     dependencies:
-      '@edumark/env':
+      '@mento-mark/env':
         specifier: workspace:*
         version: link:../env
       dotenv:
@@ -237,7 +237,7 @@ importers:
         specifier: 'catalog:'
         version: 4.3.6
     devDependencies:
-      '@edumark/config':
+      '@mento-mark/config':
         specifier: workspace:*
         version: link:../config
       '@types/pg':
@@ -265,7 +265,7 @@ importers:
         specifier: 'catalog:'
         version: 4.3.6
     devDependencies:
-      '@edumark/config':
+      '@mento-mark/config':
         specifier: workspace:*
         version: link:../config
       '@types/node':
@@ -311,7 +311,7 @@ importers:
         specifier: ^1.3.4
         version: 1.4.0
     devDependencies:
-      '@edumark/config':
+      '@mento-mark/config':
         specifier: workspace:*
         version: link:../config
       '@types/react':

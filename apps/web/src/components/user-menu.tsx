@@ -1,4 +1,4 @@
-import { Button } from "@edumark/ui/components/button";
+import { Button } from "@mento-mark/ui/components/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -7,8 +7,8 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@edumark/ui/components/dropdown-menu";
-import { Skeleton } from "@edumark/ui/components/skeleton";
+} from "@mento-mark/ui/components/dropdown-menu";
+import { Skeleton } from "@mento-mark/ui/components/skeleton";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 

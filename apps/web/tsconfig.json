@@ -21,7 +21,7 @@
     ],
     "paths": {
       "@/*": ["./src/*"],
-      "@edumark/ui/*": ["../../packages/ui/src/*"]
+      "@mento-mark/ui/*": ["../../packages/ui/src/*"]
     }
   },
   "include": [

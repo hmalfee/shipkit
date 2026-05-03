@@ -1,4 +1,4 @@
-import "@edumark/env/web";
+import "@mento-mark/env/web";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {

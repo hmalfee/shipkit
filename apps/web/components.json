@@ -13,8 +13,8 @@
   "iconLibrary": "lucide",
   "aliases": {
     "components": "@/components",
-    "utils": "@edumark/ui/lib/utils",
-    "ui": "@edumark/ui/components",
+    "utils": "@mento-mark/ui/lib/utils",
+    "ui": "@mento-mark/ui/components",
     "lib": "@/lib",
     "hooks": "@/hooks"
   },
