@@ -1,0 +1,7 @@
+{{#if (isApp type)}}
+console.log('Hello from {{name}} app!');
+{{else}}
+export const hello = () => {
+    return 'Hello from @mento-mark/{{name}}';
+};
+{{/if}}

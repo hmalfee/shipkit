@@ -1,0 +1,29 @@
+services:
+    postgres:
+        image: postgres:latest
+        command: postgres -c log_statement=all
+        environment:
+            - POSTGRES_USER=postgres
+            - POSTGRES_PASSWORD=password
+            - POSTGRES_DB=postgres
+        ports:
+            - '${POSTGRES_PORT}:5432'
+        volumes:
+            - postgres_data:/var/lib/postgresql
+        healthcheck:
+            test: ['CMD-SHELL', 'pg_isready -U postgres -d postgres']
+            interval: 2s
+            timeout: 5s
+            retries: 20
+
+    redis:
+        image: redis:latest
+        restart: always
+        ports:
+            - '${REDIS_PORT}:6379'
+        volumes:
+            - redis_data:/data
+
+volumes:
+    postgres_data:
+    redis_data:

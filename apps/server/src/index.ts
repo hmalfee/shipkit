@@ -1,36 +1,41 @@
-import { auth } from "@mento-mark/auth";
-import { env } from "@mento-mark/env/server";
-import { Hono } from "hono";
-import { cors } from "hono/cors";
-import { logger } from "hono/logger";
+import './instrument';
+
+import { serve } from '@hono/node-server';
+import { Hono } from 'hono';
+import { cors } from 'hono/cors';
+
+import { logger } from '@mento-mark/telemetry/logger';
+import { telemetry } from '@mento-mark/telemetry/middleware/hono';
+
+import { orpc } from './api/handler';
+import { env } from './env';
 
 const app = new Hono();
 
-app.use(logger());
-app.use(
-  "/*",
-  cors({
-    origin: env.CORS_ORIGIN,
-    allowMethods: ["GET", "POST", "OPTIONS"],
-    allowHeaders: ["Content-Type", "Authorization"],
-    credentials: true,
-  }),
+const allowedOrigins = Array.from(
+    Object.entries(env).filter(([key]) => key.endsWith('_PORT')),
+    ([, port]) => `http://localhost:${port as number}`,
 );
 
-app.on(["POST", "GET"], "/api/auth/*", (c) => auth.handler(c.req.raw));
+app.use(telemetry());
+app.use(
+    '/*',
+    cors({
+        origin: allowedOrigins,
+        allowMethods: ['GET', 'POST', 'DELETE', 'PUT', 'PATCH'],
+        allowHeaders: ['Content-Type', 'Authorization'],
+        credentials: true,
+    }),
+);
 
-app.get("/", (c) => {
-  return c.text("OK");
-});
-
-import { serve } from "@hono/node-server";
+app.use('*', orpc());
 
 serve(
-  {
-    fetch: app.fetch,
-    port: 3000,
-  },
-  (info) => {
-    console.log(`Server is running on http://localhost:${info.port}`);
-  },
+    {
+        fetch: app.fetch,
+        port: env.SERVER_PORT,
+    },
+    (info) => {
+        logger.info(`Server is running on http://localhost:${info.port}`);
+    },
 );

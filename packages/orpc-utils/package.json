@@ -1,0 +1,27 @@
+{
+    "name": "@mento-mark/orpc-utils",
+    "private": true,
+    "type": "module",
+    "exports": {
+        "./contract": "./src/contract/index.ts",
+        "./query": "./src/query/index.ts",
+        "./query/react": "./src/query/react/index.ts"
+    },
+    "scripts": {
+        "typecheck": "tsc"
+    },
+    "dependencies": {
+        "@orpc/client": "catalog:",
+        "@orpc/contract": "catalog:",
+        "@orpc/openapi-client": "catalog:",
+        "@orpc/tanstack-query": "catalog:",
+        "@tanstack/react-query": "catalog:",
+        "react": "catalog:",
+        "zod": "catalog:"
+    },
+    "devDependencies": {
+        "@mento-mark/ts-config": "workspace:*",
+        "@types/react": "catalog:",
+        "typescript": "catalog:"
+    }
+}

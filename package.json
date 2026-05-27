@@ -1,33 +1,44 @@
 {
-  "name": "mento-mark",
-  "private": true,
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
-  "type": "module",
-  "scripts": {
-    "dev": "turbo dev",
-    "build": "turbo build",
-    "check-types": "turbo check-types",
-    "dev:web": "turbo -F web dev",
-    "predev:server": "turbo -F server predev",
-    "dev:server": "turbo -F server dev",
-    "db:push": "turbo -F @mento-mark/db db:push",
-    "db:studio": "turbo -F @mento-mark/db db:studio",
-    "db:generate": "turbo -F @mento-mark/db db:generate",
-    "db:migrate": "turbo -F @mento-mark/db db:migrate"
-  },
-  "dependencies": {
-    "@mento-mark/env": "workspace:*",
-    "dotenv": "catalog:",
-    "zod": "catalog:"
-  },
-  "devDependencies": {
-    "@mento-mark/config": "workspace:*",
-    "@types/node": "^22.13.14",
-    "turbo": "^2.8.12",
-    "typescript": "catalog:"
-  },
-  "packageManager": "pnpm@10.32.1"
+    "name": "mento-mark",
+    "type": "module",
+    "workspaces": [
+        "apps/*",
+        "packages/*",
+        "tooling/*"
+    ],
+    "scripts": {
+        "build": "turbo build",
+        "check": "pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run knip",
+        "clean": "git clean -xdf .cache .turbo node_modules -e .env -e .env.*",
+        "clean:full": "turbo run clean",
+        "dev": "turbo dev",
+        "format": "prettier --write .",
+        "format:check": "prettier --check .",
+        "generate": "turbo gen create",
+        "knip": "knip",
+        "lint": "oxlint .",
+        "typecheck": "turbo run typecheck"
+    },
+    "prettier": "@mento-mark/prettier-config",
+    "dependencies": {
+        "@mento-mark/shared": "workspace:*",
+        "zod": "catalog:"
+    },
+    "devDependencies": {
+        "@mento-mark/oxlint-config": "workspace:*",
+        "@mento-mark/prettier-config": "workspace:*",
+        "@mento-mark/ts-config": "workspace:*",
+        "@turbo/gen": "^2.9.8",
+        "@types/node": "^22.13.14",
+        "knip": "^6.12.0",
+        "oxlint": "^1.62.0",
+        "prettier": "^3.8.3",
+        "turbo": "^2.8.12",
+        "typescript": "catalog:"
+    },
+    "packageManager": "pnpm@10.32.1",
+    "engines": {
+        "node": "22.x",
+        "pnpm": "10.x"
+    }
 }

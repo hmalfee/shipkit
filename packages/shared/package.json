@@ -1,0 +1,21 @@
+{
+    "name": "@mento-mark/shared",
+    "type": "module",
+    "exports": {
+        "./orpc": "./src/orpc/index.ts",
+        "./constants": "./src/constants.ts"
+    },
+    "scripts": {
+        "clean": "git clean -xdf .cache .turbo node_modules",
+        "typecheck": "tsc"
+    },
+    "dependencies": {
+        "@mento-mark/orpc-utils": "workspace:*",
+        "@orpc/contract": "catalog:"
+    },
+    "devDependencies": {
+        "@mento-mark/ts-config": "workspace:*",
+        "better-auth": "catalog:",
+        "typescript": "catalog:"
+    }
+}

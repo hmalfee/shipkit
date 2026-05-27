@@ -1,3 +1,3 @@
 {
-  "extends": "@mento-mark/config/tsconfig.base.json"
+    "extends": "@mento-mark/ts-config/base"
 }

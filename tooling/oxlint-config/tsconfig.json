@@ -1,0 +1,4 @@
+{
+    "extends": "@mento-mark/ts-config/base",
+    "include": ["base.ts", "next.ts"]
+}

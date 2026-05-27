@@ -1,0 +1,9 @@
+{
+    "name": "@mento-mark/ts-config",
+    "exports": {
+        "./base": "./base.json"
+    },
+    "scripts": {
+        "clean": "git clean -xdf .cache .turbo node_modules -e .env -e .env.*"
+    }
+}

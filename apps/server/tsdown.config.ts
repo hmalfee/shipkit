@@ -1,9 +1,11 @@
-import { defineConfig } from "tsdown";
+import { defineConfig } from 'tsdown';
 
 export default defineConfig({
-  entry: "./src/index.ts",
-  format: "esm",
-  outDir: "./dist",
-  clean: true,
-  noExternal: [/@mento-mark\/.*/],
+    entry: './src/index.ts',
+    outDir: './dist',
+    deps: {
+        alwaysBundle: [/@mento-mark\/.*/],
+    },
+    sourcemap: true,
+    minify: true,
 });

@@ -1,21 +1,17 @@
 {
-  "name": "@mento-mark/env",
-  "version": "0.0.0",
-  "private": true,
-  "type": "module",
-  "exports": {
-    "./server": "./src/server.ts",
-    "./web": "./src/web.ts"
-  },
-  "dependencies": {
-    "@t3-oss/env-core": "^0.13.1",
-    "@t3-oss/env-nextjs": "^0.13.1",
-    "dotenv": "catalog:",
-    "zod": "catalog:"
-  },
-  "devDependencies": {
-    "@mento-mark/config": "workspace:*",
-    "@types/node": "^22.13.14",
-    "typescript": "catalog:"
-  }
+    "name": "@mento-mark/env",
+    "type": "module",
+    "exports": {
+        "./base": "./src/base.ts",
+        "./next": "./src/next.ts",
+        "./types": "./src/types.ts"
+    },
+    "scripts": {
+        "clean": "git clean -xdf .cache .turbo node_modules -e .env -e .env.*",
+        "typecheck": "tsc"
+    },
+    "dependencies": {
+        "@t3-oss/env-core": "^0.13.1",
+        "dotenv": "catalog:"
+    }
 }

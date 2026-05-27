@@ -1,36 +1,36 @@
 {
-  "name": "web",
-  "version": "0.1.0",
-  "private": true,
-  "scripts": {
-    "dev": "next dev --port 3001",
-    "build": "next build",
-    "start": "next start"
-  },
-  "dependencies": {
-    "@mento-mark/auth": "workspace:*",
-    "@mento-mark/env": "workspace:*",
-    "@mento-mark/ui": "workspace:*",
-    "@polar-sh/better-auth": "catalog:",
-    "@tanstack/react-form": "^1.28.0",
-    "babel-plugin-react-compiler": "^1.0.0",
-    "better-auth": "catalog:",
-    "dotenv": "catalog:",
-    "lucide-react": "catalog:",
-    "next": "^16.2.0",
-    "next-themes": "catalog:",
-    "react": "catalog:",
-    "react-dom": "catalog:",
-    "sonner": "catalog:",
-    "zod": "catalog:"
-  },
-  "devDependencies": {
-    "@mento-mark/config": "workspace:*",
-    "@tailwindcss/postcss": "^4.1.18",
-    "@types/node": "^20",
-    "@types/react": "catalog:",
-    "@types/react-dom": "catalog:",
-    "tailwindcss": "catalog:",
-    "typescript": "catalog:"
-  }
+    "name": "web",
+    "type": "module",
+    "scripts": {
+        "build": "next build",
+        "clean": "git clean -xdf .cache .turbo node_modules .next -e .env -e .env.*",
+        "dev": "ports exec -- next dev --port \\$WEB_PORT",
+        "start": "ports exec -- next start --port \\$WEB_PORT",
+        "typecheck": "tsc"
+    },
+    "dependencies": {
+        "@mento-mark/auth": "workspace:*",
+        "@mento-mark/env": "workspace:*",
+        "@mento-mark/orpc-utils": "workspace:*",
+        "@mento-mark/ui": "workspace:*",
+        "@tanstack/react-form": "^1.32.0",
+        "@tanstack/react-query": "catalog:",
+        "@tanstack/react-query-devtools": "catalog:",
+        "babel-plugin-react-compiler": "^1.0.0",
+        "lucide-react": "catalog:",
+        "next": "^16.2.0",
+        "next-themes": "catalog:",
+        "react": "catalog:",
+        "react-dom": "catalog:",
+        "sonner": "catalog:",
+        "zod": "catalog:"
+    },
+    "devDependencies": {
+        "@mento-mark/ports": "workspace:*",
+        "@tailwindcss/postcss": "^4.1.18",
+        "@types/react": "catalog:",
+        "@types/react-dom": "catalog:",
+        "server-only": "^0.0.1",
+        "tailwindcss": "catalog:"
+    }
 }

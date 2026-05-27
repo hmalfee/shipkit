@@ -1,26 +1,24 @@
 {
-  "name": "@mento-mark/auth",
-  "type": "module",
-  "exports": {
-    ".": {
-      "default": "./src/index.ts"
+    "name": "@mento-mark/auth",
+    "type": "module",
+    "exports": {
+        ".": "./src/index.ts",
+        "./orpc": "./src/orpc.ts"
     },
-    "./*": {
-      "default": "./src/*.ts"
+    "scripts": {
+        "auth:generate": "SKIP_ENV_VALIDATION=1 pnpx @better-auth/cli@latest generate --config ./src/index.ts --output ./src/auth.temp.ts --yes",
+        "clean": "git clean -xdf .cache .turbo node_modules src/auth.temp.ts -e .env -e .env.*",
+        "typecheck": "tsc"
+    },
+    "dependencies": {
+        "@better-auth/redis-storage": "^1.6.11",
+        "@mento-mark/env": "workspace:*",
+        "better-auth": "catalog:"
+    },
+    "devDependencies": {
+        "@mento-mark/ts-config": "workspace:*",
+        "drizzle-orm": "^0.45.2",
+        "ioredis": "^5.10.1",
+        "typescript": "catalog:"
     }
-  },
-  "scripts": {},
-  "dependencies": {
-    "@mento-mark/db": "workspace:*",
-    "@mento-mark/env": "workspace:*",
-    "@polar-sh/better-auth": "catalog:",
-    "@polar-sh/sdk": "^0.42.2",
-    "better-auth": "catalog:",
-    "dotenv": "catalog:",
-    "zod": "catalog:"
-  },
-  "devDependencies": {
-    "@mento-mark/config": "workspace:*",
-    "typescript": "catalog:"
-  }
 }

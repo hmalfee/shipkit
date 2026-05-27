@@ -1,0 +1,6 @@
+{
+    "extends": "@mento-mark/ts-config/base",
+    "compilerOptions": {
+        "jsx": "react-jsx"
+    }
+}

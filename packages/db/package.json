@@ -1,31 +1,32 @@
 {
-  "name": "@mento-mark/db",
-  "type": "module",
-  "exports": {
-    ".": {
-      "default": "./src/index.ts"
+    "name": "@mento-mark/db",
+    "type": "module",
+    "exports": {
+        "./pg": "./src/pg/index.ts",
+        "./pg/schema": "./src/pg/schema/index.ts",
+        "./redis": "./src/redis/index.ts"
     },
-    "./*": {
-      "default": "./src/*.ts"
+    "scripts": {
+        "clean": "git clean -xdf .cache .turbo node_modules -e .env -e .env.*",
+        "db:generate": "drizzle-kit generate",
+        "db:migrate": "drizzle-kit migrate",
+        "db:push": "drizzle-kit push",
+        "predev": "ports compose up -d --wait",
+        "dev": "pnpm db:push",
+        "studio:postgres": "drizzle-kit studio",
+        "studio:redis": "pnpx redis-commander",
+        "typecheck": "tsc"
+    },
+    "dependencies": {
+        "@mento-mark/env": "workspace:*",
+        "@mento-mark/telemetry": "workspace:*",
+        "drizzle-orm": "^0.45.1",
+        "ioredis": "^5.10.1",
+        "pg": "^8.17.1"
+    },
+    "devDependencies": {
+        "@mento-mark/ports": "workspace:*",
+        "@types/pg": "^8.16.0",
+        "drizzle-kit": "^0.31.8"
     }
-  },
-  "scripts": {
-    "db:push": "drizzle-kit push",
-    "db:generate": "drizzle-kit generate",
-    "db:studio": "drizzle-kit studio",
-    "db:migrate": "drizzle-kit migrate"
-  },
-  "dependencies": {
-    "@mento-mark/env": "workspace:*",
-    "dotenv": "catalog:",
-    "drizzle-orm": "^0.45.1",
-    "pg": "^8.17.1",
-    "zod": "catalog:"
-  },
-  "devDependencies": {
-    "@mento-mark/config": "workspace:*",
-    "@types/pg": "^8.16.0",
-    "drizzle-kit": "^0.31.8",
-    "typescript": "catalog:"
-  }
 }

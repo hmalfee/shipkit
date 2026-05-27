@@ -1,12 +1,10 @@
 {
-  "extends": "@mento-mark/config/tsconfig.base.json",
-  "compilerOptions": {
-    "composite": true,
-    "outDir": "dist",
-    "paths": {
-      "@/*": ["./src/*"]
-    },
-    "jsx": "react-jsx",
-    "jsxImportSource": "hono/jsx"
-  }
+    "extends": "@mento-mark/ts-config/base",
+    "compilerOptions": {
+        "paths": {
+            "@/*": ["./src/*"]
+        },
+        "jsx": "react-jsx",
+        "jsxImportSource": "hono/jsx"
+    }
 }

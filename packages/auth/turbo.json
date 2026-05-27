@@ -1,0 +1,6 @@
+{
+    "extends": ["//"],
+    "tasks": {
+        "auth:generate": { "cache": false }
+    }
+}

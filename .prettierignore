@@ -1,0 +1,14 @@
+# Lockfiles (tracked by git, but don't format)
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
+
+# Auto-generated changelogs
+CHANGELOG.md
+
+# Minified files
+*.min.js
+*.min.css
+
+# Exlude turbo generator's hbs files
+turbo/generators/**/*.hbs

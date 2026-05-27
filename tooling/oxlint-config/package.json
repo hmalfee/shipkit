@@ -1,0 +1,17 @@
+{
+    "name": "@mento-mark/oxlint-config",
+    "type": "module",
+    "exports": {
+        "./base": "./base.ts",
+        "./next": "./next.ts"
+    },
+    "scripts": {
+        "clean": "git clean -xdf .cache .turbo node_modules -e .env -e .env.*",
+        "typecheck": "tsc"
+    },
+    "dependencies": {
+        "eslint-plugin-react": "^7.37.5",
+        "oxlint-plugin-eslint": "^1.62.0",
+        "oxlint-tsgolint": "^0.22.1"
+    }
+}
