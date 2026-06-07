@@ -61,4 +61,5 @@ coverage/
 .vercel
 .netlify
 
+next-env.d.ts
 repomix-output.md
