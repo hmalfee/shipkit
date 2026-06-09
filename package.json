@@ -16,7 +16,7 @@
         "format:check": "prettier --check .",
         "generate": "turbo gen create",
         "knip": "knip",
-        "lint": "oxlint .",
+        "lint": "oxlint . --deny-warnings",
         "typecheck": "turbo run typecheck"
     },
     "prettier": "@mento-mark/prettier-config",
