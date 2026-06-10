@@ -6,9 +6,9 @@ import AuthForm from './auth-form';
 import TodoList from './todo-list';
 
 export default function PageContent() {
-    const { data, isLoading } = api.auth.me.useQuery();
+    const { data, isPending } = api.auth.me.useQuery();
 
-    if (isLoading) {
+    if (isPending) {
         return (
             <p className="text-muted-foreground text-center text-sm">
                 Loading...

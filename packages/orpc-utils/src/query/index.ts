@@ -1,3 +1,3 @@
 export { default as createFetchClient } from './fetch';
 
-export { isDefinedError } from '@orpc/client';
+export { isDefinedError, ORPCError } from '@orpc/client';

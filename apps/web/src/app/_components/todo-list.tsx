@@ -2,7 +2,6 @@
 
 import { useForm } from '@tanstack/react-form';
 import { useState } from 'react';
-import { toast } from 'sonner';
 
 import { Button } from '@mento-mark/ui/components/button';
 import { Field, FieldError } from '@mento-mark/ui/components/field';
@@ -15,7 +14,6 @@ function AddTodoForm() {
 
     const create = api.todo.create.useMutation({
         onSuccess: () => void utils.todo.list.invalidateQuery(),
-        onError: (err: Error) => toast.error(err.message),
     });
 
     const form = useForm({
@@ -75,12 +73,10 @@ export default function TodoList() {
             void utils.todo.list.invalidateQuery();
             setEditingId(null);
         },
-        onError: (err: Error) => toast.error(err.message),
     });
 
     const remove = api.todo.delete.useMutation({
         onSuccess: () => void utils.todo.list.invalidateQuery(),
-        onError: (err: Error) => toast.error(err.message),
     });
 
     function handleToggle(id: string, completed: boolean) {

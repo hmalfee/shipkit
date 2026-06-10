@@ -17,11 +17,12 @@ function SignInForm() {
     const utils = useUtils();
 
     const signIn = useMutation({
-        onSuccess: () => {
+        onSuccess: (data) => {
             void utils.auth.me.invalidateQuery();
-            toast.success('Signed in');
+            toast.success(
+                'Welcome back, ' + data.body.name.split(' ')[0] + '!',
+            );
         },
-        onError: (err: Error) => toast.error(err.message || 'Sign in failed'),
     });
 
     const form = useForm({
@@ -113,9 +114,10 @@ function SignUpForm() {
     const signUp = useMutation({
         onSuccess: () => {
             void utils.auth.me.invalidateQuery();
-            toast.success('Account created');
+            toast.success(
+                'An account has been created. Please try signing in.',
+            );
         },
-        onError: (err: Error) => toast.error(err.message || 'Sign up failed'),
     });
 
     const form = useForm({
