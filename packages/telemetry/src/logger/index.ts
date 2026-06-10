@@ -9,8 +9,6 @@ let internalLogger: winston.Logger | null = null;
 function createWinstonLogger(serviceName?: string) {
     const transports: winston.transport[] = [
         new winston.transports.Console({
-            handleExceptions: true,
-            handleRejections: true,
             format: consoleFormat,
         }),
     ];
