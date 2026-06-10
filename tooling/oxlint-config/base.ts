@@ -23,7 +23,7 @@ const config: OxlintConfig = {
         typeAware: true,
         typeCheck: true,
         reportUnusedDisableDirectives: 'warn',
-        respectEslintDisableDirectives: true,
+        respectEslintDisableDirectives: false,
     },
     rules: {
         // ============================================================

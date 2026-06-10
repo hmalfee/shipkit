@@ -3,6 +3,7 @@ import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 
 import type { USER_ROLE_VALUES } from '@mento-mark/shared/constants';
+import type { TablesRelationalConfig } from 'drizzle-orm';
 import type { PgDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core';
 import type { Redis } from 'ioredis';
 
@@ -11,8 +12,11 @@ import { responseCookies } from './plugins/response-cookies';
 import { createSocialProviders } from './social-providers';
 import { authStore } from './store';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AuthDatabase = PgDatabase<PgQueryResultHKT, any, any>;
+type AuthDatabase = PgDatabase<
+    PgQueryResultHKT,
+    Record<string, unknown>,
+    TablesRelationalConfig
+>;
 
 // Better-Auth does not natively support array enums for additional fields.
 // To work around this, we configure Better-Auth to expect a generic 'string[]',
@@ -29,7 +33,7 @@ type Roles = typeof USER_ROLE_VALUES;
  * Then apply changes from src/auth.temp.ts to packages/db/src/pg/schema/auth.ts,
  * making sure to use authSchema.table instead of pgTable from drizzle-orm/pg-core.
  */
-function buildAuth(db: AuthDatabase, sessionCache: Redis, baseURL?: string) {
+function buildAuth(db: AuthDatabase, sessionCache: Redis, baseURL: string) {
     return betterAuth({
         appName: 'mento-mark',
         database: drizzleAdapter(db, {
@@ -83,16 +87,16 @@ let _authInstance: ReturnType<typeof buildAuth> | undefined;
 function getAuthInstance(
     db: AuthDatabase,
     sessionCache: Redis,
-    baseURL?: string,
+    baseURL: string,
 ) {
     _authInstance ??= buildAuth(db, sessionCache, baseURL);
     return _authInstance;
 }
 
 // ── CLI Export ───────────────────────────────────────────────────────
-// Required by better-auth CLI to generate the schema
+/** Never use this in your application code, this is meant for the cli to generate the schema */
 export const auth = process.argv.join(' ').includes('better-auth')
-    ? buildAuth({} as AuthDatabase, {} as Redis)
+    ? buildAuth({} as AuthDatabase, {} as Redis, '')
     : undefined;
 
 // ── Flattened auth API type ──────────────────────────────────────────
