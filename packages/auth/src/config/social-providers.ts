@@ -1,15 +1,15 @@
 import type { OAUTH_PROVIDER_IDS } from '@mento-mark/shared/constants';
 import type { betterAuth } from 'better-auth';
 
-import { env } from './env';
+import { env } from '../env';
 
-type BetterAuthSocialProviders = NonNullable<
+type BetterAuthOAuthProviders = NonNullable<
     ReturnType<typeof betterAuth>['options']['socialProviders']
 >;
 
 type OAuthProviders = {
-    [K in (typeof OAUTH_PROVIDER_IDS)[number]]: K extends keyof BetterAuthSocialProviders
-        ? BetterAuthSocialProviders[K]
+    [K in (typeof OAUTH_PROVIDER_IDS)[number]]: K extends keyof BetterAuthOAuthProviders
+        ? BetterAuthOAuthProviders[K]
         : never;
 };
 
@@ -23,7 +23,7 @@ type OAuthProviders = {
  * 3. Add the provider config below with credentials from the OAuth app settings
  */
 
-export const providersConfig = {
+export const oauthProvidersConfig = {
     google: {
         clientId: env.GOOGLE_CLIENT_ID,
         clientSecret: env.GOOGLE_CLIENT_SECRET,
@@ -31,22 +31,21 @@ export const providersConfig = {
     },
 } satisfies OAuthProviders;
 
-export const createSocialProviders = (baseURL?: string) =>
-    Object.fromEntries(
-        Object.entries(providersConfig).map(([key, config]) => [
+export function buildOAuthProviders(baseURL: string) {
+    return Object.fromEntries(
+        Object.entries(oauthProvidersConfig).map(([key, config]) => [
             key,
             {
                 // The below redirect URI is the same as what we set in oauth provider's dashboard.
                 // We write the same thing in two places because the below will be validated by the
                 // provider based on what we have in the provider's dashboard.
-                redirectURI: baseURL
-                    ? `${baseURL}/auth/callback/${key}`
-                    : undefined,
+                redirectURI: `${baseURL}/auth/callback/${key}`,
                 ...config,
             },
         ]),
     ) as {
-        [K in keyof typeof providersConfig]: (typeof providersConfig)[K] & {
+        [K in keyof typeof oauthProvidersConfig]: (typeof oauthProvidersConfig)[K] & {
             redirectURI?: string;
         };
     } satisfies OAuthProviders;
+}

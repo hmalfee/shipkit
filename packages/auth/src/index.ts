@@ -1,113 +1,29 @@
-import { redisStorage } from '@better-auth/redis-storage';
-import { betterAuth } from 'better-auth';
-import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-
-import type { USER_ROLE_VALUES } from '@mento-mark/shared/constants';
-import type { TablesRelationalConfig } from 'drizzle-orm';
-import type { PgDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core';
 import type { Redis } from 'ioredis';
+import type { AuthDatabase, Roles } from './config';
 
-import { env } from './env';
-import { responseCookies } from './plugins/response-cookies';
-import { createSocialProviders } from './social-providers';
-import { authStore } from './store';
+import { createBetterAuthConfig } from './config';
+import { authRequestContext } from './context-store';
 
-type AuthDatabase = PgDatabase<
-    PgQueryResultHKT,
-    Record<string, unknown>,
-    TablesRelationalConfig
->;
+let _authInstance: ReturnType<typeof createBetterAuthConfig> | undefined;
 
-// Better-Auth does not natively support array enums for additional fields.
-// To work around this, we configure Better-Auth to expect a generic 'string[]',
-// while our PostgreSQL schema enforces a strict custom 'pgEnum' array in packages/db/src/pg/schema/auth.ts.
-// Finally, we cast the session type definitions to reflect the strict 'Roles[]' type.
-type Roles = typeof USER_ROLE_VALUES;
-
-// ── Better Auth instance (not exported directly) ─────────────────────
-/**
- * When you modify this config (add plugins, additional fields, etc.), regenerate
- * the schema by running:
- *   pnpm --filter @mento-mark/auth auth:generate
- *
- * Then apply changes from src/auth.temp.ts to packages/db/src/pg/schema/auth.ts,
- * making sure to use authSchema.table instead of pgTable from drizzle-orm/pg-core.
- */
-function buildAuth(db: AuthDatabase, sessionCache: Redis, baseURL: string) {
-    return betterAuth({
-        appName: 'mento-mark',
-        database: drizzleAdapter(db, {
-            provider: 'pg',
-            usePlural: true,
-        }),
-        emailAndPassword: {
-            enabled: true,
-        },
-        user: {
-            additionalFields: {
-                roles: {
-                    type: 'string[]',
-                    required: false,
-                    input: false,
-                },
-            },
-        },
-        baseURL,
-        basePath: '/auth',
-        socialProviders: createSocialProviders(baseURL),
-        onAPIError: {
-            throw: true,
-        },
-        logger: {
-            disabled: true,
-        },
-        advanced: {
-            useSecureCookies: env.USE_SECURE_COOKIES,
-            database: {
-                generateId: false, // let Drizzle handle UUID generation
-            },
-            cookiePrefix: 'auth:',
-        },
-        secondaryStorage: redisStorage({
-            client: sessionCache,
-            keyPrefix: 'auth:',
-        }),
-
-        plugins: [
-            responseCookies(), // must be last
-        ],
-        rateLimit: {
-            enabled: false,
-        },
-    });
-}
-
-let _authInstance: ReturnType<typeof buildAuth> | undefined;
-
-function getAuthInstance(
+function getOrCreateAuthInstance(
     db: AuthDatabase,
     sessionCache: Redis,
     baseURL: string,
 ) {
-    _authInstance ??= buildAuth(db, sessionCache, baseURL);
+    _authInstance ??= createBetterAuthConfig(db, sessionCache, baseURL);
     return _authInstance;
 }
 
-// ── CLI Export ───────────────────────────────────────────────────────
-/** Never use this in your application code, this is meant for the cli to generate the schema */
-export const auth = process.argv.join(' ').includes('better-auth')
-    ? buildAuth({} as AuthDatabase, {} as Redis, '')
-    : undefined;
-
-// ── Flattened auth API type ──────────────────────────────────────────
-
-type BetterAuthAPI = ReturnType<typeof buildAuth>['api'];
-type DefaultSession = ReturnType<typeof buildAuth>['$Infer']['Session'];
+type BetterAuthAPI = ReturnType<typeof createBetterAuthConfig>['api'];
+type DefaultSession = ReturnType<
+    typeof createBetterAuthConfig
+>['$Infer']['Session'];
 
 /**
  * Session with strictly typed roles enum (not just string[])
  */
-type StrictSession = Omit<DefaultSession, 'user'> & {
+export type StrictSession = Omit<DefaultSession, 'user'> & {
     user: DefaultSession['user'] & {
         roles: Roles;
     };
@@ -126,8 +42,6 @@ export type Auth = {
     getSession: () => Promise<StrictSession | null>;
 };
 
-// ── createAuth proxy ─────────────────────────────────────────────────
-
 export interface CreateAuthContext {
     headers: { request: Headers; response: Headers };
     storage: { database: AuthDatabase; sessionCache: Redis };
@@ -141,7 +55,7 @@ export interface CreateAuthContext {
  *    via AsyncLocalStorage + the response-cookies plugin
  */
 export function createAuth(ctx: CreateAuthContext): Auth {
-    const authInstance = getAuthInstance(
+    const authInstance = getOrCreateAuthInstance(
         ctx.storage.database,
         ctx.storage.sessionCache,
         ctx.baseURL,
@@ -152,8 +66,9 @@ export function createAuth(ctx: CreateAuthContext): Auth {
             // Raw request passthrough for OAuth callbacks
             if (prop === '$passthrough') {
                 return (request: Request) =>
-                    authStore.run({ resHeaders: ctx.headers.response }, () =>
-                        authInstance.handler(request),
+                    authRequestContext.run(
+                        { resHeaders: ctx.headers.response },
+                        () => authInstance.handler(request),
                     );
             }
 
@@ -170,8 +85,12 @@ export function createAuth(ctx: CreateAuthContext): Auth {
                     opts.body = arg;
                 }
 
-                return authStore.run({ resHeaders: ctx.headers.response }, () =>
-                    (fn as (opts: Record<string, unknown>) => unknown)(opts),
+                return authRequestContext.run(
+                    { resHeaders: ctx.headers.response },
+                    () =>
+                        (fn as (opts: Record<string, unknown>) => unknown)(
+                            opts,
+                        ),
                 );
             };
         },

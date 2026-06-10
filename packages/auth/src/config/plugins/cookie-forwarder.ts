@@ -2,19 +2,17 @@ import { createAuthMiddleware } from 'better-auth/api';
 
 import type { BetterAuthPlugin } from 'better-auth';
 
-import { authStore } from '../store';
+import { authRequestContext } from '../../context-store';
 
-// ── Response-cookies plugin (must be last in plugins array) ──────────
-
-export function responseCookies(): BetterAuthPlugin {
+export function cookieForwarderPlugin(): BetterAuthPlugin {
     return {
-        id: 'response-cookies',
+        id: 'cookie-forwarder',
         hooks: {
             after: [
                 {
                     matcher: () => true,
                     handler: createAuthMiddleware(async (ctx) => {
-                        const store = authStore.getStore();
+                        const store = authRequestContext.getStore();
                         if (!store) return;
 
                         const headers = ctx.context.responseHeaders;

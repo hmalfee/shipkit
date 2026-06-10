@@ -6,7 +6,7 @@
         "./orpc": "./src/orpc.ts"
     },
     "scripts": {
-        "auth:generate": "SKIP_ENV_VALIDATION=1 pnpx @better-auth/cli@latest generate --config ./src/index.ts --output ./src/auth.temp.ts --yes",
+        "auth:generate": "SKIP_ENV_VALIDATION=1 pnpx @better-auth/cli@latest generate --config ./src/cli.ts --output ./src/auth.temp.ts --yes",
         "clean": "git clean -xdf .cache .turbo node_modules src/auth.temp.ts -e .env -e .env.*",
         "typecheck": "tsc"
     },
