@@ -41,8 +41,8 @@ export function createEnv<
     return _createEnv({
         ...opts,
         ...buildSharedConfig({
-            ...opts,
-            clientPrefix: opts.clientPrefix ?? '',
+            clientKeys: opts.client ? Object.keys(opts.client) : undefined,
+            rules: opts.rules,
         }),
         runtimeEnv: {
             ...process.env,
@@ -52,7 +52,7 @@ export function createEnv<
         clientPrefix: opts.clientPrefix ?? '',
         server: {
             ...baseServer,
-            ...opts.server!,
+            ...opts.server,
         },
     } as never) as never;
 }

@@ -132,7 +132,7 @@ export function applyRules<TShape extends ZodRawShape>(
     rulesCallback: (
         rules: RulesBuilder<TShape>,
     ) => ValidationRule<Record<string, unknown>>[],
-    clientPrefix?: string,
+    clientKeys?: string[],
 ) {
     const rulesBuilder = createRulesBuilder(shape);
     const allRules = rulesCallback(rulesBuilder);
@@ -140,13 +140,14 @@ export function applyRules<TShape extends ZodRawShape>(
     const isServer = typeof window === 'undefined';
 
     // On client: skip any rule that references server-only keys.
-    // On server (or no prefix): run everything.
-    const activeRules =
-        isServer || !clientPrefix
-            ? allRules
-            : allRules.filter((rule) =>
-                  rule.keys.every((key) => key.startsWith(clientPrefix)),
-              );
+    // On server: run everything.
+    const activeRules = isServer
+        ? allRules
+        : clientKeys?.length
+          ? allRules.filter((rule) =>
+                rule.keys.every((key) => clientKeys.includes(key)),
+            )
+          : [];
 
     return z.object(shape).superRefine((data, ctx) => {
         for (const rule of activeRules) {

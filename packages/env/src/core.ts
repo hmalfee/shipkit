@@ -28,7 +28,7 @@ export function loadEnvConfig(envDir?: string) {
 }
 
 export function buildSharedConfig<T extends ZodRawShape>(opts: {
-    clientPrefix?: string;
+    clientKeys?: string[];
     rules?: (
         rules: RulesBuilder<T>,
     ) => ValidationRule<Record<string, unknown>>[];
@@ -38,7 +38,7 @@ export function buildSharedConfig<T extends ZodRawShape>(opts: {
         skipValidation: !!process.env.SKIP_ENV_VALIDATION,
         createFinalSchema: opts.rules
             ? (shape: ZodRawShape) =>
-                  applyRules(shape as T, opts.rules!, opts.clientPrefix)
+                  applyRules(shape as T, opts.rules!, opts.clientKeys)
             : undefined,
     };
 }
