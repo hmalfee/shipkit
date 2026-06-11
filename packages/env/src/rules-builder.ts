@@ -127,31 +127,33 @@ export type RulesBuilder<TShape extends ZodRawShape> = ReturnType<
     typeof createRulesBuilder<TShape>
 >;
 
-/**
- * Applies validation rules to a Zod schema using superRefine.
- * Use this in the `createFinalSchema` callback of @t3-oss/env-core.
- *
- * @example
- * applyRules(shape, (rules) => [
- *     rules.atLeastOne(["PISTON_URL", "ONE_COMPILER_LITE_API_KEY"]),
- *     rules.allOrNone(["SENTRY_AUTH_TOKEN", "SENTRY_ORG_SLUG"]),
- * ])
- */
 export function applyRules<TShape extends ZodRawShape>(
     shape: TShape,
     rulesCallback: (
         rules: RulesBuilder<TShape>,
     ) => ValidationRule<Record<string, unknown>>[],
+    clientPrefix?: string,
 ) {
     const rulesBuilder = createRulesBuilder(shape);
-    const rules = rulesCallback(rulesBuilder);
+    const allRules = rulesCallback(rulesBuilder);
+
+    const isServer = typeof window === 'undefined';
+
+    // On client: skip any rule that references server-only keys.
+    // On server (or no prefix): run everything.
+    const activeRules =
+        isServer || !clientPrefix
+            ? allRules
+            : allRules.filter((rule) =>
+                  rule.keys.every((key) => key.startsWith(clientPrefix)),
+              );
 
     return z.object(shape).superRefine((data, ctx) => {
-        for (const rule of rules) {
+        for (const rule of activeRules) {
             if (!rule.validate(data)) {
                 for (const key of rule.keys) {
                     ctx.addIssue({
-                        code: z.ZodIssueCode.custom,
+                        code: 'custom',
                         message: rule.message,
                         path: [key],
                     });

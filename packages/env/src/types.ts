@@ -9,23 +9,25 @@ export type InferSchema<T extends ZodSchema> = {
     [K in keyof T]: z.infer<T[K]>;
 };
 
-/**
- * Configuration options for `createEnv()`.
- *
- * @template TServer Zod schema for server variables
- * @template TClient Zod schema for client variables
- * @template TExtra Extra base variables (e.g., NODE_ENV, NEXT_PUBLIC_ENV)
- * @template TPrefix Client prefix (e.g., 'NEXT_PUBLIC_', 'VITE_PUBLIC_')
- */
 export type CreateEnvOptions<
     TServer extends ZodSchema,
     TClient extends ZodSchema,
     TExtra extends ZodSchema = NonNullable<unknown>,
     TPrefix extends string | undefined = undefined,
 > = {
+    /** Optional explicit directory to load `.env` from. Defaults to the caller's directory. */
     envDir?: string;
+
+    /** Prefix for client-side variables (e.g., `'NEXT_PUBLIC_'`). */
     clientPrefix?: TPrefix;
+
+    /** Schema for server-only environment variables. */
     server?: TServer;
+
+    /**
+     * Schema for client-side environment variables.
+     * All keys must start with the `clientPrefix` if one is provided.
+     */
     client?: TPrefix extends string
         ? {
               [K in keyof TClient]: K extends `${TPrefix}${string}`
@@ -33,18 +35,21 @@ export type CreateEnvOptions<
                   : `Error: Key '${K & string}' must start with '${TPrefix}'`;
           }
         : TClient;
-    /**
-     * Define cross-field validation rules for your environment variables.
-     *
-     * @example
-     * rules: (build) => [
-     *     // Ensure at least one of these two keys is provided
-     *     build.atLeastOne(["GITHUB_CLIENT_ID", "GOOGLE_CLIENT_ID"]),
-     *     // Ensure both are provided if one is, or neither if not
-     *     build.allOrNone(["SENTRY_ORG", "SENTRY_PROJECT"]),
-     * ]
-     */
+
+    /** Define cross-field validation rules (e.g., mutually exclusive keys). */
     rules?: (
-        build: RulesBuilder<TServer & TClient & TExtra>,
+        rules: RulesBuilder<TServer & TClient & TExtra>,
     ) => ValidationRule<Record<string, unknown>>[];
-};
+} & (keyof TClient extends never
+    ? { clientAccess?: never }
+    : {
+          /**
+           * Required when `client` schemas are defined.
+           * Maps every client key to its `process.env.KEY` reference to ensure
+           * bundlers (like Next.js) can statically analyze and inline them.
+           */
+          clientAccess: Record<
+              NoInfer<keyof TClient>,
+              string | boolean | number | undefined
+          >;
+      });

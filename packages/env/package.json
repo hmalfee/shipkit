@@ -2,9 +2,7 @@
     "name": "@mento-mark/env",
     "type": "module",
     "exports": {
-        "./base": "./src/base.ts",
-        "./next": "./src/next.ts",
-        "./types": "./src/types.ts"
+        ".": "./src/index.ts"
     },
     "scripts": {
         "clean": "git clean -xdf .cache .turbo node_modules -e .env -e .env.*",

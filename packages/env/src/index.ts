@@ -12,24 +12,21 @@ type Env<TServer extends ZodSchema, TClient extends ZodSchema> = Readonly<
 >;
 
 /**
- * Creates and validates environment variables for generic (non-Next.js) environments.
- *
- * Supports custom client prefixes (e.g., `VITE_PUBLIC_` for Vite, `PUBLIC_` for SvelteKit).
- * You can also define cross-field validation rules using the `rules` property.
+ * Creates and validates environment variables.
  *
  * @example
+ * // Server-only
  * export const env = createEnv({
- *   server: {
- *     DB_URL: z.string().url(),
- *     API_KEY: z.string(),
- *   },
- *   client: {
- *     VITE_PUBLIC_API_URL: z.string().url(),
- *   },
- *   clientPrefix: 'VITE_PUBLIC_',
- *   rules: (build) => [
- *     build.atLeastOne(["API_KEY", "OAUTH_TOKEN"]),
- *   ],
+ *   server: { DB_URL: z.string().url() },
+ * });
+ *
+ * @example
+ * // With client prefix (e.g., Next.js)
+ * export const env = createEnv({
+ *   server: { DB_URL: z.string().url() },
+ *   client: { NEXT_PUBLIC_API_URL: z.string().url() },
+ *   clientPrefix: 'NEXT_PUBLIC_',
+ *   clientAccess: { NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL },
  * });
  */
 export function createEnv<
@@ -43,8 +40,15 @@ export function createEnv<
 
     return _createEnv({
         ...opts,
-        ...buildSharedConfig(opts),
-        runtimeEnv: process.env,
+        ...buildSharedConfig({
+            ...opts,
+            clientPrefix: opts.clientPrefix ?? '',
+        }),
+        runtimeEnv: {
+            ...process.env,
+            ...(opts as { clientAccess?: Record<string, unknown> })
+                .clientAccess,
+        },
         clientPrefix: opts.clientPrefix ?? '',
         server: {
             ...baseServer,
