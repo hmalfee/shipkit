@@ -3,35 +3,35 @@ import { Pool } from 'pg';
 
 import { logger } from '@mento-mark/telemetry/logger';
 
-import { env } from '../env';
 import * as schema from './schema';
 
-const pool = new Pool({
-    connectionString: env.POSTGRES_URL,
-});
+let instance: ReturnType<typeof drizzle<typeof schema>> | undefined;
 
-if (env.NODE_ENV === 'development') {
-    pool.on('connect', () => {
-        logger.info('[POSTGRES] New connection established', {
-            component: 'postgres',
+export function createDb(connectionString: string) {
+    if (instance) return instance;
+
+    const pool = new Pool({ connectionString });
+
+    // oxlint-disable-next-line eslint-js/no-restricted-syntax
+    if (process.env.NODE_ENV === 'development') {
+        pool.on('connect', () => {
+            logger.info('[POSTGRES] New connection established');
         });
+
+        pool.on('remove', () => {
+            logger.info('[POSTGRES] Connection removed from the pool');
+        });
+    }
+
+    pool.on('error', (err) => {
+        logger.error('[POSTGRES]', { err });
     });
 
-    pool.on('remove', () => {
-        logger.info('[POSTGRES] Connection removed from the pool', {
-            component: 'postgres',
-        });
-    });
+    instance = drizzle(pool, { schema });
+    return instance;
 }
 
-pool.on('error', (err) => {
-    logger.error('[POSTGRES]', { err, component: 'postgres' });
-});
+type Database = ReturnType<typeof createDb>;
 
-const db = drizzle(pool, { schema });
-
-type Database = typeof db;
-
-export { db, pool, type Database };
+export { type Database };
 export * from 'drizzle-orm';
-export type TestType = string;

@@ -6,8 +6,8 @@ import type { USER_ROLE_VALUES } from '@mento-mark/shared/constants';
 import type { TablesRelationalConfig } from 'drizzle-orm';
 import type { PgDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core';
 import type { Redis } from 'ioredis';
+import type { OAuthProvidersConfig } from './social-providers';
 
-import { env } from '../env';
 import { cookieForwarderPlugin } from './plugins/cookie-forwarder';
 import { buildOAuthProviders } from './social-providers';
 
@@ -17,7 +17,11 @@ export type AuthDatabase = PgDatabase<
     TablesRelationalConfig
 >;
 
-export type Roles = typeof USER_ROLE_VALUES;
+export type AuthConfig = {
+    secret: string;
+    useSecureCookies: boolean;
+    oauth: OAuthProvidersConfig;
+};
 
 // ── Better Auth instance config (not exported directly as API) ─────────────
 /**
@@ -32,9 +36,11 @@ export function createBetterAuthConfig(
     db: AuthDatabase,
     sessionCache: Redis,
     baseURL: string,
+    config: AuthConfig,
 ) {
     return betterAuth({
         appName: 'mento-mark',
+        secret: config.secret,
         database: drizzleAdapter(db, {
             provider: 'pg',
             usePlural: true,
@@ -53,7 +59,7 @@ export function createBetterAuthConfig(
         },
         baseURL,
         basePath: '/auth',
-        socialProviders: buildOAuthProviders(baseURL),
+        socialProviders: buildOAuthProviders(baseURL, config.oauth),
         onAPIError: {
             throw: true,
         },
@@ -61,7 +67,7 @@ export function createBetterAuthConfig(
             disabled: true,
         },
         advanced: {
-            useSecureCookies: env.USE_SECURE_COOKIES,
+            useSecureCookies: config.useSecureCookies,
             database: {
                 generateId: false, // let Drizzle handle UUID generation
             },
@@ -80,3 +86,5 @@ export function createBetterAuthConfig(
         },
     });
 }
+
+export type Roles = typeof USER_ROLE_VALUES;

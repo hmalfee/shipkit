@@ -1,5 +1,5 @@
 import type { Redis } from 'ioredis';
-import type { AuthDatabase, Roles } from './config';
+import type { AuthConfig, AuthDatabase, Roles } from './config';
 
 import { createBetterAuthConfig } from './config';
 import { authRequestContext } from './context-store';
@@ -10,8 +10,9 @@ function getOrCreateAuthInstance(
     db: AuthDatabase,
     sessionCache: Redis,
     baseURL: string,
+    config: AuthConfig,
 ) {
-    _authInstance ??= createBetterAuthConfig(db, sessionCache, baseURL);
+    _authInstance ??= createBetterAuthConfig(db, sessionCache, baseURL, config);
     return _authInstance;
 }
 
@@ -46,6 +47,7 @@ export interface CreateAuthContext {
     headers: { request: Headers; response: Headers };
     storage: { database: AuthDatabase; sessionCache: Redis };
     baseURL: string;
+    config: AuthConfig;
 }
 
 /**
@@ -59,6 +61,7 @@ export function createAuth(ctx: CreateAuthContext): Auth {
         ctx.storage.database,
         ctx.storage.sessionCache,
         ctx.baseURL,
+        ctx.config,
     );
 
     return new Proxy({} as Auth, {

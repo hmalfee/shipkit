@@ -1,12 +1,11 @@
 import { OpenTelemetryTransportV3 } from '@opentelemetry/winston-transport';
 import winston from 'winston';
 
-import { env } from '../env';
 import { consoleFormat, otelFormat } from './formats';
 
 let internalLogger: winston.Logger | null = null;
 
-function createWinstonLogger(serviceName?: string) {
+function createWinstonLogger(serviceName?: string, otelTransport?: boolean) {
     const transports: winston.transport[] = [
         new winston.transports.Console({
             format: consoleFormat,
@@ -14,7 +13,7 @@ function createWinstonLogger(serviceName?: string) {
     ];
 
     // Explicitly add the OTel transport if an endpoint is configured
-    if (env.OTEL_EXPORTER_OTLP_ENDPOINT) {
+    if (otelTransport) {
         transports.push(new OpenTelemetryTransportV3());
     }
 
@@ -44,6 +43,6 @@ export const logger = new Proxy({} as winston.Logger, {
     },
 });
 
-export function initLogger(serviceName: string) {
-    internalLogger = createWinstonLogger(serviceName);
+export function initLogger(serviceName: string, otelTransport?: boolean) {
+    internalLogger = createWinstonLogger(serviceName, otelTransport);
 }

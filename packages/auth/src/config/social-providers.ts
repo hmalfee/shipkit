@@ -1,8 +1,6 @@
 import type { OAUTH_PROVIDER_IDS } from '@mento-mark/shared/constants';
 import type { betterAuth } from 'better-auth';
 
-import { env } from '../env';
-
 type BetterAuthOAuthProviders = NonNullable<
     ReturnType<typeof betterAuth>['options']['socialProviders']
 >;
@@ -13,6 +11,14 @@ type OAuthProviders = {
         : never;
 };
 
+export type OAuthProvidersConfig = Record<
+    (typeof OAUTH_PROVIDER_IDS)[number],
+    {
+        clientId: string;
+        clientSecret: string;
+    }
+>;
+
 /**
  * OAuth Provider Configuration
  *
@@ -22,16 +28,18 @@ type OAuthProviders = {
  *    `{BASE_URL}/auth/callback/{provider}` (e.g., http://localhost:3000/auth/callback/github)
  * 3. Add the provider config below with credentials from the OAuth app settings
  */
+export function buildOAuthProviders(
+    baseURL: string,
+    oauth: OAuthProvidersConfig,
+) {
+    const oauthProvidersConfig = {
+        google: {
+            clientId: oauth.google.clientId,
+            clientSecret: oauth.google.clientSecret,
+            prompt: 'select_account',
+        },
+    } satisfies OAuthProviders;
 
-export const oauthProvidersConfig = {
-    google: {
-        clientId: env.GOOGLE_CLIENT_ID,
-        clientSecret: env.GOOGLE_CLIENT_SECRET,
-        prompt: 'select_account',
-    },
-} satisfies OAuthProviders;
-
-export function buildOAuthProviders(baseURL: string) {
     return Object.fromEntries(
         Object.entries(oauthProvidersConfig).map(([key, config]) => [
             key,

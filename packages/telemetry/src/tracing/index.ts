@@ -31,21 +31,21 @@ import {
     ATTR_SERVICE_NAMESPACE,
 } from '@opentelemetry/semantic-conventions/incubating';
 
-import { env } from '../env';
-
-export function initializeSdk(serviceName: string) {
+export function initializeSdk(serviceName: string, otelEndpoint?: string) {
     const instanceId = crypto.randomUUID();
+    // oxlint-disable-next-line eslint-js/no-restricted-syntax
+    const environment = process.env.NODE_ENV ?? 'unknown';
 
     const resource = resourceFromAttributes({
         [ATTR_SERVICE_NAMESPACE]: 'mento-mark',
         [ATTR_SERVICE_NAME]: serviceName,
         [ATTR_SERVICE_VERSION]: 'N/A',
         [ATTR_SERVICE_INSTANCE_ID]: instanceId,
-        [ATTR_DEPLOYMENT_ENVIRONMENT_NAME]: env.NODE_ENV,
+        [ATTR_DEPLOYMENT_ENVIRONMENT_NAME]: environment,
     });
 
-    const isProd = env.NODE_ENV === 'production';
-    const hasEndpoint = !!env.OTEL_EXPORTER_OTLP_ENDPOINT;
+    const isProd = environment === 'production';
+    const hasEndpoint = !!otelEndpoint;
 
     const metricReader = hasEndpoint
         ? new PeriodicExportingMetricReader({

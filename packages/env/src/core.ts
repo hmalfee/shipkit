@@ -13,17 +13,20 @@ import { applyRules } from './rules-builder';
 
 /** Base server environment variables available to all configs. */
 export const baseServer = {
-    NODE_ENV: z
-        .enum(['development', 'production', 'test'])
-        .default('development'),
+    NODE_ENV: z.enum(['development', 'production', 'test']),
 } satisfies ZodSchema;
 
 export function loadEnvConfig(envDir?: string) {
     if (typeof window !== 'undefined') return;
 
-    const dir = envDir ?? getCallerDir();
-    if (dir) {
-        config({ path: path.resolve(dir, '..', '.env'), quiet: true });
+    if (envDir) {
+        config({ path: path.resolve(envDir, '.env'), quiet: true });
+        return;
+    }
+
+    const callerDir = getCallerDir();
+    if (callerDir) {
+        config({ path: path.resolve(callerDir, '..', '.env'), quiet: true });
     }
 }
 

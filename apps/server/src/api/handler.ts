@@ -5,8 +5,8 @@ import { ZodToJsonSchemaConverter } from '@orpc/zod/zod4';
 import z from 'zod';
 
 import { createAuth } from '@mento-mark/auth';
-import { db } from '@mento-mark/db/pg';
-import { redis } from '@mento-mark/db/redis';
+import { createDb } from '@mento-mark/db/pg';
+import { createRedisClient } from '@mento-mark/db/redis';
 import { logger } from '@mento-mark/telemetry/logger';
 
 import { env } from '@/env';
@@ -14,6 +14,9 @@ import { env } from '@/env';
 import type { MiddlewareHandler } from 'hono';
 
 import { router } from './router';
+
+const db = createDb(env.POSTGRES_URL);
+const redis = createRedisClient(env.REDIS_URL);
 
 const createHandler = async () => {
     const plugins = [
@@ -91,6 +94,16 @@ export const orpc = (): MiddlewareHandler => async (c, next) => {
                 headers: { request: c.req.raw.headers, response: resHeaders },
                 storage: { database: db, sessionCache: redis },
                 baseURL: `http://localhost:${env.SERVER_PORT}`,
+                config: {
+                    secret: env.AUTH_SECRET,
+                    useSecureCookies: env.USE_SECURE_AUTH_COOKIES ?? false,
+                    oauth: {
+                        google: {
+                            clientId: env.GOOGLE_CLIENT_ID,
+                            clientSecret: env.GOOGLE_CLIENT_SECRET,
+                        },
+                    },
+                },
             }),
             db,
             redis,

@@ -281,9 +281,6 @@ importers:
       '@better-auth/redis-storage':
         specifier: ^1.6.11
         version: 1.6.11(@better-auth/core@1.6.11(@better-auth/utils@0.3.1)(@better-fetch/fetch@1.1.21)(@opentelemetry/api@1.9.1)(better-call@1.3.2(zod@4.3.6))(jose@6.2.2)(kysely@0.28.17)(nanostores@1.3.0))(ioredis@5.10.1)
-      '@mento-mark/env':
-        specifier: workspace:*
-        version: link:../env
       better-auth:
         specifier: 'catalog:'
         version: 1.5.5(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(@upstash/redis@1.38.0)(kysely@0.28.17)(pg@8.20.0))(mongodb@7.2.0)(next@16.2.4(@opentelemetry/api@1.9.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(pg@8.20.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
@@ -393,9 +390,6 @@ importers:
 
   packages/telemetry:
     dependencies:
-      '@mento-mark/env':
-        specifier: workspace:*
-        version: link:../env
       '@opentelemetry/api':
         specifier: 'catalog:'
         version: 1.9.1

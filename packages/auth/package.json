@@ -12,7 +12,6 @@
     },
     "dependencies": {
         "@better-auth/redis-storage": "^1.6.11",
-        "@mento-mark/env": "workspace:*",
         "better-auth": "catalog:"
     },
     "devDependencies": {

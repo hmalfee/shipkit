@@ -3,12 +3,21 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { defineConfig } from 'drizzle-kit';
+import { z } from 'zod';
 
-import { env } from './src/env';
+import { createEnv } from '@mento-mark/env';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const schemaDir = path.join(__dirname, './src/pg/schema');
+
+const env = createEnv({
+    envDir: path.join(__dirname, '../../apps/server'),
+    server: {
+        POSTGRES_URL: z.url(),
+        NODE_ENV: z.string().optional(),
+    },
+});
 
 export default defineConfig({
     dialect: 'postgresql',

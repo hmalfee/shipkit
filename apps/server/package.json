@@ -5,7 +5,7 @@
     "scripts": {
         "build": "tsdown",
         "clean": "git clean -xdf .cache .turbo node_modules dist -e .env -e .env.*",
-        "dev": "ports exec -- tsx watch src/index.ts",
+        "dev": "NODE_ENV=development sh -c 'ports exec -- tsx src/env.ts && ports exec -- tsx watch src/index.ts'",
         "start": "ports exec -- node --env-file=.env --enable-source-maps dist/index.mjs",
         "typecheck": "tsc -b"
     },

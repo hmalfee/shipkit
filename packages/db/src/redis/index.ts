@@ -2,11 +2,11 @@ import IORedis from 'ioredis';
 
 import { logger } from '@mento-mark/telemetry/logger';
 
-import { env } from '../env';
-
 let redisInstance: IORedis | undefined;
 
-function createRedisClient(redisUrl: string) {
+export function createRedisClient(redisUrl: string): IORedis {
+    if (redisInstance) return redisInstance;
+
     const { hostname, port, username, password, pathname, protocol } = new URL(
         redisUrl,
     );
@@ -24,54 +24,31 @@ function createRedisClient(redisUrl: string) {
         lazyConnect: true,
         retryStrategy(times) {
             if (times > 5) {
-                logger.error('[REDIS] Max reconnection attempts reached', {
-                    component: 'redis',
-                });
+                logger.error('[REDIS] Max reconnection attempts reached');
                 return null; // Stop retrying
             }
             return Math.min(times * 200, 2000); // Exponential backoff, capped at 2s
         },
     });
 
-    if (env.NODE_ENV === 'development') {
+    // oxlint-disable-next-line eslint-js/no-restricted-syntax
+    if (process.env.NODE_ENV === 'development') {
         client.on('connect', () => {
-            logger.info('[REDIS] New connection established', {
-                component: 'redis',
-            });
+            logger.info('[REDIS] New connection established');
         });
 
         client.on('close', () => {
-            logger.info('[REDIS] Connection removed', { component: 'redis' });
+            logger.info('[REDIS] Connection removed');
         });
     }
 
     client.on('error', (err) => {
-        logger.error('[REDIS]', { err, component: 'redis' });
+        logger.error('[REDIS]', { err });
     });
 
-    return client;
+    redisInstance = client;
+    return redisInstance;
 }
-
-export function getRedisClient(): IORedis {
-    if (redisInstance) {
-        return redisInstance;
-    }
-
-    const redisUrl = env.REDIS_URL;
-
-    try {
-        redisInstance = createRedisClient(redisUrl);
-        return redisInstance;
-    } catch (error) {
-        logger.error('[REDIS] Failed to initialize Redis client', {
-            error,
-            component: 'redis',
-        });
-        throw error;
-    }
-}
-
-export const redis = getRedisClient();
 
 type Redis = IORedis;
 

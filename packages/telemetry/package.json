@@ -13,7 +13,6 @@
         "typecheck": "tsc"
     },
     "dependencies": {
-        "@mento-mark/env": "workspace:*",
         "@opentelemetry/api": "catalog:",
         "@opentelemetry/core": "catalog:",
         "@opentelemetry/exporter-logs-otlp-proto": "catalog:",

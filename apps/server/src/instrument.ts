@@ -3,6 +3,8 @@ import fs from 'fs';
 import { initTelemetry } from '@mento-mark/telemetry';
 import { logger } from '@mento-mark/telemetry/logger';
 
+import { env } from './env';
+
 initTelemetry({
     serviceName: (
         JSON.parse(
@@ -11,6 +13,7 @@ initTelemetry({
                 .toString(),
         ) as { name: string }
     ).name,
+    otelEndpoint: env.OTEL_EXPORTER_OTLP_ENDPOINT,
 });
 
 process.on('uncaughtException', (err) => {

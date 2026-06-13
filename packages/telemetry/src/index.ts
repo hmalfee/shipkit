@@ -3,11 +3,14 @@ import { initializeSdk } from './tracing';
 
 let sdk: ReturnType<typeof initializeSdk> | undefined;
 
-export function initTelemetry(config: { serviceName: string }) {
+export function initTelemetry(config: {
+    serviceName: string;
+    otelEndpoint?: string;
+}) {
     if (sdk) return;
 
-    sdk = initializeSdk(config.serviceName);
-    initLogger(config.serviceName);
+    sdk = initializeSdk(config.serviceName, config.otelEndpoint);
+    initLogger(config.serviceName, !!config.otelEndpoint);
 
     // Auto-register shutdown on SIGTERM/SIGINT
     const shutdown = () => {
