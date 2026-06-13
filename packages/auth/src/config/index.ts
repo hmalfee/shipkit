@@ -47,6 +47,7 @@ export function createBetterAuthConfig(
         }),
         emailAndPassword: {
             enabled: true,
+            autoSignIn: false,
         },
         user: {
             additionalFields: {

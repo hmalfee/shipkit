@@ -107,16 +107,14 @@ function SignInForm() {
     );
 }
 
-function SignUpForm() {
+function SignUpForm({ onSuccess }: { onSuccess: () => void }) {
     const { useMutation, inputSchema } = api.auth.signUp;
-    const utils = useUtils();
 
     const signUp = useMutation({
         onSuccess: () => {
-            void utils.auth.me.invalidateQuery();
-            toast.success(
-                'An account has been created. Please try signing in.',
-            );
+            form.reset();
+            onSuccess();
+            toast.success('Account created! Please sign in.');
         },
     });
 
@@ -244,7 +242,11 @@ export default function AuthForm() {
                 </p>
             </div>
 
-            {mode === 'signin' ? <SignInForm /> : <SignUpForm />}
+            {mode === 'signin' ? (
+                <SignInForm />
+            ) : (
+                <SignUpForm onSuccess={() => setMode('signin')} />
+            )}
 
             <div className="relative">
                 <div className="absolute inset-0 flex items-center">

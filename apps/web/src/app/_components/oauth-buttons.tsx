@@ -1,8 +1,15 @@
 'use client';
 
+import { AlertCircleIcon } from 'lucide-react';
 import { useState } from 'react';
 
 import { OAUTH_PROVIDERS } from '@mento-mark/shared/constants';
+import {
+    Alert,
+    AlertDescription,
+    AlertTitle,
+} from '@mento-mark/ui/components/alert';
+import { Button } from '@mento-mark/ui/components/button';
 
 import { useOAuthPopup } from '@/hooks/use-oauth-popup';
 import { api } from '@/lib/api/client';
@@ -48,18 +55,19 @@ export function OAuthButtons() {
     return (
         <div className="flex w-full flex-col space-y-3">
             {oAuthError && (
-                <div className="rounded-md border border-red-200 bg-red-100 p-3 text-red-900">
-                    <p className="font-semibold">
+                <Alert variant="destructive">
+                    <AlertCircleIcon />
+                    <AlertTitle>
                         {oAuthError.error.message ?? 'Authentication error'}
-                    </p>
-                    <p className="text-sm">
+                    </AlertTitle>
+                    <AlertDescription>
                         {oAuthError.error.description ?? 'Please try again.'}
-                    </p>
-                </div>
+                    </AlertDescription>
+                </Alert>
             )}
 
             {Object.entries(OAUTH_PROVIDERS).map(([key, value]) => (
-                <button
+                <Button
                     key={key}
                     onClick={() => {
                         setOAuthError(null);
@@ -74,14 +82,14 @@ export function OAuthButtons() {
                         });
                     }}
                     disabled={oneAuthInProgress}
-                    className="flex items-center justify-center gap-2 rounded-md border p-2 transition-colors hover:bg-gray-50 disabled:opacity-50"
+                    variant="outline"
                 >
                     <span>
                         {pendingProvider === value
                             ? 'Connecting...'
                             : `Continue with ${key}`}
                     </span>
-                </button>
+                </Button>
             ))}
         </div>
     );
