@@ -28,6 +28,8 @@ const isDefinedORPCError = (e: Error): e is ORPCError<string, unknown> =>
     e instanceof ORPCError && isDefinedError(e);
 
 const handleError = (e: Error, showToast: boolean) => {
+    if (typeof window === 'undefined') return;
+
     // Error boundary handles offline errors.
     if (isOffline(e)) return;
 
@@ -58,7 +60,7 @@ export const createQueryClient = () =>
                     if (isDefinedORPCError(e) || isOffline(e)) return false;
 
                     if (isServerDown(e)) {
-                        if (count === 0) {
+                        if (count === 0 && typeof window !== 'undefined') {
                             toast.error(
                                 'Service is currently unreachable. Retrying...',
                                 {
@@ -99,7 +101,10 @@ export const createQueryClient = () =>
         }),
         queryCache: new QueryCache({
             // Dismiss persistent server-down toast when any query succeeds
-            onSuccess: () => toast.dismiss('server-error'),
+            onSuccess: () => {
+                if (typeof window !== 'undefined')
+                    toast.dismiss('server-error');
+            },
             onError: (e, query) => handleError(e, !!query.meta?.showErrorToast),
         }),
     });

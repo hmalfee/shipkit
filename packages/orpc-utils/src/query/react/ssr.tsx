@@ -99,9 +99,25 @@ export function createSSRHelpers<
                             ) => {
                                 if (!getQueryOpts) return;
                                 const qc = getQueryClient();
-                                await qc.prefetchQuery(
-                                    getQueryOpts({ input, ...opts }),
-                                );
+                                const mergedOpts =
+                                    input !== undefined
+                                        ? { input, ...opts }
+                                        : (opts ?? {});
+                                const queryOpts = getQueryOpts(mergedOpts);
+                                await qc.prefetchQuery(queryOpts);
+
+                                // In SSR, prefetchQuery swallows errors to allow client fallback.
+                                // We explicitly log them here for better debugging.
+                                const state = qc.getQueryCache().find({
+                                    queryKey: queryOpts.queryKey,
+                                })?.state;
+                                if (state?.status === 'error') {
+                                    // oxlint-disable-next-line no-console
+                                    console.error(
+                                        `[SSR Prefetch Error] Query ${JSON.stringify(queryOpts.queryKey)} failed:`,
+                                        state.error,
+                                    );
+                                }
                             },
                             setQueryData: (
                                 inputOrData: unknown,

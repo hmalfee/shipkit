@@ -296,10 +296,15 @@ function enhance(
                                   useQuery: (
                                       input?: unknown,
                                       opts?: Record<string, unknown>,
-                                  ) =>
-                                      useQuery(
-                                          getQueryOpts!({ input, ...opts }),
-                                      ),
+                                  ) => {
+                                      const mergedOpts =
+                                          input !== undefined
+                                              ? { input, ...opts }
+                                              : (opts ?? {});
+                                      return useQuery(
+                                          getQueryOpts!(mergedOpts),
+                                      );
+                                  },
                               }
                             : {}),
                         ...(meta.type === 'mutation'
