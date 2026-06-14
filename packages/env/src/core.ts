@@ -8,7 +8,6 @@ import type { ZodRawShape } from 'zod';
 import type { RulesBuilder, ValidationRule } from './rules-builder';
 import type { ZodSchema } from './types';
 
-import { getCallerDir } from './caller';
 import { applyRules } from './rules-builder';
 
 /** Base server environment variables available to all configs. */
@@ -19,14 +18,20 @@ export const baseServer = {
 export function loadEnvConfig(envDir?: string) {
     if (typeof window !== 'undefined') return;
 
-    if (envDir) {
-        config({ path: path.resolve(envDir, '.env'), quiet: true });
-        return;
-    }
+    const baseDir = envDir ?? process.cwd();
+    const nodeEnv = process.env.NODE_ENV;
 
-    const callerDir = getCallerDir();
-    if (callerDir) {
-        config({ path: path.resolve(callerDir, '..', '.env'), quiet: true });
+    const envFiles = [
+        nodeEnv && `.env.${nodeEnv}.local`,
+        nodeEnv !== 'test' && '.env.local',
+        nodeEnv && `.env.${nodeEnv}`,
+        '.env',
+    ].filter(Boolean) as string[];
+
+    for (const file of envFiles) {
+        const fullPath = path.resolve(baseDir, file);
+        // Suppress dotenv logs like "injected env..." by passing quiet
+        config({ path: fullPath, quiet: true } as Parameters<typeof config>[0]);
     }
 }
 
