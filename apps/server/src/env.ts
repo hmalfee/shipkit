@@ -5,7 +5,7 @@ import { createEnv } from '@mento-mark/env';
 export const env = createEnv({
     server: {
         // Server
-        SERVER_PORT: z.coerce.number(),
+        PORT: z.coerce.number(),
         WEB_PORT: z.coerce.number(),
 
         // Database

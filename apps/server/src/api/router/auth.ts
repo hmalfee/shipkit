@@ -117,7 +117,7 @@ export const auth = os.auth.router({
         // Reconstruct the full callback URL that better-auth expects
         const url = new URL(
             `/auth/callback/${input.params.provider}`,
-            `http://localhost:${env.SERVER_PORT}`,
+            `http://localhost:${env.PORT}`,
         );
 
         // Forward all query params (code, state, error, etc.)

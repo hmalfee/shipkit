@@ -2,6 +2,8 @@
 // oxlint-disable eslint-js/no-restricted-syntax
 // oxlint-disable no-console
 import { spawnSync } from 'child_process';
+import fs from 'fs';
+import path from 'path';
 
 import { getServiceNames, isValidService, registry } from '../src/registry.js';
 import {
@@ -37,6 +39,7 @@ const commands = {
 
     /**
      * Execute command with port env vars injected: ports exec -- <cmd> [args...]
+     * Package-aware: automatically sets PORT if current package name matches a registry service.
      */
     exec() {
         const validation = validateRegistry();
@@ -56,6 +59,24 @@ const commands = {
 
         const [bin, ...binArgs] = cmdArgs;
         const env = buildEnvWithPorts(process.env);
+
+        try {
+            const pkgPath = path.join(process.cwd(), 'package.json');
+            if (fs.existsSync(pkgPath)) {
+                const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+                if (pkg.name) {
+                    const serviceName = pkg.name.split('/').pop();
+                    if (registry[serviceName]) {
+                        const portVar = `${serviceName.toUpperCase()}_PORT`;
+                        if (env[portVar]) {
+                            env.PORT = env[portVar].toString();
+                        }
+                    }
+                }
+            }
+        } catch {
+            // Ignore errors reading or parsing package.json
+        }
 
         const replacedBinArgs = binArgs.map((arg) => {
             return arg.replace(
@@ -241,6 +262,7 @@ Examples:
 Usage: ports exec -- <command> [args...]
 
 Port env vars are automatically set based on the registry.
+If run inside a package matching a registry service, PORT is also set automatically.
 You can override them with environment variables:
   <SERVICE>_PORT=<port> ports exec -- <cmd>
 

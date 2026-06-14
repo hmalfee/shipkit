@@ -33,7 +33,7 @@ app.use('*', orpc());
 serve(
     {
         fetch: app.fetch,
-        port: env.SERVER_PORT,
+        port: env.PORT,
     },
     (info) => {
         logger.info(`Server is running on http://localhost:${info.port}`);

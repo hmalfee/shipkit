@@ -4,8 +4,8 @@
     "scripts": {
         "build": "next build",
         "clean": "git clean -xdf .cache .turbo node_modules .next -e .env -e .env.*",
-        "dev": "ports exec -- next dev --port \\$WEB_PORT",
-        "start": "ports exec -- next start --port \\$WEB_PORT",
+        "dev": "ports exec -- next dev",
+        "start": "ports exec -- next start",
         "typecheck": "tsc"
     },
     "dependencies": {

@@ -4,7 +4,7 @@ import { createEnv } from '@mento-mark/env';
 
 export const env = createEnv({
     server: {
-        WEB_PORT: z.coerce.number(),
+        PORT: z.coerce.number(),
         SERVER_PORT: z.coerce.number(),
 
         // Sentry

@@ -93,7 +93,7 @@ export const orpc = (): MiddlewareHandler => async (c, next) => {
             auth: createAuth({
                 headers: { request: c.req.raw.headers, response: resHeaders },
                 storage: { database: db, sessionCache: redis },
-                baseURL: `http://localhost:${env.SERVER_PORT}`,
+                baseURL: `http://localhost:${env.PORT}`,
                 config: {
                     secret: env.AUTH_SECRET,
                     useSecureCookies: env.USE_SECURE_AUTH_COOKIES ?? false,
