@@ -1,13 +1,5 @@
 /**
- * @typedef {object} ServiceConfig
- * @property {number} port
- * @property {string} description
- */
-
-// @ts-check
-/**
  * Port registry for all services in the monorepo.
- * @type {Record<string, ServiceConfig>}
  */
 export const registry = {
     web: { port: 4001, description: 'Next.js frontend' },
@@ -19,7 +11,6 @@ export const registry = {
 
 /**
  * Map of environment variable names to default ports.
- * @type {Record<string, number>}
  */
 export const ENV_MAP = Object.fromEntries(
     Object.entries(registry).map(([k, v]) => [
@@ -30,7 +21,6 @@ export const ENV_MAP = Object.fromEntries(
 
 /**
  * Get all service names.
- * @returns {string[]}
  */
 export function getServiceNames() {
     return Object.keys(registry);
@@ -38,8 +28,6 @@ export function getServiceNames() {
 
 /**
  * Check if a service exists in registry.
- * @param {string} name
- * @returns {boolean}
  */
 export function isValidService(name) {
     return name in registry;

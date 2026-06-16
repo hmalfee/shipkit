@@ -26,7 +26,6 @@
         "zod": "catalog:"
     },
     "devDependencies": {
-        "@mento-mark/ports": "workspace:*",
         "@tailwindcss/postcss": "^4.1.18",
         "@types/react": "catalog:",
         "@types/react-dom": "catalog:",

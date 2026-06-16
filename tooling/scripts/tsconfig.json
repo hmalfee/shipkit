@@ -1,0 +1,11 @@
+{
+    "compilerOptions": {
+        "module": "NodeNext",
+        "skipLibCheck": true,
+        "checkJs": true,
+        "noEmit": true,
+        "noImplicitAny": false
+    },
+    "include": ["bin"],
+    "exclude": ["node_modules"]
+}

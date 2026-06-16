@@ -25,7 +25,6 @@
         "pg": "^8.17.1"
     },
     "devDependencies": {
-        "@mento-mark/ports": "workspace:*",
         "@types/pg": "^8.16.0",
         "drizzle-kit": "^0.31.8"
     }

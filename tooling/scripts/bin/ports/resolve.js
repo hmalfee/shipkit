@@ -1,13 +1,9 @@
-// oxlint-disable eslint-js/no-restricted-syntax
 import { ENV_MAP, registry } from './registry.js';
 import { validatePort } from './validate.js';
 
 /**
  * Resolves port configuration by merging registry defaults with env overrides.
  * Env vars take precedence over registry defaults.
- *
- * @param {Record<string, any>} [env=process.env]
- * @returns {Record<string, number>}
  */
 export function resolvePortsFromEnv(env = process.env) {
     const resolved = {};
@@ -36,10 +32,6 @@ export function resolvePortsFromEnv(env = process.env) {
 
 /**
  * Gets a single port by service name, considering env overrides.
- *
- * @param {string} serviceName
- * @param {Record<string, any>} [env=process.env]
- * @returns {number}
  */
 export function getPort(serviceName, env = process.env) {
     if (!(serviceName in registry)) {
@@ -68,9 +60,7 @@ export function getPort(serviceName, env = process.env) {
 /**
  * Merges resolved ports into a new environment object.
  * Useful for passing to child processes.
- *
- * @param {Record<string, any>} [baseEnv=process.env]
- * @returns {Record<string, any>}
+ * @returns {Record<string, string>}
  */
 export function buildEnvWithPorts(baseEnv = process.env) {
     const resolved = resolvePortsFromEnv(baseEnv);

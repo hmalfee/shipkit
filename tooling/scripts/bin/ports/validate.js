@@ -1,4 +1,3 @@
-// oxlint-disable no-console
 import { registry } from './registry.js';
 
 const MIN_PORT = 1;
@@ -7,8 +6,6 @@ const RESERVED_PORT_LIMIT = 1024;
 
 /**
  * Validates a single port value.
- * @param {number} port
- * @returns {{valid: boolean, errors: string[]}}
  */
 export function validatePort(port) {
     const errors = [];
@@ -29,8 +26,6 @@ export function validatePort(port) {
 
 /**
  * Warns if port is in reserved range (< 1024).
- * @param {number} port
- * @returns {string|null}
  */
 export function checkReservedPort(port) {
     if (port < RESERVED_PORT_LIMIT) {
@@ -41,8 +36,6 @@ export function checkReservedPort(port) {
 
 /**
  * Validates the entire port registry for conflicts.
- * @param {Record<string, {port: number}>} [customRegistry]
- * @returns {{valid: boolean, errors: string[]}}
  */
 export function validateRegistry(customRegistry = registry) {
     const seen = new Map();
@@ -76,8 +69,6 @@ export function validateRegistry(customRegistry = registry) {
 /**
  * Checks if ports are actually available on the system.
  * Only works on Node.js with net module.
- * @param {Record<string, {port: number}>} [customRegistry]
- * @returns {Promise<{available: boolean, unavailable: Array<{service: string, port: number, reason: string}>}>}
  */
 export async function checkPortAvailability(customRegistry = registry) {
     const { createServer } = await import('net');
@@ -87,7 +78,7 @@ export async function checkPortAvailability(customRegistry = registry) {
         await new Promise((resolve) => {
             const server = createServer();
 
-            server.once('error', (err) => {
+            server.once('error', (/** @type {NodeJS.ErrnoException} */ err) => {
                 if (err.code === 'EADDRINUSE') {
                     unavailable.push({
                         service: name,
@@ -101,12 +92,12 @@ export async function checkPortAvailability(customRegistry = registry) {
                         reason: err.message,
                     });
                 }
-                resolve();
+                resolve(undefined);
             });
 
             server.once('listening', () => {
                 server.close();
-                resolve();
+                resolve(undefined);
             });
 
             server.listen(port, '127.0.0.1');

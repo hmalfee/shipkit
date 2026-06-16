@@ -24,7 +24,6 @@
         "zod": "catalog:"
     },
     "devDependencies": {
-        "@mento-mark/ports": "workspace:*",
         "tsdown": "^0.21.9"
     }
 }

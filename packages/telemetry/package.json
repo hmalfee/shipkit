@@ -32,9 +32,6 @@
         "@opentelemetry/winston-transport": "^0.28.0",
         "winston": "^3.17.0"
     },
-    "devDependencies": {
-        "@mento-mark/ports": "workspace:*"
-    },
     "peerDependencies": {
         "hono": ">=4.0.0"
     },
