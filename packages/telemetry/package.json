@@ -9,7 +9,7 @@
     },
     "scripts": {
         "clean": "git clean -xdf .cache .turbo node_modules -e .env -e .env.*",
-        "dev": "ports compose up -d",
+        "dev": "ports exec docker compose up -d",
         "typecheck": "tsc"
     },
     "dependencies": {

@@ -5,8 +5,8 @@
     "scripts": {
         "build": "tsdown",
         "clean": "git clean -xdf .cache .turbo node_modules dist -e .env -e .env.*",
-        "dev": "NODE_ENV=development ports exec -- sh -c 'tsx src/env.ts && tsx watch --import ./src/instrument.ts ./src/index.ts'",
-        "start": "NODE_ENV=production ports exec -- sh -c 'node dist/env.mjs && node --import ./dist/instrument.mjs --enable-source-maps dist/index.mjs'",
+        "dev": "NODE_ENV=development ports exec sh -c 'tsx src/env.ts && tsx watch --import ./src/instrument.ts ./src/index.ts'",
+        "start": "NODE_ENV=production ports exec sh -c 'node dist/env.mjs && node --import ./dist/instrument.mjs --enable-source-maps dist/index.mjs'",
         "typecheck": "tsc -b"
     },
     "dependencies": {

@@ -6,7 +6,10 @@ import { buildEnvWithPorts, getPort, resolvePortsFromEnv } from './resolve.js';
 import { checkPortAvailability, validateRegistry } from './validate.js';
 
 $.verbose = false;
-const [command, ...args] = argv._;
+// Use raw process.argv — not argv._ from minimist.
+// Minimist strips short/long flags (-d, --wait) from argv._
+// Passthrough commands (exec) need to preserve ALL flags.
+const [command, ...args] = process.argv.slice(2);
 
 function abortIfInvalid() {
     const { valid, errors } = validateRegistry();
@@ -176,17 +179,6 @@ const commands = {
         process.stdout.write(output);
     },
 
-    async compose() {
-        abortIfInvalid();
-
-        const { exitCode } = await $({
-            env: buildEnvWithPorts(process.env),
-            stdio: 'inherit',
-        })`docker compose ${args}`.nothrow();
-
-        process.exit(exitCode ?? 0);
-    },
-
     help() {
         const topic = args[0];
         const help = {
@@ -195,15 +187,14 @@ Usage: ports <command> [options]
 Commands:
   get <service>              Get port for a service
   exec <cmd> [args...]       Execute command with port env vars injected
-  compose [args...]          Run docker compose with port env vars injected
   list [--json]              List all services and ports
   check [--live]             Validate port registry (--live checks availability)
   gen-env [--format=fmt]     Generate .env file (dotenv|shell|json)
   help [command]             Show this help or help for specific command
 Examples:
   ports get web
+  ports exec docker compose up -d
   ports exec npm run dev
-  ports compose up -d
   WEB_PORT=5000 ports exec next dev`,
             get: `Get port for a service
 Usage: ports get <service>
@@ -217,12 +208,6 @@ Override with: <SERVICE>_PORT=<port> ports exec <cmd>
 Examples:
   ports exec npm run dev
   WEB_PORT=5000 ports exec next dev`,
-            compose: `Wrapper for docker compose with automatic port env injection
-Usage: ports compose [args...]
-Examples:
-  ports compose up -d
-  ports compose down
-  ports compose logs -f service_name`,
             check: `Validate port registry
 Usage: ports check [--live]
   --live    Also check system port availability
