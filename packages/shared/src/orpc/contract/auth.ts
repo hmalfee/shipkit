@@ -63,6 +63,9 @@ export const auth = oc.prefix('/auth').router({
             params: CallbackParamsSchema,
             query: CallbackQuerySchema,
         })
+        .errors({
+            TOO_MANY_REQUESTS: {},
+        })
         .responses({
             FOUND: undefined,
         }),

@@ -15,7 +15,8 @@ export const auth = os.auth.router({
     }),
 
     signUp: cr.auth.signUp.handler(async ({ context, input, errors }) => {
-        const { exceeded } = await context.rateLimit();
+        const { exceeded } = await context.rateLimit({ blockDuration: 60 });
+
         if (exceeded) {
             throw errors.TOO_MANY_REQUESTS({
                 message: 'Too many sign up attempts. Please try again later.',
@@ -42,7 +43,11 @@ export const auth = os.auth.router({
     }),
 
     signIn: cr.auth.signIn.handler(async ({ context, input, errors }) => {
-        const { exceeded } = await context.rateLimit();
+        const { exceeded } = await context.rateLimit({
+            limit: 5,
+            blockDuration: 300,
+        });
+
         if (exceeded) {
             throw errors.TOO_MANY_REQUESTS({
                 message: 'Too many sign in attempts. Please try again later.',
@@ -84,7 +89,8 @@ export const auth = os.auth.router({
 
     oauthSignIn: cr.auth.oauthSignIn.handler(
         async ({ context, input, errors }) => {
-            const { exceeded } = await context.rateLimit();
+            const { exceeded } = await context.rateLimit({ blockDuration: 60 });
+
             if (exceeded) {
                 throw errors.TOO_MANY_REQUESTS({
                     message:
@@ -113,35 +119,46 @@ export const auth = os.auth.router({
         },
     ),
 
-    oauthCallback: cr.auth.oauthCallback.handler(async ({ context, input }) => {
-        // Reconstruct the full callback URL that better-auth expects
-        const url = new URL(
-            `/auth/callback/${input.params.provider}`,
-            `http://localhost:${env.PORT}`,
-        );
+    oauthCallback: cr.auth.oauthCallback.handler(
+        async ({ context, input, errors }) => {
+            const { exceeded } = await context.rateLimit({ limit: 15 });
 
-        // Forward all query params (code, state, error, etc.)
-        for (const [key, value] of Object.entries(input.query)) {
-            if (value !== undefined) {
-                url.searchParams.set(
-                    key,
-                    typeof value === 'object'
-                        ? JSON.stringify(value)
-                        : String(value as string),
-                );
+            if (exceeded) {
+                throw errors.TOO_MANY_REQUESTS({
+                    message:
+                        'Too many sign in attempts. Please try again later.',
+                });
             }
-        }
 
-        // Build a synthetic Request for better-auth handler
-        const request = new Request(url, {
-            method: 'GET',
-            headers: context.reqHeaders,
-        });
+            // Reconstruct the full callback URL that better-auth expects
+            const url = new URL(
+                `/auth/callback/${input.params.provider}`,
+                `http://localhost:${env.PORT}`,
+            );
 
-        // Passthrough — cookies forwarded via responseCookies plugin
-        const response = await context.auth.$passthrough(request);
-        const location = response.headers.get('location') ?? '/';
+            // Forward all query params (code, state, error, etc.)
+            for (const [key, value] of Object.entries(input.query)) {
+                if (value !== undefined) {
+                    url.searchParams.set(
+                        key,
+                        typeof value === 'object'
+                            ? JSON.stringify(value)
+                            : String(value as string),
+                    );
+                }
+            }
 
-        return { status: 302, headers: { location } };
-    }),
+            // Build a synthetic Request for better-auth handler
+            const request = new Request(url, {
+                method: 'GET',
+                headers: context.reqHeaders,
+            });
+
+            // Passthrough — cookies forwarded via responseCookies plugin
+            const response = await context.auth.$passthrough(request);
+            const location = response.headers.get('location') ?? '/';
+
+            return { status: 302, headers: { location } };
+        },
+    ),
 });

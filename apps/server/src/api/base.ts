@@ -1,5 +1,4 @@
 import { implement } from '@orpc/server';
-import { RateLimiterRedis } from 'rate-limiter-flexible';
 
 import { contract } from '@mento-mark/shared/orpc';
 import { type logger } from '@mento-mark/telemetry/logger';
@@ -9,20 +8,8 @@ import { env } from '@/env';
 import type { Auth } from '@mento-mark/auth';
 import type { Database } from '@mento-mark/db/pg';
 import type { Redis } from '@mento-mark/db/redis';
-import type { RateLimiterRes } from 'rate-limiter-flexible';
 
-export type RateLimitConfig = {
-    limit?: number; // e.g., 100
-    window?: number; // e.g., 10 (seconds)
-    identifier?: string; // Optional override for the extracted IP
-};
-
-export interface RateLimitResult {
-    exceeded: boolean;
-    limit: number;
-    remaining: number;
-    reset: number;
-}
+import { createRateLimit } from './rate-limiter';
 
 export type Context = {
     reqHeaders: Headers;
@@ -31,30 +18,6 @@ export type Context = {
     db: Database;
     redis: Redis;
     logger: typeof logger;
-};
-
-// Cache for rate limiters to avoid creating a new instance for every request
-const rateLimiters = new Map<string, RateLimiterRedis>();
-
-const getRateLimiter = (
-    points: number,
-    duration: number,
-    redisClient: Redis,
-) => {
-    const key = `${points}:${duration}`;
-    let limiter = rateLimiters.get(key);
-
-    if (!limiter) {
-        limiter = new RateLimiterRedis({
-            storeClient: redisClient,
-            points,
-            duration,
-            keyPrefix: 'rate_limit',
-        });
-        rateLimiters.set(key, limiter);
-    }
-
-    return limiter;
 };
 
 /**
@@ -89,45 +52,27 @@ const base = os.middleware(async ({ context, next, path }) => {
     }
 });
 
-const routeBuilder = os.use(
+/**
+ * `cr` (createRoute): Route builder with `base` + session + rateLimit.
+ * Auth enforcement is handled in route handlers via contract-defined errors.
+ */
+export const cr = os.use(
     base.concat(
         os.middleware(async ({ context, next, path }) => {
+            // One trade-off is that by the time the rate limit is checked
+            // in routes, the session has already been fetched. However, since
+            // we mostly rate limit users on routes where getSession won't
+            // reach the database (e.g. login/signup routes) due to invalid
+            // session cookies, this is an acceptable trade-off.
             const session = await context.auth.getSession();
-            const routeId = path.join('.');
 
-            const rateLimit = async (
-                config?: RateLimitConfig,
-            ): Promise<RateLimitResult> => {
-                const ip =
-                    context.reqHeaders.get('x-forwarded-for') ?? 'anonymous';
-                const baseIdentifier = config?.identifier ?? ip;
-                const identifier = `${routeId}:${baseIdentifier}`;
-
-                // Use provided config or a default of 100 requests per minute
-                const limit = config?.limit ?? 100;
-                const window = config?.window ?? 60;
-
-                const limiter = getRateLimiter(limit, window, context.redis);
-
-                try {
-                    const result = await limiter.consume(identifier, 1);
-                    return {
-                        exceeded: false,
-                        limit,
-                        remaining: result.remainingPoints,
-                        reset: result.msBeforeNext,
-                    };
-                } catch (rejection: unknown) {
-                    // rate-limiter-flexible rejects with RateLimiterRes when exceeded
-                    const result = rejection as RateLimiterRes;
-                    return {
-                        exceeded: true,
-                        limit,
-                        remaining: result?.remainingPoints ?? 0,
-                        reset: result?.msBeforeNext ?? 0,
-                    };
-                }
-            };
+            const rateLimit = createRateLimit({
+                reqHeaders: context.reqHeaders,
+                resHeaders: context.resHeaders,
+                redis: context.redis,
+                pathKey: path.join('.'),
+                logger: context.logger,
+            });
 
             return next({
                 context: { ...context, session, rateLimit },
@@ -135,9 +80,3 @@ const routeBuilder = os.use(
         }),
     ),
 );
-
-/**
- * `cr` (createRoute): Route builder with timing + session + rateLimit.
- * Auth enforcement is handled in route handlers via contract-defined errors.
- */
-export const cr = routeBuilder;
