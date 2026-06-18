@@ -1,5 +1,6 @@
 'use client';
 
+import { useQueryClient } from '@tanstack/react-query';
 import { Loader } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useTransition } from 'react';
@@ -16,6 +17,7 @@ export default function Error({
     reset: () => void;
 }) {
     const router = useRouter();
+    const queryClient = useQueryClient();
     const [isPending, startTransition] = useTransition();
     const offline = isOffline(error);
     const serverDown = isServerDown(error);
@@ -39,6 +41,7 @@ export default function Error({
             <Button
                 onClick={() => {
                     startTransition(() => {
+                        void queryClient.resetQueries();
                         router.refresh();
                         reset();
                     });
