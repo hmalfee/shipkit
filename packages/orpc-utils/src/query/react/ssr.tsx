@@ -112,6 +112,16 @@ export function createSSRHelpers<
                                     queryKey: queryOpts.queryKey,
                                 })?.state;
                                 if (state?.status === 'error') {
+                                    if (
+                                        state.error &&
+                                        typeof state.error === 'object' &&
+                                        'digest' in state.error &&
+                                        state.error.digest ===
+                                            'DYNAMIC_SERVER_USAGE'
+                                    ) {
+                                        throw state.error;
+                                    }
+
                                     // oxlint-disable-next-line no-console
                                     console.error(
                                         `[SSR Prefetch Error] Query ${JSON.stringify(queryOpts.queryKey)} failed:`,
