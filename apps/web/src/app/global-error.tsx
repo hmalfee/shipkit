@@ -1,5 +1,8 @@
 'use client';
 
+import { useEffect } from 'react';
+
+import { captureException } from '@mento-mark/sentry/react';
 import { Button } from '@mento-mark/ui/components/button';
 
 import { isOffline, isServerDown } from '@/lib/api/query-client';
@@ -13,6 +16,12 @@ export default function GlobalError({
 }) {
     const offline = isOffline(error);
     const serverDown = isServerDown(error);
+
+    useEffect(() => {
+        // Don't report network errors to Sentry
+        if (offline || serverDown) return;
+        captureException(error);
+    }, [error, offline, serverDown]);
 
     return (
         <html lang="en" suppressHydrationWarning>

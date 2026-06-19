@@ -1,0 +1,3 @@
+{
+    "extends": "@mento-mark/ts-config/base"
+}

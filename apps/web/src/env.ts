@@ -12,6 +12,7 @@ export const env = createEnv({
         SENTRY_PROJECT: z.string().min(1).optional(),
         SENTRY_AUTH_TOKEN: z.string().min(1).optional(),
         SENTRY_URL: z.url().optional(),
+        SENTRY_RELEASE: z.string().min(1).optional(),
     },
     client: {
         NEXT_PUBLIC_ENV: z
@@ -33,6 +34,7 @@ export const env = createEnv({
             'SENTRY_ORG',
             'SENTRY_PROJECT',
             'SENTRY_URL',
+            'SENTRY_RELEASE',
         ]),
     ],
 });

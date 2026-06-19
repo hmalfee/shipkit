@@ -3,8 +3,9 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { Loader } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useTransition } from 'react';
+import { useEffect, useTransition } from 'react';
 
+import { captureException } from '@mento-mark/sentry/react';
 import { Button } from '@mento-mark/ui/components/button';
 
 import { isOffline, isServerDown } from '@/lib/api/query-client';
@@ -17,10 +18,16 @@ export default function Error({
     reset: () => void;
 }) {
     const router = useRouter();
+    // returns the current query client instance within the provider
     const queryClient = useQueryClient();
     const [isPending, startTransition] = useTransition();
     const offline = isOffline(error);
     const serverDown = isServerDown(error);
+
+    useEffect(() => {
+        if (offline || serverDown) return;
+        captureException(error);
+    }, [error, offline, serverDown]);
 
     return (
         <main className="flex min-h-[calc(100vh-4.5rem)] flex-col items-center justify-center gap-4 p-6">
