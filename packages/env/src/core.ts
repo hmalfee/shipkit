@@ -1,5 +1,5 @@
 // oxlint-disable eslint-js/no-restricted-syntax
-import path from 'path';
+import path from 'node:path';
 
 import { config } from 'dotenv';
 import { z } from 'zod';

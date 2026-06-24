@@ -18,7 +18,7 @@ export const defaultNoRestrictedSyntaxRules = [
 ] as const;
 
 const config: OxlintConfig = {
-    jsPlugins: ['oxlint-plugin-eslint'], // enables using "eslint-js/no-restricted-syntax" rules
+    jsPlugins: ['oxlint-plugin-eslint', 'eslint-plugin-n'], // oxlint-plugin-eslint enables using "eslint-js/no-restricted-syntax" rules
     options: {
         typeAware: true,
         typeCheck: true,
@@ -143,6 +143,9 @@ const config: OxlintConfig = {
                     'warn',
                     { prefer: 'type-imports', fixStyle: 'inline-type-imports' },
                 ],
+
+                // prefer using the node: protocol for built-in modules
+                'n/prefer-node-protocol': 'error',
             },
         },
         {
