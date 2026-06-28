@@ -82,18 +82,9 @@ await spinner(
 );
 echo(chalk.green('✓ Cleaned up non-standalone Next.js artifacts'));
 
-// 5. Find and delete all source maps
-await spinner('Deleting sourcemap files…', async () => {
-    await $`find ${NEXT_DIR} -type f -name '*.js.map' -delete`;
-    await $`find ${NEXT_DIR} -type f -name '*.css.map' -delete`;
-});
-echo(chalk.green('✓ Deleted sourcemap files'));
-
-// 6. Strip sourceMappingURL comments from JS and CSS files
-await spinner('Stripping sourceMappingURL references…', async () => {
-    await $`find ${NEXT_DIR} -type f -name '*.js' -exec sed -i -E 's/sourceMappingURL=[^ ]*\\.js\\.map//g' {} +`;
-    await $`find ${NEXT_DIR} -type f -name '*.css' -exec sed -i -E 's/sourceMappingURL=[^ ]*\\.css\\.map//g' {} +`;
-});
-echo(chalk.green('✓ Stripped sourceMappingURL references'));
-
 echo(chalk.green(`✨ Standalone build finalized at ${STANDALONE_DIR}`));
+echo(
+    chalk.blue(
+        `🌐 You can now run your app with: node ${TARGET_APP_DIR}/server.js`,
+    ),
+);
