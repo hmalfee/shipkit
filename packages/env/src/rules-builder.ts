@@ -12,6 +12,7 @@ export type ValidationRule<TData = Record<string, unknown>> = {
 function createRulesBuilder<TSchema extends ZodRawShape>(_schema: TSchema) {
     type EnvKey = Extract<keyof TSchema, string>;
     type EnvData = Record<EnvKey, unknown>;
+    type InferredValue<K extends EnvKey> = z.infer<TSchema[K]>;
 
     return {
         atLeastOne: (
@@ -68,7 +69,7 @@ function createRulesBuilder<TSchema extends ZodRawShape>(_schema: TSchema) {
 
         ifValueThen: <K extends EnvKey>(
             condition: K,
-            expectedValue: EnvData[K],
+            expectedValue: InferredValue<K>,
             required: [EnvKey, ...EnvKey[]],
             message?: string,
         ): ValidationRule<EnvData> => ({
