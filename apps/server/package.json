@@ -14,7 +14,6 @@
         "@mento-mark/auth": "workspace:*",
         "@mento-mark/db": "workspace:*",
         "@mento-mark/env": "workspace:*",
-        "@mento-mark/telemetry": "workspace:*",
         "@orpc/json-schema": "catalog:",
         "@orpc/openapi": "catalog:",
         "@orpc/server": "catalog:",

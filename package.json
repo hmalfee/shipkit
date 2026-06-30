@@ -22,6 +22,7 @@
     "prettier": "@mento-mark/prettier-config",
     "dependencies": {
         "@mento-mark/shared": "workspace:*",
+        "@mento-mark/telemetry": "workspace:*",
         "zod": "catalog:"
     },
     "devDependencies": {

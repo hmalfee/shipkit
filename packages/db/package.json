@@ -19,7 +19,6 @@
     },
     "dependencies": {
         "@mento-mark/env": "workspace:*",
-        "@mento-mark/telemetry": "workspace:*",
         "drizzle-orm": "^0.45.1",
         "ioredis": "^5.10.1",
         "pg": "^8.17.1"

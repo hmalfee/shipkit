@@ -12,7 +12,6 @@
     "dependencies": {
         "@mento-mark/env": "workspace:*",
         "@mento-mark/orpc-utils": "workspace:*",
-        "@mento-mark/telemetry": "workspace:*",
         "@mento-mark/ui": "workspace:*",
         "@tanstack/react-form": "^1.32.0",
         "@tanstack/react-query": "catalog:",
