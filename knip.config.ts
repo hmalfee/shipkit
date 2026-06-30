@@ -11,7 +11,6 @@ const config: KnipConfig = {
             entry: ['bin/**/*.js'],
         },
     },
-    ignoreExportsUsedInFile: true,
     exclude: ['optionalPeerDependencies'], // Allows setting peer dependencies as optional
 };
 

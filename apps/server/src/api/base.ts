@@ -11,7 +11,7 @@ import type { Redis } from '@mento-mark/db/redis';
 
 import { createRateLimit } from './rate-limiter';
 
-export type Context = {
+type Context = {
     reqHeaders: Headers;
     resHeaders: Headers;
     auth: Auth;
