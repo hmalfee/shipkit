@@ -1,11 +1,3 @@
 {
-    "compilerOptions": {
-        "module": "NodeNext",
-        "skipLibCheck": true,
-        "checkJs": true,
-        "noEmit": true,
-        "noImplicitAny": false
-    },
-    "include": ["bin"],
-    "exclude": ["node_modules"]
+    "extends": "@mento-mark/ts-config/base"
 }
