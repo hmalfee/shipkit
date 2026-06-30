@@ -20,8 +20,7 @@
         "@orpc/server": "catalog:",
         "@orpc/zod": "catalog:",
         "hono": "^4.8.2",
-        "rate-limiter-flexible": "^11.1.0",
-        "zod": "catalog:"
+        "rate-limiter-flexible": "^11.1.0"
     },
     "devDependencies": {
         "tsdown": "^0.21.9"

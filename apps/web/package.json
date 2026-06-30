@@ -10,10 +10,9 @@
         "typecheck": "tsc"
     },
     "dependencies": {
-        "@mento-mark/auth": "workspace:*",
         "@mento-mark/env": "workspace:*",
         "@mento-mark/orpc-utils": "workspace:*",
-        "@mento-mark/sentry": "workspace:*",
+        "@mento-mark/telemetry": "workspace:*",
         "@mento-mark/ui": "workspace:*",
         "@tanstack/react-form": "^1.32.0",
         "@tanstack/react-query": "catalog:",
@@ -24,8 +23,7 @@
         "next-themes": "catalog:",
         "react": "catalog:",
         "react-dom": "catalog:",
-        "sonner": "catalog:",
-        "zod": "catalog:"
+        "sonner": "catalog:"
     },
     "devDependencies": {
         "@tailwindcss/postcss": "^4.1.18",
