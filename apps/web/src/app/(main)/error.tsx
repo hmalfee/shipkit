@@ -3,9 +3,9 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { Loader } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useEffect, useTransition } from 'react';
+import { useEffect, useRef, useTransition } from 'react';
 
-import { captureException } from '@mento-mark/sentry/react';
+import { logger } from '@mento-mark/telemetry/logger';
 import { Button } from '@mento-mark/ui/components/button';
 
 import { isOffline, isServerDown } from '@/lib/api/query-client';
@@ -23,10 +23,14 @@ export default function Error({
     const [isPending, startTransition] = useTransition();
     const offline = isOffline(error);
     const serverDown = isServerDown(error);
+    const logged = useRef(false);
 
     useEffect(() => {
+        if (logged.current) return;
+        logged.current = true;
         if (offline || serverDown) return;
-        captureException(error);
+        if (error.digest) return;
+        logger.error('[Error Boundary]', { error });
     }, [error, offline, serverDown]);
 
     return (

@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 
+import { logger } from '@mento-mark/telemetry/logger';
+
 import type { NextRequest } from 'next/server';
 
 /**
@@ -55,8 +57,7 @@ export function createSentryTunnelHandler(dsn: string | undefined) {
 
             return new NextResponse(null, { status: 200 });
         } catch (error) {
-            // oxlint-disable-next-line no-console
-            console.error('Tunnel error:', error);
+            logger.error('Tunnel error:', { error });
             return new NextResponse(null, { status: 500 });
         }
     };

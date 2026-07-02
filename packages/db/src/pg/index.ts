@@ -24,7 +24,7 @@ export function createDb(connectionString: string) {
     }
 
     pool.on('error', (err) => {
-        logger.error('[POSTGRES]', { err });
+        logger.error('[POSTGRES]', { error: err });
     });
 
     instance = drizzle(pool, { schema });

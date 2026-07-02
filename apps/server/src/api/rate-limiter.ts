@@ -1,7 +1,7 @@
 import { RateLimiterRedis } from 'rate-limiter-flexible';
 
 import type { Redis } from '@mento-mark/db/redis';
-import type { logger as Logger } from '@mento-mark/telemetry/logger';
+import type { Logger } from '@mento-mark/telemetry/logger';
 import type { RateLimiterRes } from 'rate-limiter-flexible';
 
 interface RateLimitConfig {
@@ -26,7 +26,7 @@ interface RateLimitSystem {
     resHeaders: Headers;
     redis: Redis;
     pathKey: string;
-    logger: typeof Logger;
+    logger: Logger;
 }
 
 const V4_MAPPED = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/i;
@@ -37,7 +37,7 @@ const stripV4Mapped = (ip: string): string => {
     return (match?.[1] ?? ip).toLowerCase();
 };
 
-const resolveIP = (headers: Headers, log: typeof Logger): string => {
+const resolveIP = (headers: Headers, log: Logger): string => {
     // 1. Cloudflare — most trustworthy when behind CF
     const cfIp = headers.get('cf-connecting-ip')?.trim();
     if (cfIp) return stripV4Mapped(cfIp);
@@ -109,7 +109,7 @@ export const createRateLimit =
         } catch (err) {
             if (err instanceof Error) {
                 // Fail open on infrastructure errors — don't block legitimate users
-                system.logger.error('[RateLimit] Redis error', err);
+                system.logger.error('[RateLimit] Redis error', { error: err });
                 return { exceeded: false, limit, remaining: limit, resetMs: 0 };
             }
 

@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
-import { captureException } from '@mento-mark/sentry/react';
+import { logger } from '@mento-mark/telemetry/logger';
 import { Button } from '@mento-mark/ui/components/button';
 
 import { isOffline, isServerDown } from '@/lib/api/query-client';
@@ -16,11 +16,15 @@ export default function GlobalError({
 }) {
     const offline = isOffline(error);
     const serverDown = isServerDown(error);
+    // For duplicate error logging prevention during react strict mode
+    const logged = useRef(false);
 
     useEffect(() => {
-        // Don't report network errors to Sentry
+        if (logged.current) return;
+        logged.current = true;
         if (offline || serverDown) return;
-        captureException(error);
+        if (error.digest) return;
+        logger.error('[Global Error Boundary]', { error });
     }, [error, offline, serverDown]);
 
     return (

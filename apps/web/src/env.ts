@@ -6,35 +6,18 @@ export const env = createEnv({
     server: {
         PORT: z.coerce.number(),
         SERVER_PORT: z.coerce.number(),
-
-        // Sentry
-        SENTRY_ORG: z.string().min(1).optional(),
-        SENTRY_PROJECT: z.string().min(1).optional(),
-        SENTRY_AUTH_TOKEN: z.string().min(1).optional(),
-        SENTRY_URL: z.url().optional(),
-        SENTRY_RELEASE: z.string().min(1).optional(),
-    },
-    client: {
-        NEXT_PUBLIC_ENV: z
-            .enum(['development', 'production', 'test'])
-            .default('development'),
-        NEXT_PUBLIC_SERVER_URL: z.url(),
-        NEXT_PUBLIC_SENTRY_DSN: z.url().optional(),
+        OTEL_URL: z.url().optional(),
     },
     clientPrefix: 'NEXT_PUBLIC_',
+    client: {
+        NEXT_PUBLIC_ENV: z.enum(['development', 'production', 'test']),
+        NEXT_PUBLIC_SERVER_URL: z.url(),
+    },
     clientAccess: {
         NEXT_PUBLIC_ENV: process.env.NEXT_PUBLIC_ENV,
         NEXT_PUBLIC_SERVER_URL: process.env.NEXT_PUBLIC_SERVER_URL,
-        NEXT_PUBLIC_SENTRY_DSN: process.env.NEXT_PUBLIC_SENTRY_DSN,
     },
-    rules: ({ allOrNone }) => [
-        allOrNone([
-            'NEXT_PUBLIC_SENTRY_DSN',
-            'SENTRY_AUTH_TOKEN',
-            'SENTRY_ORG',
-            'SENTRY_PROJECT',
-            'SENTRY_URL',
-            'SENTRY_RELEASE',
-        ]),
+    rules: ({ ifValueThen }) => [
+        ifValueThen('NODE_ENV', 'production', ['OTEL_URL']),
     ],
 });

@@ -2,6 +2,8 @@ import { isContractProcedure } from '@orpc/contract';
 import { createTanstackQueryUtils } from '@orpc/tanstack-query';
 import { dehydrate, HydrationBoundary } from '@tanstack/react-query';
 
+import { logger } from '@mento-mark/telemetry/logger';
+
 import type { FetchQueryOptions, QueryClient } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 
@@ -122,10 +124,9 @@ export function createSSRHelpers<
                                         throw state.error;
                                     }
 
-                                    // oxlint-disable-next-line no-console
-                                    console.error(
+                                    logger.error(
                                         `[SSR Prefetch Error] Query ${JSON.stringify(queryOpts.queryKey)} failed:`,
-                                        state.error,
+                                        { error: state.error },
                                     );
                                 }
                             },

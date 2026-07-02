@@ -24,12 +24,9 @@ export function startSpan<T>(
     return tracer.startActiveSpan(name, options, async (span) => {
         try {
             const result = await fn(span);
-            // Only set OK if the span hasn't already been marked as ERROR
-            // (Since OpenTelemetry JS doesn't expose a clean way to read the status code,
-            // we'll just set OK. But wait, if someone set ERROR, we shouldn't overwrite it.)
-            // Actually, we can just omit setting OK. The default is UNSET, which means "no error".
-            // If they explicitly set ERROR, it will remain ERROR.
-            // Let's just remove the unconditional SetStatus OK!
+            // OpenTelemetry defaults to UNSET ("no error").
+            // We omit setting OK here so we don't accidentally overwrite an ERROR
+            // status set manually within the span execution.
             return result;
         } catch (err) {
             span.setStatus({
@@ -97,4 +94,22 @@ export function getTraceContext() {
     const span = trace.getActiveSpan();
     if (!span) return undefined;
     return span.spanContext();
+}
+
+const routeTemplates = new WeakMap<Span, string>();
+
+/**
+ * Associates an abstract route template (e.g. `/todo/{id}`) with an active span.
+ * Used by RPC frameworks (oRPC, tRPC, etc.) to pass the template to a telemetry middleware.
+ */
+export function setRouteTemplate(span: Span, template: string) {
+    routeTemplates.set(span, template);
+}
+
+/**
+ * Retrieves the abstract route template associated with a span. Set by `setRouteTemplate()`.
+ * Used by RPC middlewares (oRPC, tRPC, etc.) to pass the template to telemetry middlewares.
+ */
+export function getRouteTemplate(span: Span): string | undefined {
+    return routeTemplates.get(span);
 }

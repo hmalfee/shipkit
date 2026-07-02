@@ -34,3 +34,5 @@ publicHoistPattern:
     - '*eslint*'
     - '*prettier*'
     - '*oxlint*'
+allowBuilds:
+    better-sqlite3: true

@@ -67,12 +67,13 @@ const createHandler = async () => {
                     !(error instanceof ORPCError) || error.status === 500;
 
                 if (isInternal) {
-                    logger.error(
-                        '[oRPC] Internal Server Error:',
+                    const cause =
                         error instanceof ORPCError
                             ? (error.cause ?? error)
-                            : error,
-                    );
+                            : error;
+                    logger.error('[oRPC] Internal Server Error', {
+                        error: cause,
+                    });
                 }
             }),
         ],
@@ -81,7 +82,7 @@ const createHandler = async () => {
 
 let handler: Awaited<ReturnType<typeof createHandler>> | undefined;
 
-export const orpc = (): MiddlewareHandler => async (c, next) => {
+export const orpc = (): MiddlewareHandler => async (c) => {
     handler ??= await createHandler();
 
     const resHeaders = new Headers();
@@ -118,5 +119,10 @@ export const orpc = (): MiddlewareHandler => async (c, next) => {
         });
         return finalResponse;
     }
-    await next();
+
+    const error = new ORPCError('NOT_FOUND', {
+        message: `Route ${c.req.method} ${c.req.path} not found`,
+        defined: true,
+    });
+    return c.json(error.toJSON(), error.status as never);
 };

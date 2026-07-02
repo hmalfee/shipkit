@@ -12,3 +12,6 @@ CHANGELOG.md
 
 # Exlude turbo generator's hbs files
 turbo/generators/**/*.hbs
+
+# Exclude telemetry descriptor minified files
+packages/telemetry/src/**/otlp-descriptor.json

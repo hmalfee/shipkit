@@ -43,7 +43,7 @@ export function createRedisClient(redisUrl: string): IORedis {
     }
 
     client.on('error', (err) => {
-        logger.error('[REDIS]', { err });
+        logger.error('[REDIS]', { error: err });
     });
 
     redisInstance = client;

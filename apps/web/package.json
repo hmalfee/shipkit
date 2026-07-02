@@ -2,7 +2,7 @@
     "name": "web",
     "type": "module",
     "scripts": {
-        "build": "ports exec next build --webpack",
+        "build": "ports exec next build",
         "postbuild": "next-standalone-postbuild",
         "clean": "git clean -xdf .cache .turbo node_modules .next -e .env -e .env.*",
         "dev": "ports exec next dev",

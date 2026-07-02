@@ -3,30 +3,39 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 
 import { logger } from '@mento-mark/telemetry/logger';
-import { telemetry } from '@mento-mark/telemetry/middleware/hono';
+import { traceHonoRequest } from '@mento-mark/telemetry/node/hono';
 
 import { orpc } from './api/handler';
 import { env } from './env';
 
 const app = new Hono();
 
-const allowedOrigins = Array.from(
-    Object.entries(env).filter(([key]) => key.endsWith('_PORT')),
-    ([, port]) => `http://localhost:${port as number}`,
-);
+// safety net: all orpc errors are handled by orpc internally
+app.onError((err, c) => {
+    logger.error('Unhandled error escaped all middlewares', { error: err });
+    return c.json(
+        {
+            error:
+                env.NODE_ENV === 'production'
+                    ? 'Internal Server Error'
+                    : err.message,
+        },
+        500,
+    );
+});
 
-app.use(telemetry());
+app.use(traceHonoRequest());
 app.use(
     '/*',
     cors({
-        origin: allowedOrigins,
+        origin: [`http://localhost:${env.WEB_PORT}`],
         allowMethods: ['GET', 'POST', 'DELETE', 'PUT', 'PATCH'],
         allowHeaders: ['Content-Type', 'Authorization'],
         credentials: true,
     }),
 );
-
-app.use('*', orpc());
+// Make sure this is the last middleware, as it will handle all requests that reach this point
+app.use('/*', orpc());
 
 serve(
     {
@@ -34,6 +43,8 @@ serve(
         port: env.PORT,
     },
     (info) => {
-        logger.info(`Server is running on http://localhost:${info.port}`);
+        logger.info(`Server is running on http://localhost:${info.port}`, {
+            forceConsole: true,
+        });
     },
 );

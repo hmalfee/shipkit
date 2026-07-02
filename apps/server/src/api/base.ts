@@ -1,13 +1,14 @@
 import { implement } from '@orpc/server';
 
 import { contract } from '@mento-mark/shared/orpc';
-import { type logger } from '@mento-mark/telemetry/logger';
+import { captureORPCTemplate } from '@mento-mark/telemetry/node/orpc';
 
 import { env } from '@/env';
 
 import type { Auth } from '@mento-mark/auth';
 import type { Database } from '@mento-mark/db/pg';
 import type { Redis } from '@mento-mark/db/redis';
+import type { Logger } from '@mento-mark/telemetry/logger';
 
 import { createRateLimit } from './rate-limiter';
 
@@ -17,7 +18,7 @@ type Context = {
     auth: Auth;
     db: Database;
     redis: Redis;
-    logger: typeof logger;
+    logger: Logger;
 };
 
 /**
@@ -37,14 +38,22 @@ const base = os.middleware(async ({ context, next, path }) => {
         const end = Date.now();
         if (env.NODE_ENV === 'development') {
             context.logger.info(
-                `[oRPC] ${path.join('.')} executed in ${end - start}ms`,
+                `[oRPC] {orpcPath} executed in {durationMs}ms`,
+                {
+                    orpcPath: path.join('.'),
+                    durationMs: end - start,
+                },
             );
         }
         return result;
     } catch (error) {
         const end = Date.now();
         context.logger.error(
-            `[oRPC] ${path.join('.')} failed in ${end - start}ms`,
+            `[oRPC] ${path.join('.')} failed in {durationMs}ms`,
+            {
+                error,
+                durationMs: end - start,
+            },
         );
         // rethrow error to be handled by global error handler
         // oxlint-disable-next-line eslint-js/no-restricted-syntax
@@ -56,7 +65,7 @@ const base = os.middleware(async ({ context, next, path }) => {
  * `cr` (createRoute): Route builder with `base` + session + rateLimit.
  * Auth enforcement is handled in route handlers via contract-defined errors.
  */
-export const cr = os.use(
+export const cr = os.use(captureORPCTemplate).use(
     base.concat(
         os.middleware(async ({ context, next, path }) => {
             // One trade-off is that by the time the rate limit is checked

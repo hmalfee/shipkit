@@ -1,48 +1,45 @@
-import { OpenTelemetryTransportV3 } from '@opentelemetry/winston-transport';
-import winston from 'winston';
+import { getLogger } from '@logtape/logtape';
 
-import { consoleFormat, otelFormat } from './formats';
+import type { Logger } from '@logtape/logtape';
+import type { LoggerProvider } from '@opentelemetry/sdk-logs';
+import type { LoggerConfig, OtelLogSinkResult } from './config';
 
-let internalLogger: winston.Logger | null = null;
+import { initBrowserLogger } from './browser';
 
-function createWinstonLogger(serviceName?: string, otelTransport?: boolean) {
-    const transports: winston.transport[] = [
-        new winston.transports.Console({
-            format: consoleFormat,
-        }),
-    ];
+export type { Logger };
 
-    // Explicitly add the OTel transport if an endpoint is configured
-    if (otelTransport) {
-        transports.push(new OpenTelemetryTransportV3());
+export interface InitLoggerOptions extends LoggerConfig {
+    loggerProvider?: LoggerProvider;
+    otelSinkResult?: OtelLogSinkResult | null;
+}
+
+const isBrowser = typeof window !== 'undefined';
+let logProvider: LoggerProvider | undefined;
+let initialized = false;
+
+export const logger: Logger = getLogger();
+
+export async function initLogger(options: InitLoggerOptions): Promise<void> {
+    if (initialized) return;
+    initialized = true;
+
+    if (isBrowser) {
+        await initBrowserLogger({
+            otelSink: options.otelSinkResult?.sink,
+            environment: options.environment,
+        });
+        logProvider = options.otelSinkResult?.loggerProvider;
+        return;
     }
 
-    return winston.createLogger({
-        level: 'silly',
-        defaultMeta: serviceName ? { service: serviceName } : undefined,
-        format: winston.format.combine(
-            winston.format.errors({ stack: true }),
-            otelFormat,
-        ),
-        transports,
-    });
+    const { initNodeLogger } = await import('./node');
+    logProvider = await initNodeLogger(options);
 }
 
-// Initialize a default logger without service name for early logs
-internalLogger = createWinstonLogger();
-
-export const logger = new Proxy({} as winston.Logger, {
-    get(_target, prop: string | symbol, receiver: unknown): unknown {
-        internalLogger ??= createWinstonLogger();
-        const value: unknown = Reflect.get(internalLogger, prop, receiver);
-        if (typeof value === 'function') {
-            const fn = value as (...args: unknown[]) => unknown;
-            return fn.bind(internalLogger);
-        }
-        return value;
-    },
-});
-
-export function initLogger(serviceName: string, otelTransport?: boolean) {
-    internalLogger = createWinstonLogger(serviceName, otelTransport);
+export async function shutdownLogger(): Promise<void> {
+    await logProvider?.shutdown();
+    logProvider = undefined;
+    initialized = false;
 }
+
+export { withContext } from '@logtape/logtape';
