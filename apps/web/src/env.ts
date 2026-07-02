@@ -17,7 +17,8 @@ export const env = createEnv({
         NEXT_PUBLIC_ENV: process.env.NEXT_PUBLIC_ENV,
         NEXT_PUBLIC_SERVER_URL: process.env.NEXT_PUBLIC_SERVER_URL,
     },
-    rules: ({ ifValueThen }) => [
+    rules: ({ ifValueThen, equalValues }) => [
         ifValueThen('NODE_ENV', 'production', ['OTEL_URL']),
+        equalValues('NEXT_PUBLIC_ENV', 'NODE_ENV'),
     ],
 });

@@ -83,6 +83,16 @@ function createRulesBuilder<TSchema extends ZodRawShape>(_schema: TSchema) {
             },
         }),
 
+        equalValues: (
+            keyA: EnvKey,
+            keyB: EnvKey,
+            message?: string,
+        ): ValidationRule<EnvData> => ({
+            keys: [keyA, keyB],
+            message: message ?? `${keyA} and ${keyB} must have the same value`,
+            validate: (data) => data[keyA] === data[keyB],
+        }),
+
         mutuallyExclusive: (
             keyA: EnvKey,
             keyB: EnvKey,
