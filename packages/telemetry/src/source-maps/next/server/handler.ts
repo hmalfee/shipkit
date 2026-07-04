@@ -49,7 +49,6 @@ export function createOtelIngestHandler(otelEndpoint: string | undefined) {
 
     function getResolver(): SourceMapResolver | null {
         if (resolverChecked) return resolver;
-        resolverChecked = true;
 
         const exists = existsSync(DEFAULT_DB_PATH);
 
@@ -63,6 +62,7 @@ export function createOtelIngestHandler(otelEndpoint: string | undefined) {
         try {
             store = createSqliteStore(DEFAULT_DB_PATH);
             resolver = createSourceMapResolver((id) => store!.get(id));
+            resolverChecked = true;
             return resolver;
         } catch (error) {
             logger.error(
