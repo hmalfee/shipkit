@@ -32,6 +32,7 @@ app.use(
         allowMethods: ['GET', 'POST', 'DELETE', 'PUT', 'PATCH'],
         allowHeaders: ['Content-Type', 'Authorization'],
         credentials: true,
+        maxAge: 86400, // Cache preflight requests for 24 hours
     }),
 );
 // Make sure this is the last middleware, as it will handle all requests that reach this point

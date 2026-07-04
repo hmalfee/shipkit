@@ -227,6 +227,9 @@ export function initializeSdk(config: TelemetryConfig) {
         instrumentations: [
             new HttpInstrumentation({
                 ignoreIncomingRequestHook: (req) => {
+                    if (req.method === 'OPTIONS') {
+                        return true;
+                    }
                     const ignoredPaths = ['/', '/favicon.ico', '/health'];
                     return ignoredPaths.includes(req.url ?? '');
                 },

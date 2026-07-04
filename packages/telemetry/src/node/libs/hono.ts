@@ -26,6 +26,10 @@ const isProduction = process.env.NODE_ENV === 'production';
  */
 export function traceHonoRequest(): MiddlewareHandler {
     return async (c, next) => {
+        if (c.req.method === 'OPTIONS') {
+            return next();
+        }
+
         const startTime = performance.now();
         const req = c.req.raw as Request & {
             [TELEMETRY_MOUNTED]?: boolean;
