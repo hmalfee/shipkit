@@ -1,6 +1,5 @@
 import { existsSync } from 'node:fs';
 
-import { getLogger } from '@logtape/logtape';
 import { NextResponse } from 'next/server';
 import protobuf from 'protobufjs';
 
@@ -9,12 +8,12 @@ import type { OtlpLogsRequest, OtlpTraceRequest } from './attr-utils';
 import type { SourceMapResolver } from './resolver';
 import type { SourceMapStore } from './store';
 
+import { logger } from '../../../logger';
 import descriptor from './otlp-descriptor.json';
 import { resolveExceptionLogs, resolveExceptionStackTraces } from './resolve';
 import { createSourceMapResolver } from './resolver';
 import { createSqliteStore, DEFAULT_DB_PATH } from './store';
 
-const logger = getLogger(['telemetry', 'sourcemaps']);
 // oxlint-disable-next-line eslint-js/no-restricted-syntax
 const isProd = process.env.NODE_ENV === 'production';
 
@@ -28,6 +27,104 @@ function getProtoRoot(): protobuf.Root {
 
 const MAX_BODY_BYTES = 4 * 1024 * 1024; // 4 MB
 const COLLECTOR_TIMEOUT_MS = 10_000;
+
+const DEBUG_ID_MAPS_NEEDLE = new TextEncoder().encode(
+    'exception.stacktrace.debug_id_maps',
+);
+
+function containsDebugIdMaps(body: Uint8Array): boolean {
+    const needle = DEBUG_ID_MAPS_NEEDLE;
+    const haystack = body;
+    if (haystack.length < needle.length) return false;
+
+    outer: for (
+        let i = 0, end = haystack.length - needle.length;
+        i <= end;
+        i++
+    ) {
+        if (haystack[i] !== needle[0]) continue;
+        for (let j = 1; j < needle.length; j++) {
+            if (haystack[i + j] !== needle[j]) continue outer;
+        }
+        return true;
+    }
+    return false;
+}
+
+async function forwardToCollector(
+    targetUrl: string,
+    method: string,
+    contentType: string,
+    body: BodyInit | undefined,
+): Promise<NextResponse> {
+    try {
+        const response = await fetch(targetUrl, {
+            method,
+            headers: { 'Content-Type': contentType },
+            body,
+            signal: AbortSignal.timeout(COLLECTOR_TIMEOUT_MS),
+        });
+
+        if (
+            method === 'POST' &&
+            contentType.includes('application/x-protobuf')
+        ) {
+            return new NextResponse(null, {
+                status: response.ok ? 200 : response.status,
+            });
+        }
+
+        const cleanedHeaders = new Headers(response.headers);
+        cleanedHeaders.delete('content-encoding');
+        cleanedHeaders.delete('content-length');
+        cleanedHeaders.delete('content-disposition');
+
+        return new NextResponse(response.body, {
+            status: response.status,
+            headers: cleanedHeaders,
+        });
+    } catch (err) {
+        if (err instanceof DOMException && err.name === 'TimeoutError') {
+            return new NextResponse('Collector timeout', { status: 504 });
+        }
+        return new NextResponse('Collector unreachable', { status: 502 });
+    }
+}
+
+function enrichPayload(
+    body: Uint8Array,
+    joinedPath: string,
+    resolver: SourceMapResolver,
+): Uint8Array {
+    try {
+        const root = getProtoRoot();
+        const isTraces = joinedPath === 'v1/traces';
+        const typeName = isTraces
+            ? 'opentelemetry.proto.collector.trace.v1.ExportTraceServiceRequest'
+            : 'opentelemetry.proto.collector.logs.v1.ExportLogsServiceRequest';
+
+        const T = root.lookupType(typeName);
+        const message = T.decode(body);
+        const obj = T.toObject(message, {
+            defaults: true,
+        }) as OtlpTraceRequest | OtlpLogsRequest;
+
+        try {
+            if (isTraces) {
+                resolveExceptionStackTraces(obj as OtlpTraceRequest, resolver);
+            } else {
+                resolveExceptionLogs(obj as OtlpLogsRequest, resolver);
+            }
+        } catch {
+            // resolution error — return re-encoded original object
+        }
+
+        return T.encode(T.fromObject(obj)).finish();
+    } catch {
+        // decode error — return original bytes
+        return body;
+    }
+}
 
 /**
  * Creates a Next.js API route handler that acts as a proxy for OpenTelemetry ingestion.
@@ -53,7 +150,7 @@ export function createOtelIngestHandler(otelEndpoint: string | undefined) {
         const exists = existsSync(DEFAULT_DB_PATH);
 
         if (!exists) {
-            const msg = `Telemetry SourceMaps Database not found at ${DEFAULT_DB_PATH}. Client-side exception stacktraces will not be resolved.`;
+            const msg = `[OTel Proxy Handler]: Telemetry SourceMaps Database not found at ${DEFAULT_DB_PATH}. Client-side exception stacktraces will not be resolved.`;
             if (isProd) logger.error(msg);
             else logger.warn(msg);
             return null;
@@ -66,7 +163,7 @@ export function createOtelIngestHandler(otelEndpoint: string | undefined) {
             return resolver;
         } catch (error) {
             logger.error(
-                `Failed to initialize SourceMaps database: ${error instanceof Error ? error.message : String(error)}`,
+                `[OTel Proxy Handler]: Failed to initialize SourceMaps database: ${error instanceof Error ? error.message : String(error)}`,
             );
             return null;
         }
@@ -103,111 +200,57 @@ export function createOtelIngestHandler(otelEndpoint: string | undefined) {
         const targetUrl = `${otelEndpoint.replace(/\/$/, '')}/${joinedPath}`;
         const contentType = req.headers.get('content-type') ?? '';
         const isProto = contentType.includes('application/x-protobuf');
-
-        if (
+        const isResolvablePath =
             req.method === 'POST' &&
             isProto &&
-            (joinedPath === 'v1/traces' || joinedPath === 'v1/logs')
-        ) {
-            const contentLength = parseInt(
-                req.headers.get('content-length') ?? '0',
-                10,
+            (joinedPath === 'v1/traces' || joinedPath === 'v1/logs');
+
+        if (!isResolvablePath) {
+            const hasBody = req.method !== 'GET' && req.method !== 'HEAD';
+            const body = hasBody ? await req.text() : undefined;
+            return forwardToCollector(
+                targetUrl,
+                req.method,
+                contentType || 'application/json',
+                body,
             );
-            if (contentLength > MAX_BODY_BYTES) {
-                return new NextResponse('Payload too large', { status: 413 });
-            }
-
-            const body = new Uint8Array(await req.arrayBuffer());
-            let forwardBody: Uint8Array = body;
-
-            try {
-                const root = getProtoRoot();
-                const res = getResolver();
-                const isTraces = joinedPath === 'v1/traces';
-                const typeName = isTraces
-                    ? 'opentelemetry.proto.collector.trace.v1.ExportTraceServiceRequest'
-                    : 'opentelemetry.proto.collector.logs.v1.ExportLogsServiceRequest';
-
-                const T = root.lookupType(typeName);
-                const message = T.decode(body);
-
-                if (res) {
-                    const obj = T.toObject(message, {
-                        defaults: true,
-                    }) as OtlpTraceRequest | OtlpLogsRequest;
-
-                    try {
-                        if (isTraces) {
-                            resolveExceptionStackTraces(
-                                obj as OtlpTraceRequest,
-                                res,
-                            );
-                        } else {
-                            resolveExceptionLogs(obj as OtlpLogsRequest, res);
-                        }
-                    } catch {
-                        // silently ignore resolution errors, forward the original message
-                    }
-                    forwardBody = T.encode(T.fromObject(obj)).finish();
-                } else {
-                    forwardBody = T.encode(message).finish();
-                }
-            } catch {
-                // silently ignore decoding errors, forward the original message
-            }
-
-            try {
-                const response = await fetch(targetUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-protobuf' },
-                    body: forwardBody as unknown as BodyInit,
-                    signal: AbortSignal.timeout(COLLECTOR_TIMEOUT_MS),
-                });
-                return new NextResponse(null, {
-                    status: response.ok ? 200 : response.status,
-                });
-            } catch (err) {
-                if (
-                    err instanceof DOMException &&
-                    err.name === 'TimeoutError'
-                ) {
-                    return new NextResponse('Collector timeout', {
-                        status: 504,
-                    });
-                }
-                return new NextResponse('Collector unreachable', {
-                    status: 502,
-                });
-            }
         }
 
-        const hasBody = req.method !== 'GET' && req.method !== 'HEAD';
-        const bodyText = hasBody ? await req.text() : undefined;
-
-        try {
-            const response = await fetch(targetUrl, {
-                method: req.method,
-                headers: {
-                    'Content-Type': contentType || 'application/json',
-                },
-                body: bodyText,
-                signal: AbortSignal.timeout(COLLECTOR_TIMEOUT_MS),
-            });
-
-            const cleanedHeaders = new Headers(response.headers);
-            cleanedHeaders.delete('content-encoding');
-            cleanedHeaders.delete('content-length');
-            cleanedHeaders.delete('content-disposition');
-
-            return new NextResponse(response.body, {
-                status: response.status,
-                headers: cleanedHeaders,
-            });
-        } catch (err) {
-            if (err instanceof DOMException && err.name === 'TimeoutError') {
-                return new NextResponse('Collector timeout', { status: 504 });
-            }
-            return new NextResponse('Collector unreachable', { status: 502 });
+        const contentLength = parseInt(
+            req.headers.get('content-length') ?? '0',
+            10,
+        );
+        if (contentLength > MAX_BODY_BYTES) {
+            return new NextResponse('Payload too large', { status: 413 });
         }
+
+        const body = new Uint8Array(await req.arrayBuffer());
+
+        if (!containsDebugIdMaps(body)) {
+            return forwardToCollector(
+                targetUrl,
+                'POST',
+                'application/x-protobuf',
+                body as unknown as BodyInit,
+            );
+        }
+
+        const res = getResolver();
+        if (!res) {
+            return forwardToCollector(
+                targetUrl,
+                'POST',
+                'application/x-protobuf',
+                body as unknown as BodyInit,
+            );
+        }
+
+        const enrichedBody = enrichPayload(body, joinedPath, res);
+        return forwardToCollector(
+            targetUrl,
+            'POST',
+            'application/x-protobuf',
+            enrichedBody as unknown as BodyInit,
+        );
     };
 }
