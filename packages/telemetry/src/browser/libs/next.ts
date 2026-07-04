@@ -8,6 +8,7 @@ export const nextjsBrowserIgnoredUrls: (string | RegExp)[] = [
     /\/__nextjs_/,
     /\/_next\//,
     /\.hot-update\./,
+    /_rsc=/,
 ];
 
 const tracer = trace.getTracer('@mento-mark/telemetry/browser/next');
