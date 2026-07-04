@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 
+import { getActiveSpan } from '@mento-mark/telemetry/node';
 import { createOtelIngestHandler } from '@mento-mark/telemetry/source-maps/next/server';
 
 import { env } from '@/env';
@@ -44,13 +45,26 @@ async function handler(
 ) {
     const { slug } = await params;
 
+    const span = getActiveSpan();
+
     for (let i = slug.length; i > 0; i--) {
         const prefix = '/' + slug.slice(0, i).join('/');
         const router = routers[prefix];
         if (router) {
+            // When using catch-all, Next.js sets the `next.route` attribute to the catch-all route
+            // (e.g. `/api/[...slug]`) instead of the actual route (e.g. `/api/hello/world`). This
+            // is not ideal for observability, so we set a `http.route` attribute to the resolved
+            // route for better observability.
+            span?.setAttribute('http.route', `/api${prefix}`);
+            span?.updateName(`${req.method} /api${prefix}`);
+
             return router(req, { params: { path: slug.slice(i) } });
         }
     }
+
+    const fallbackRoute = `/api/${slug.join('/')}`;
+    span?.setAttribute('http.route', fallbackRoute);
+    span?.updateName(`${req.method} ${fallbackRoute}`);
 
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
 }
