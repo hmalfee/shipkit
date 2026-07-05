@@ -170,8 +170,6 @@ function logRequestOutcome(
 
     if (status >= 500) {
         requestLogger.error(template, fields);
-    } else if (status >= 400) {
-        requestLogger.warn(template, fields);
     } else {
         requestLogger.info(template, fields);
     }
