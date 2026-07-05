@@ -17,6 +17,8 @@ const TELEMETRY_MOUNTED = Symbol('telemetry_mounted');
 // oxlint-disable-next-line eslint-js/no-restricted-syntax
 const isProduction = process.env.NODE_ENV === 'production';
 
+type RequestLogger = ReturnType<typeof logger.with>;
+
 /**
  * Hono middleware that adds OpenTelemetry tracing and logging to requests.
  * Extracts propagation context from headers, manages the active span for the request lifecycle,
@@ -26,8 +28,11 @@ const isProduction = process.env.NODE_ENV === 'production';
  */
 export function traceHonoRequest(): MiddlewareHandler {
     return async (c, next) => {
+        // Ignore OPTIONS requests for telemetry but allow CORS headers on them
         if (c.req.method === 'OPTIONS') {
-            return next();
+            await next();
+            mergePropagationHeaders(c);
+            return;
         }
 
         const startTime = performance.now();
@@ -51,137 +56,123 @@ export function traceHonoRequest(): MiddlewareHandler {
                 return startSpan(
                     `${c.req.method} ${c.req.path}`,
                     {},
-                    async (newSpan) => {
-                        return handleRequest(c, next, newSpan, startTime);
-                    },
+                    (newSpan) => handleRequest(c, next, newSpan, startTime),
                 );
-            } else {
-                return handleRequest(c, next, span, startTime);
             }
+
+            return handleRequest(c, next, span, startTime);
         });
     };
 }
 
+/**
+ * Runs the downstream handler chain, then finalizes the span and logs the
+ * outcome exactly once — whether `next()` resolves or throws — via `finally`.
+ */
 async function handleRequest(
     c: Context,
     next: () => Promise<void>,
     span: Span,
     startTime: number,
-) {
+): Promise<void> {
     const method = c.req.method;
     const route = c.req.path;
-
     const requestLogger = logger.with({ route });
-    c.set('logger', requestLogger);
+
+    let thrownError: Error | undefined;
 
     try {
         await next();
-
-        const httpRoute = getRouteTemplate(span) ?? routePath(c) ?? route;
-
-        span.updateName(`${method} ${httpRoute}`);
-        span.setAttribute(ATTR_URL_PATH, route);
-        span.setAttribute(ATTR_HTTP_ROUTE, httpRoute);
-
-        span.setAttribute(ATTR_HTTP_RESPONSE_STATUS_CODE, c.res.status);
-        c.res.headers.append('x-trace-id', span.spanContext().traceId);
-
-        const allowHeaders = c.res.headers.get('Access-Control-Allow-Headers');
-        if (allowHeaders) {
-            c.res.headers.set(
-                'Access-Control-Allow-Headers',
-                [
-                    ...new Set([
-                        ...allowHeaders.split(',').map((h) => h.trim()),
-                        ...PROPAGATION_HEADERS,
-                    ]),
-                ].join(', '),
-            );
-        }
-
-        if (c.error) {
-            span.setStatus({
-                code: SpanStatusCode.ERROR,
-                message: c.error.message,
-            });
-            span.recordException(c.error);
-        } else if (c.res.status >= 500) {
-            span.setStatus({ code: SpanStatusCode.ERROR });
-        }
-
-        const durationS = (performance.now() - startTime) / 1000;
-        const durationMs = Math.round(durationS * 1000);
-
-        if (!isProduction) {
-            if (c.res.status >= 500) {
-                requestLogger.error(
-                    '{method} {httpRoute} {status} {durationMs}ms',
-                    {
-                        method,
-                        httpRoute,
-                        status: c.res.status,
-                        durationMs,
-                    },
-                );
-            } else if (c.res.status >= 400) {
-                requestLogger.warn(
-                    '{method} {httpRoute} {status} {durationMs}ms',
-                    {
-                        method,
-                        httpRoute,
-                        status: c.res.status,
-                        durationMs,
-                    },
-                );
-            } else {
-                requestLogger.info(
-                    '{method} {httpRoute} {status} {durationMs}ms',
-                    { method, httpRoute, status: c.res.status, durationMs },
-                );
-            }
-        }
     } catch (err) {
-        const httpRoute = getRouteTemplate(span) ?? routePath(c) ?? route;
-
-        span.updateName(`${method} ${httpRoute}`);
-        span.setAttribute(ATTR_URL_PATH, route);
-        span.setAttribute(ATTR_HTTP_ROUTE, httpRoute);
-        span.setAttribute(ATTR_HTTP_RESPONSE_STATUS_CODE, 500);
-
-        c.res.headers.append('x-trace-id', span.spanContext().traceId);
-        const allowHeaders = c.res.headers.get('Access-Control-Allow-Headers');
-        if (allowHeaders) {
-            c.res.headers.set(
-                'Access-Control-Allow-Headers',
-                [
-                    ...new Set([
-                        ...allowHeaders.split(',').map((h) => h.trim()),
-                        ...PROPAGATION_HEADERS,
-                    ]),
-                ].join(', '),
-            );
-        }
-
-        span.setStatus({
-            code: SpanStatusCode.ERROR,
-            message: (err as Error).message,
-        });
-        span.recordException(err as Error);
-
-        const durationS = (performance.now() - startTime) / 1000;
-        const durationMs = Math.round(durationS * 1000);
+        thrownError = err as Error;
+        throw err;
+    } finally {
+        const { httpRoute, status } = finalizeSpan(
+            c,
+            span,
+            method,
+            route,
+            thrownError,
+        );
 
         if (!isProduction) {
-            requestLogger.error(
-                '{method} {httpRoute} {status} {durationMs}ms',
-                {
-                    method,
-                    httpRoute,
-                    status: 500,
-                    durationMs,
-                },
+            const durationMs = Math.round(performance.now() - startTime);
+            logRequestOutcome(
+                requestLogger,
+                method,
+                httpRoute,
+                status,
+                durationMs,
             );
         }
-        throw err;
+    }
+}
+
+/**
+ * Sets the final span name/attributes/status and appends response headers.
+ * `thrownError` is only present when `next()` threw past this middleware —
+ * distinct from an error already handled internally and surfaced via `c.error`.
+ */
+function finalizeSpan(
+    c: Context,
+    span: Span,
+    method: string,
+    route: string,
+    thrownError?: Error,
+): { httpRoute: string; status: number } {
+    const httpRoute = getRouteTemplate(span) ?? routePath(c) ?? route;
+    const status = thrownError ? 500 : c.res.status;
+
+    span.updateName(`${method} ${httpRoute}`);
+    span.setAttribute(ATTR_URL_PATH, route);
+    span.setAttribute(ATTR_HTTP_ROUTE, httpRoute);
+    span.setAttribute(ATTR_HTTP_RESPONSE_STATUS_CODE, status);
+
+    c.res.headers.append('x-trace-id', span.spanContext().traceId);
+    mergePropagationHeaders(c);
+
+    const error = thrownError ?? c.error;
+    if (error) {
+        span.setStatus({ code: SpanStatusCode.ERROR, message: error.message });
+        span.recordException(error);
+    } else if (status >= 500) {
+        span.setStatus({ code: SpanStatusCode.ERROR });
+    }
+
+    return { httpRoute, status };
+}
+
+/** Merges the propagation headers into any existing CORS allow-list. */
+function mergePropagationHeaders(c: Context): void {
+    const allowHeaders = c.res.headers.get('Access-Control-Allow-Headers');
+    if (!allowHeaders) return;
+
+    c.res.headers.set(
+        'Access-Control-Allow-Headers',
+        [
+            ...new Set([
+                ...allowHeaders.split(',').map((h) => h.trim()),
+                ...PROPAGATION_HEADERS,
+            ]),
+        ].join(', '),
+    );
+}
+
+function logRequestOutcome(
+    requestLogger: RequestLogger,
+    method: string,
+    httpRoute: string,
+    status: number,
+    durationMs: number,
+): void {
+    const template = '{method} {httpRoute} {status} {durationMs}ms';
+    const fields = { method, httpRoute, status, durationMs };
+
+    if (status >= 500) {
+        requestLogger.error(template, fields);
+    } else if (status >= 400) {
+        requestLogger.warn(template, fields);
+    } else {
+        requestLogger.info(template, fields);
     }
 }
