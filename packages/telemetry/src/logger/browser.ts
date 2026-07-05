@@ -1,15 +1,13 @@
-import { configure, getConsoleSink } from '@logtape/logtape';
-import {
-    DEFAULT_REDACT_FIELDS,
-    EMAIL_ADDRESS_PATTERN,
-    JWT_PATTERN,
-    redactByField,
-    redactByPattern,
-} from '@logtape/redaction';
+import { configure } from '@logtape/logtape';
 
 import type { Sink } from '@logtape/logtape';
 
-import { consoleFormatter } from './formatter';
+import {
+    buildLoggerCategories,
+    buildRedactedConsoleSink,
+    withProdConsoleGate,
+    withProdOtelGate,
+} from './internals';
 
 export interface BrowserLoggerConfig {
     otelSink?: Sink;
@@ -17,49 +15,28 @@ export interface BrowserLoggerConfig {
 }
 
 export async function initBrowserLogger(config: BrowserLoggerConfig) {
-    const rawConsoleSink = redactByField(
-        getConsoleSink({
-            console,
-            formatter: redactByPattern(consoleFormatter, [
-                EMAIL_ADDRESS_PATTERN,
-                JWT_PATTERN,
-            ]),
-        }),
-        {
-            fieldPatterns: DEFAULT_REDACT_FIELDS,
-            action: () => '[REDACTED]',
-        },
-    );
-
     const isProd = config.environment === 'production';
 
-    const consoleSink: Sink = (record) => {
-        if (!isProd || record.properties?.forceConsole) {
-            rawConsoleSink(record);
-        }
+    const consoleSink = withProdConsoleGate(
+        isProd,
+        buildRedactedConsoleSink(console),
+    );
+    const otelSink = config.otelSink
+        ? withProdOtelGate(isProd, config.otelSink)
+        : undefined;
+
+    const sinks: Record<string, Sink> = {
+        console: consoleSink,
     };
+    if (otelSink) {
+        sinks.otel = otelSink;
+    }
 
     await configure({
-        sinks: {
-            console: consoleSink,
-            ...(config.otelSink ? { otel: config.otelSink } : {}),
-        },
-        loggers: [
-            {
-                category: [],
-                sinks: ['console', ...(config.otelSink ? ['otel'] : [])],
-                lowestLevel: 'debug',
-            },
-            {
-                category: ['local'],
-                sinks: ['console'],
-                lowestLevel: 'debug',
-            },
-            {
-                category: ['logtape', 'meta'],
-                sinks: ['console'],
-                lowestLevel: 'warning',
-            },
-        ],
+        sinks,
+        loggers: buildLoggerCategories([
+            'console',
+            ...(otelSink ? ['otel'] : []),
+        ]),
     });
 }

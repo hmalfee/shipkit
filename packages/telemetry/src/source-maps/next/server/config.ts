@@ -124,7 +124,7 @@ export function withTelemetrySourceMaps(nextConfig: NextConfig): NextConfig {
                                 fsSync.copyFileSync(DEFAULT_DB_PATH, target);
                                 logger.info(
                                     '✨ Copied sourcemaps.db to {target}',
-                                    { target, forceConsole: true },
+                                    { target, alwaysLog: true },
                                 );
                             }
                         }

@@ -10,7 +10,6 @@ import {
 import type { LogRecord, Sink } from '@logtape/logtape';
 import type { LogRecordProcessor } from '@opentelemetry/sdk-logs';
 
-import { logger } from '.';
 import { buildResource } from '../shared';
 
 export interface LoggerConfig {
@@ -20,6 +19,8 @@ export interface LoggerConfig {
     environment: string;
     resourceAttributes?: Record<string, string>;
     extraLogProcessors?: LogRecordProcessor[];
+    /** Called when the OTLP log exporter fails. Defaults to console.error. */
+    onExportError?: (message: string, meta: Record<string, unknown>) => void;
 }
 
 export interface OtelLogSinkResult {
@@ -30,10 +31,18 @@ export interface OtelLogSinkResult {
 // Wrapper to catch and log export errors
 class CustomOTLPLogExporter extends OTLPLogExporter {
     public readonly customUrl: string;
+    private readonly onExportError: (
+        message: string,
+        meta: Record<string, unknown>,
+    ) => void;
 
-    constructor(config: { url: string }) {
+    constructor(config: {
+        url: string;
+        onExportError: (message: string, meta: Record<string, unknown>) => void;
+    }) {
         super(config);
         this.customUrl = config.url;
+        this.onExportError = config.onExportError;
     }
 
     override export(
@@ -47,7 +56,7 @@ class CustomOTLPLogExporter extends OTLPLogExporter {
             items as Parameters<OTLPLogExporter['export']>[0],
             (result) => {
                 if (result.code !== ExportResultCode.SUCCESS) {
-                    logger.error(
+                    this.onExportError(
                         `[Telemetry] Failed to export logs to OTEL endpoint: ${this.customUrl}\n`,
                         { ...result },
                     );
@@ -82,6 +91,10 @@ export function buildOtelLogSink(
     const endpoint = config.otelEndpoint?.replace(/\/$/, '');
     if (!endpoint) return null;
 
+    const onExportError =
+        // oxlint-disable-next-line no-console
+        config.onExportError ?? ((msg, meta) => console.error(msg, meta));
+
     const loggerProvider = new LoggerProvider({
         resource: buildResource({
             serviceName: config.serviceName,
@@ -92,7 +105,10 @@ export function buildOtelLogSink(
         processors: [
             ...(config.extraLogProcessors ?? []),
             new BatchLogRecordProcessor(
-                new CustomOTLPLogExporter({ url: `${endpoint}/v1/logs` }),
+                new CustomOTLPLogExporter({
+                    url: `${endpoint}/v1/logs`,
+                    onExportError,
+                }),
             ),
         ],
     });

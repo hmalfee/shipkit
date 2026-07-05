@@ -45,7 +45,7 @@ serve(
     },
     (info) => {
         logger.info(`Server is running on http://localhost:${info.port}`, {
-            forceConsole: true,
+            alwaysLog: true,
         });
     },
 );

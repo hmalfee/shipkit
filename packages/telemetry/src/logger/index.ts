@@ -8,8 +8,20 @@ import { initBrowserLogger } from './browser';
 
 export type { Logger };
 
+/**
+ * Production logging behavior:
+ *
+ * | Level   | alwaysLog | Console | OTEL |
+ * |---------|-----------|---------|------|
+ * | debug   | false     | -       | -    |
+ * | info    | false     | -       | -    |
+ * | warn+   | false     | -       | yes  |
+ * | any     | true      | yes     | yes  |
+ *
+ * Dev: all levels go to both sinks unconditionally.
+ */
+
 export interface InitLoggerOptions extends LoggerConfig {
-    loggerProvider?: LoggerProvider;
     otelSinkResult?: OtelLogSinkResult | null;
 }
 

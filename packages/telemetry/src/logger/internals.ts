@@ -1,4 +1,13 @@
-import type { LogRecord } from '@logtape/logtape';
+import { getConsoleSink } from '@logtape/logtape';
+import {
+    DEFAULT_REDACT_FIELDS,
+    EMAIL_ADDRESS_PATTERN,
+    JWT_PATTERN,
+    redactByField,
+    redactByPattern,
+} from '@logtape/redaction';
+
+import type { LoggerConfig, LogRecord, Sink } from '@logtape/logtape';
 
 const RESET = '\x1b[0m';
 const TIMESTAMP_COLOR = '\x1b[38;2;100;140;100m'; // muted green
@@ -38,7 +47,7 @@ function colorizeLevel(level: string): string {
  * - Category: dimmed
  * - Error objects: appended via `%o` so the terminal prints the stack trace.
  */
-export function consoleFormatter(record: LogRecord): unknown[] {
+function consoleFormatter(record: LogRecord): unknown[] {
     // Build message string from LogTape template parts
     let msg = '';
     const values: unknown[] = [];
@@ -67,4 +76,72 @@ export function consoleFormatter(record: LogRecord): unknown[] {
     }
 
     return [formatted, ...values];
+}
+
+const PROD_MIN_LEVELS: ReadonlySet<string> = new Set([
+    'warning',
+    'error',
+    'fatal',
+]);
+
+function isAlwaysLog(record: LogRecord): boolean {
+    return Boolean(record.properties?.alwaysLog);
+}
+
+/**
+ * Console policy: in production, console output requires `alwaysLog: true`,
+ * regardless of level. In development everything passes through.
+ */
+export function withProdConsoleGate(isProd: boolean, inner: Sink): Sink {
+    return (record) => {
+        if (isProd && !isAlwaysLog(record)) return;
+        inner(record);
+    };
+}
+
+/**
+ * OTEL policy: in production, warn+ (or alwaysLog) records are exported.
+ * In development everything passes through.
+ */
+export function withProdOtelGate(isProd: boolean, inner: Sink): Sink {
+    return (record) => {
+        if (
+            isProd &&
+            !isAlwaysLog(record) &&
+            !PROD_MIN_LEVELS.has(record.level)
+        ) {
+            return;
+        }
+        inner(record);
+    };
+}
+
+export function buildRedactedConsoleSink(consoleRef?: Console): Sink {
+    return redactByField(
+        getConsoleSink({
+            ...(consoleRef ? { console: consoleRef } : {}),
+            formatter: redactByPattern(consoleFormatter, [
+                EMAIL_ADDRESS_PATTERN,
+                JWT_PATTERN,
+            ]),
+        }),
+        {
+            fieldPatterns: DEFAULT_REDACT_FIELDS,
+            action: () => '[REDACTED]',
+        },
+    );
+}
+
+export function buildLoggerCategories(
+    rootSinks: string[],
+): LoggerConfig<string, string>[] {
+    return [
+        { category: [], sinks: rootSinks, lowestLevel: 'debug' },
+        { category: ['local'], sinks: ['console'], lowestLevel: 'debug' },
+        {
+            category: ['logtape', 'meta'],
+            sinks: ['console'],
+            lowestLevel: 'warning',
+        },
+    ];
 }
