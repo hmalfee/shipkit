@@ -2,10 +2,10 @@ import { redisStorage } from '@better-auth/redis-storage';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 
+import type { Redis } from '@mento-mark/db/redis';
 import type { USER_ROLE_VALUES } from '@mento-mark/shared/constants';
 import type { TablesRelationalConfig } from 'drizzle-orm';
 import type { PgDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core';
-import type { Redis } from 'ioredis';
 import type { OAuthProvidersConfig } from './social-providers';
 
 import { cookieForwarderPlugin } from './plugins/cookie-forwarder';

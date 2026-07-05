@@ -15,9 +15,9 @@
         "better-auth": "catalog:"
     },
     "devDependencies": {
+        "@mento-mark/db": "workspace:*",
         "@mento-mark/ts-config": "workspace:*",
         "drizzle-orm": "^0.45.2",
-        "ioredis": "^5.10.1",
         "typescript": "catalog:"
     }
 }

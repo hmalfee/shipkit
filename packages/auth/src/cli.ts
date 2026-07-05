@@ -1,4 +1,4 @@
-import type { Redis } from 'ioredis';
+import type { Redis } from '@mento-mark/db/redis';
 import type { AuthDatabase } from './config';
 
 import { createBetterAuthConfig } from './config';

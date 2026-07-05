@@ -231,15 +231,15 @@ importers:
         specifier: 'catalog:'
         version: 1.5.5(better-sqlite3@9.6.0)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@opentelemetry/api@1.9.1)(@types/better-sqlite3@7.6.13)(@types/pg@8.20.0)(@upstash/redis@1.38.0)(better-sqlite3@9.6.0)(kysely@0.28.17)(pg@8.20.0))(mongodb@7.2.0)(next@16.2.4(@opentelemetry/api@1.9.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(pg@8.20.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
     devDependencies:
+      '@mento-mark/db':
+        specifier: workspace:*
+        version: link:../db
       '@mento-mark/ts-config':
         specifier: workspace:*
         version: link:../../tooling/ts-config
       drizzle-orm:
         specifier: ^0.45.2
         version: 0.45.2(@opentelemetry/api@1.9.1)(@types/better-sqlite3@7.6.13)(@types/pg@8.20.0)(@upstash/redis@1.38.0)(better-sqlite3@9.6.0)(kysely@0.28.17)(pg@8.20.0)
-      ioredis:
-        specifier: ^5.10.1
-        version: 5.10.1
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
