@@ -26,16 +26,24 @@ type ServerClient<TClient, TContract> = TClient extends (
 ) => infer R
     ? ProcedureType<TContract> extends 'query'
         ? {
-              prefetchQuery: (
-                  ...args: A extends []
-                      ? [opts?: Record<string, unknown>]
-                      : [input?: A[0], opts?: Record<string, unknown>]
-              ) => Promise<void>;
-              setQueryData: (
-                  ...args: A extends []
-                      ? [data: Awaited<R>]
-                      : [input: A[0], data: Awaited<R>]
-              ) => void;
+              prefetchQuery: undefined extends A[0]
+                  ? {
+                        (opts?: Record<string, unknown>): Promise<void>;
+                        (
+                            input: A[0],
+                            opts?: Record<string, unknown>,
+                        ): Promise<void>;
+                    }
+                  : (
+                        input: A[0],
+                        opts?: Record<string, unknown>,
+                    ) => Promise<void>;
+              setQueryData: undefined extends A[0]
+                  ? {
+                        (data: Awaited<R>): void;
+                        (input: A[0], data: Awaited<R>): void;
+                    }
+                  : (input: A[0], data: Awaited<R>) => void;
           }
         : never
     : {
@@ -95,12 +103,26 @@ export function createSSRHelpers<
                         }
 
                         const leaf = {
-                            prefetchQuery: async (
-                                input?: unknown,
-                                opts?: Record<string, unknown>,
-                            ) => {
+                            prefetchQuery: async (...args: unknown[]) => {
                                 if (!getQueryOpts) return;
                                 const qc = getQueryClient();
+                                const hasInput =
+                                    contractChild['~orpc'].inputSchema !==
+                                    undefined;
+                                let input: unknown;
+                                let opts: Record<string, unknown> | undefined;
+
+                                if (hasInput) {
+                                    input = args[0];
+                                    opts = args[1] as
+                                        | Record<string, unknown>
+                                        | undefined;
+                                } else {
+                                    opts = args[0] as
+                                        | Record<string, unknown>
+                                        | undefined;
+                                }
+
                                 const mergedOpts =
                                     input !== undefined
                                         ? { input, ...opts }
@@ -130,15 +152,18 @@ export function createSSRHelpers<
                                     );
                                 }
                             },
-                            setQueryData: (
-                                inputOrData: unknown,
-                                maybeData?: unknown,
-                            ) => {
-                                const hasInput = maybeData !== undefined;
-                                const input = hasInput
-                                    ? inputOrData
-                                    : undefined;
-                                const data = hasInput ? maybeData : inputOrData;
+                            setQueryData: (...args: unknown[]) => {
+                                const hasInput =
+                                    contractChild['~orpc'].inputSchema !==
+                                    undefined;
+                                let input: unknown;
+                                let data: unknown;
+                                if (hasInput) {
+                                    input = args[0];
+                                    data = args[1];
+                                } else {
+                                    data = args[0];
+                                }
 
                                 const queryKeyFn = queryUtilsChild?.queryKey as
                                     | ((opts: { input?: unknown }) => unknown[])

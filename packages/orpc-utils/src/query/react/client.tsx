@@ -51,9 +51,10 @@ type EnhancedClient<TClient, TContract> = TClient extends (
     ? TClient &
           (ProcedureType<TContract> extends 'query'
               ? WithInputSchema<TContract> & {
-                    useQuery: (
-                        ...args: A extends []
-                            ? [
+                    $inferOutput: Awaited<R>;
+                    useQuery: undefined extends A[0]
+                        ? {
+                              (
                                   opts?: Omit<
                                       UseQueryOptions<
                                           Awaited<R>,
@@ -61,9 +62,9 @@ type EnhancedClient<TClient, TContract> = TClient extends (
                                       >,
                                       'queryKey' | 'queryFn'
                                   >,
-                              ]
-                            : [
-                                  input?: A[0],
+                              ): UseQueryResult<Awaited<R>, ErrorOf<TContract>>;
+                              (
+                                  input: A[0],
                                   opts?: Omit<
                                       UseQueryOptions<
                                           Awaited<R>,
@@ -71,11 +72,28 @@ type EnhancedClient<TClient, TContract> = TClient extends (
                                       >,
                                       'queryKey' | 'queryFn'
                                   >,
-                              ]
-                    ) => UseQueryResult<Awaited<R>, ErrorOf<TContract>>;
+                              ): UseQueryResult<Awaited<R>, ErrorOf<TContract>>;
+                          }
+                        : (
+                              input: A[0],
+                              opts?: Omit<
+                                  UseQueryOptions<
+                                      Awaited<R>,
+                                      ErrorOf<TContract>
+                                  >,
+                                  'queryKey' | 'queryFn'
+                              >,
+                          ) => UseQueryResult<Awaited<R>, ErrorOf<TContract>>;
+                    queryKey: undefined extends A[0]
+                        ? {
+                              (): readonly unknown[];
+                              (input: A[0]): readonly unknown[];
+                          }
+                        : (input: A[0]) => readonly unknown[];
                 }
               : ProcedureType<TContract> extends 'mutation'
                 ? WithInputSchema<TContract> & {
+                      $inferOutput: Awaited<R>;
                       useMutation: (
                           opts?: Omit<
                               UseMutationOptions<
@@ -90,6 +108,7 @@ type EnhancedClient<TClient, TContract> = TClient extends (
                           ErrorOf<TContract>,
                           A extends [] ? void : A[0]
                       >;
+                      mutationKey: () => readonly unknown[];
                   }
                 : Record<string, never>)
     : {
@@ -110,27 +129,38 @@ type UtilsClient<TClient, TContract> = TClient extends (
 ) => infer R
     ? ProcedureType<TContract> extends 'query'
         ? {
-              invalidateQuery: (
-                  ...args: A extends [] ? [] : [input?: A[0]]
-              ) => Promise<void>;
-              setQueryData: (
-                  ...args: A extends []
-                      ? [
+              invalidateQuery: undefined extends A[0]
+                  ? {
+                        (): Promise<void>;
+                        (input: A[0]): Promise<void>;
+                    }
+                  : (input: A[0]) => Promise<void>;
+              setQueryData: undefined extends A[0]
+                  ? {
+                        (
                             updater:
                                 | Awaited<R>
                                 | ((
                                       old: Awaited<R> | undefined,
                                   ) => Awaited<R> | undefined),
-                        ]
-                      : [
+                        ): void;
+                        (
                             input: A[0],
                             updater:
                                 | Awaited<R>
                                 | ((
                                       old: Awaited<R> | undefined,
                                   ) => Awaited<R> | undefined),
-                        ]
-              ) => void;
+                        ): void;
+                    }
+                  : (
+                        input: A[0],
+                        updater:
+                            | Awaited<R>
+                            | ((
+                                  old: Awaited<R> | undefined,
+                              ) => Awaited<R> | undefined),
+                    ) => void;
           }
         : never
     : {
@@ -194,7 +224,11 @@ function buildUtilsProxy(
                     }
 
                     const utilsLeaf = {
-                        invalidateQuery: async (input?: unknown) => {
+                        invalidateQuery: async (...args: unknown[]) => {
+                            const hasInput =
+                                contractChild['~orpc'].inputSchema !==
+                                undefined;
+                            const input = hasInput ? args[0] : undefined;
                             const keyFn = queryUtilsChild.key as (opts: {
                                 input?: unknown;
                             }) => unknown[];
@@ -202,15 +236,18 @@ function buildUtilsProxy(
                                 queryKey: keyFn({ input }),
                             });
                         },
-                        setQueryData: (
-                            inputOrUpdater: unknown,
-                            maybeUpdater?: unknown,
-                        ) => {
-                            const hasInput = maybeUpdater !== undefined;
-                            const input = hasInput ? inputOrUpdater : undefined;
-                            const updater = hasInput
-                                ? maybeUpdater
-                                : inputOrUpdater;
+                        setQueryData: (...args: unknown[]) => {
+                            const hasInput =
+                                contractChild['~orpc'].inputSchema !==
+                                undefined;
+                            let input: unknown;
+                            let updater: unknown;
+                            if (hasInput) {
+                                input = args[0];
+                                updater = args[1];
+                            } else {
+                                updater = args[0];
+                            }
 
                             const queryKeyFn =
                                 queryUtilsChild.queryKey as (opts: {
@@ -293,16 +330,51 @@ function enhance(
                             : {}),
                         ...(meta.type === 'query'
                             ? {
-                                  useQuery: (
-                                      input?: unknown,
-                                      opts?: Record<string, unknown>,
-                                  ) => {
+                                  useQuery: (...args: unknown[]) => {
+                                      const hasInput =
+                                          def.inputSchema !== undefined;
+                                      let input: unknown;
+                                      let opts:
+                                          | Record<string, unknown>
+                                          | undefined;
+
+                                      if (hasInput) {
+                                          input = args[0];
+                                          opts = args[1] as
+                                              | Record<string, unknown>
+                                              | undefined;
+                                      } else {
+                                          opts = args[0] as
+                                              | Record<string, unknown>
+                                              | undefined;
+                                      }
+
                                       const mergedOpts =
                                           input !== undefined
                                               ? { input, ...opts }
                                               : (opts ?? {});
                                       return useQuery(
                                           getQueryOpts!(mergedOpts),
+                                      );
+                                  },
+                                  queryKey: (...args: unknown[]) => {
+                                      const hasInput =
+                                          def.inputSchema !== undefined;
+                                      const input = hasInput
+                                          ? args[0]
+                                          : undefined;
+
+                                      const keyFn =
+                                          queryUtilsChild?.queryKey as
+                                              | ((opts?: {
+                                                    input?: unknown;
+                                                }) => readonly unknown[])
+                                              | undefined;
+                                      if (!keyFn) return [];
+                                      return keyFn(
+                                          input !== undefined
+                                              ? { input }
+                                              : undefined,
                                       );
                                   },
                               }
@@ -312,6 +384,19 @@ function enhance(
                                   useMutation: (
                                       opts?: Record<string, unknown>,
                                   ) => useMutation(getMutationOpts!(opts)),
+                                  mutationKey: () => {
+                                      const keyFn =
+                                          queryUtilsChild?.mutationKey as
+                                              | ((
+                                                    opts?: Record<
+                                                        string,
+                                                        unknown
+                                                    >,
+                                                ) => readonly unknown[])
+                                              | undefined;
+                                      if (!keyFn) return [];
+                                      return keyFn();
+                                  },
                               }
                             : {}),
                     },
