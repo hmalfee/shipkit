@@ -7,7 +7,7 @@ import { getActiveSpan, setRouteTemplate } from '../spans';
  * from the matched procedure's contract and stores it on the
  * active OpenTelemetry span.
  *
- * Usage: `os.use(routeTemplate)` in the middleware chain.
+ * Usage: `os.use(captureORPCTemplate)` in the middleware chain.
  */
 export const captureORPCTemplate: Middleware<
     Context,
