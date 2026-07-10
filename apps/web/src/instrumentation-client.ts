@@ -1,9 +1,5 @@
 import { initBrowserTelemetry } from '@mento-mark/telemetry/browser';
 import {
-    createNavigationSpan,
-    nextjsBrowserIgnoredUrls,
-} from '@mento-mark/telemetry/browser/next';
-import {
     DebugIdEnrichingLogProcessor,
     DebugIdEnrichingSpanProcessor,
 } from '@mento-mark/telemetry/source-maps/next/client';
@@ -18,7 +14,5 @@ initBrowserTelemetry({
     environment: env.NEXT_PUBLIC_ENV,
     extraSpanProcessors: [new DebugIdEnrichingSpanProcessor()],
     extraLogProcessors: [new DebugIdEnrichingLogProcessor()],
-    ignoredUrls: nextjsBrowserIgnoredUrls,
+    nextjs: true,
 });
-
-export const onRouterTransitionStart = createNavigationSpan;

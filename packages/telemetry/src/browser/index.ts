@@ -14,12 +14,43 @@ import {
 } from '@opentelemetry/sdk-trace-base';
 import { WebTracerProvider } from '@opentelemetry/sdk-trace-web';
 
+import type { Context } from '@opentelemetry/api';
 import type { LogRecordProcessor } from '@opentelemetry/sdk-logs';
-import type { SpanProcessor } from '@opentelemetry/sdk-trace-base';
+import type {
+    ReadableSpan,
+    Span,
+    SpanProcessor,
+} from '@opentelemetry/sdk-trace-base';
 
 import { initLogger, shutdownLogger } from '../logger';
 import { buildOtelLogSink } from '../logger/config';
 import { buildResource } from '../shared';
+
+class BrowserFilteringSpanProcessor implements SpanProcessor {
+    constructor(private readonly _delegate: SpanProcessor) {}
+
+    onStart(span: Span, context: Context): void {
+        this._delegate.onStart(span, context);
+    }
+
+    onEnd(span: ReadableSpan): void {
+        // Drop aborted/cancelled fetches (status 0 = request never completed).
+        // Framework-agnostic — happens with React navigation, StrictMode, any SPA.
+        if (span.attributes['http.status_code'] === 0) {
+            return; // drop the span
+        }
+
+        this._delegate.onEnd(span);
+    }
+
+    shutdown(): Promise<void> {
+        return this._delegate.shutdown();
+    }
+
+    forceFlush(): Promise<void> {
+        return this._delegate.forceFlush();
+    }
+}
 
 const DEFAULT_IGNORED_URLS: (string | RegExp)[] = [
     /\/v1\/traces/,
@@ -38,7 +69,16 @@ export interface BrowserTelemetryConfig {
     extraSpanProcessors?: SpanProcessor[];
     extraLogProcessors?: LogRecordProcessor[];
     ignoredUrls?: (string | RegExp)[];
+    /** Enable Next.js specific telemetry filtering. */
+    nextjs?: boolean;
 }
+
+const NEXTJS_IGNORED_URLS: (string | RegExp)[] = [
+    /__nextjs_/, // internal Next.js requests (e.g., original-stack-frame)
+    /_next\//, // static assets and chunks
+    /\.hot-update\./, // HMR
+    /_rsc=/, // RSC data fetches
+];
 
 let provider: WebTracerProvider | undefined;
 
@@ -56,6 +96,7 @@ export function initBrowserTelemetry(config: BrowserTelemetryConfig) {
         extraSpanProcessors = [],
         extraLogProcessors = [],
         ignoredUrls = [],
+        nextjs = false,
     } = config;
 
     const endpoint = otelEndpoint?.replace(/\/$/, '');
@@ -71,13 +112,12 @@ export function initBrowserTelemetry(config: BrowserTelemetryConfig) {
     const spanProcessors = [...extraSpanProcessors];
 
     if (hasEndpoint) {
-        spanProcessors.push(
-            new BatchSpanProcessor(
-                new OTLPTraceExporter({
-                    url: `${endpoint}/v1/traces`,
-                }),
-            ),
+        const batchProcessor = new BatchSpanProcessor(
+            new OTLPTraceExporter({
+                url: `${endpoint}/v1/traces`,
+            }),
         );
+        spanProcessors.push(new BrowserFilteringSpanProcessor(batchProcessor));
     }
 
     provider = new WebTracerProvider({
@@ -116,16 +156,21 @@ export function initBrowserTelemetry(config: BrowserTelemetryConfig) {
         });
     }
 
+    const allIgnoredUrls = [...DEFAULT_IGNORED_URLS, ...ignoredUrls];
+    if (nextjs) {
+        allIgnoredUrls.push(...NEXTJS_IGNORED_URLS);
+    }
+
     registerInstrumentations({
         instrumentations: [
             new FetchInstrumentation({
                 propagateTraceHeaderCorsUrls: propagateToUrls,
                 clearTimingResources: true,
-                ignoreUrls: [...DEFAULT_IGNORED_URLS, ...ignoredUrls],
+                ignoreUrls: allIgnoredUrls,
             }),
             new XMLHttpRequestInstrumentation({
                 propagateTraceHeaderCorsUrls: propagateToUrls,
-                ignoreUrls: [...DEFAULT_IGNORED_URLS, ...ignoredUrls],
+                ignoreUrls: allIgnoredUrls,
             }),
         ],
     });

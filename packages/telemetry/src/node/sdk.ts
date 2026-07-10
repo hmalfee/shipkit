@@ -31,10 +31,6 @@ import type {
 import { logger } from '../logger';
 import { buildResource } from '../shared';
 
-export type SpanFilter = (span: ReadableSpan) => boolean;
-
-export type RouteExtractor = (span: ReadableSpan) => string | undefined;
-
 export interface TelemetryConfig {
     serviceName: string;
     serviceVersion?: string;
@@ -42,19 +38,28 @@ export interface TelemetryConfig {
     environment: string;
     /** Routes to ignore from telemetry tracing. */
     ignoredRoutes?: string[];
+    /** URLs or domains to ignore from outbound telemetry tracing. */
+    ignoredUrls?: string[];
     resourceAttributes?: Record<string, string>;
     extraSpanProcessors?: SpanProcessor[];
-    spanFilters?: SpanFilter[];
-    routeExtractors?: RouteExtractor[];
+    /** Enable Next.js specific telemetry filtering. */
+    nextjs?: boolean;
 }
+
+const NOISY_NEXT_SPAN_TYPES = new Set([
+    'NextNodeServer.getLayoutOrPageModule',
+    'NextNodeServer.createComponentTree',
+    'NextNodeServer.findPageComponents',
+    'NextNodeServer.startResponse',
+    'NextNodeServer.clientComponentLoading',
+]);
 
 class FilteringSpanProcessor implements SpanProcessor {
     constructor(
         private readonly _delegate: SpanProcessor,
         private readonly _ignoredRoutes: string[] = [],
-        private readonly _otelEndpoint?: string,
-        private readonly _spanFilters: SpanFilter[] = [],
-        private readonly _routeExtractors: RouteExtractor[] = [],
+        private readonly _ignoredUrls: string[] = [],
+        private readonly _nextjs = false,
     ) {}
 
     onStart(span: Span, context: Context): void {
@@ -62,25 +67,47 @@ class FilteringSpanProcessor implements SpanProcessor {
     }
 
     onEnd(span: ReadableSpan): void {
-        if (this._spanFilters.some((filter) => filter(span))) {
-            return;
+        const url = span.attributes['http.url'] ?? span.attributes['url.full'];
+        const target =
+            span.attributes['http.target'] ?? span.attributes['url.path'];
+
+        if (this._nextjs) {
+            const spanType = span.attributes['next.span_type'];
+            if (
+                typeof spanType === 'string' &&
+                NOISY_NEXT_SPAN_TYPES.has(spanType)
+            )
+                return;
+
+            if (typeof url === 'string' && url.includes('registry.npmjs.org'))
+                return;
+
+            if (typeof url === 'string' && url.includes('_rsc=')) return;
+            if (typeof target === 'string' && target.includes('_rsc=')) return;
+            if (span.attributes['next.rsc'] === true) return;
+
+            if (
+                typeof target === 'string' &&
+                target.startsWith('/_next/static/')
+            )
+                return;
         }
 
-        const url = span.attributes['http.url'] ?? span.attributes['url.full'];
         if (typeof url === 'string') {
-            if (this._otelEndpoint && url.includes(this._otelEndpoint)) {
+            if (
+                this._ignoredUrls.some((ignoredUrl) => url.includes(ignoredUrl))
+            ) {
                 return;
             }
         }
 
-        const target =
-            span.attributes['http.target'] ?? span.attributes['url.path'];
-        const route =
-            span.attributes['http.route'] ??
-            this._routeExtractors.reduce<string | undefined>(
-                (found, extractor) => found ?? extractor(span),
-                undefined,
-            );
+        let route = span.attributes['http.route'];
+        if (!route && this._nextjs) {
+            const nextRoute = span.attributes['next.route'];
+            if (typeof nextRoute === 'string') {
+                route = nextRoute;
+            }
+        }
 
         if (
             this._ignoredRoutes.some(
@@ -190,9 +217,8 @@ export function initializeSdk(config: TelemetryConfig) {
                   }),
               ),
               config.ignoredRoutes,
-              endpoint,
-              config.spanFilters,
-              config.routeExtractors,
+              config.ignoredUrls,
+              config.nextjs,
           )
         : undefined;
 

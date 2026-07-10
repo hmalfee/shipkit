@@ -1,10 +1,10 @@
 import type { LogRecordProcessor } from '@opentelemetry/sdk-logs';
-import type { RouteExtractor, SpanFilter, TelemetryConfig } from './sdk';
+import type { TelemetryConfig } from './sdk';
 
 import { initLogger, shutdownLogger } from '../logger';
 import { initializeSdk } from './sdk';
 
-export type { RouteExtractor, SpanFilter, TelemetryConfig };
+export type { TelemetryConfig };
 
 interface InitTelemetryConfig extends Omit<TelemetryConfig, 'environment'> {
     environment?: string;

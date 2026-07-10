@@ -17,6 +17,9 @@ const nextConfig: NextConfig = {
     reactCompiler: true,
     output: 'standalone',
     transpilePackages: workspacePackages,
+    logging: {
+        browserToTerminal: true,
+    },
 };
 
 // No point building source maps if no collectors are configured

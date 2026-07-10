@@ -7,6 +7,7 @@ import { env } from './env';
 await initTelemetry({
     serviceName: pkg.name,
     otelEndpoint: env.OTEL_URL,
+    ignoredUrls: [env.OTEL_URL].filter((p): p is string => Boolean(p)),
     environment: env.NODE_ENV,
 });
 
