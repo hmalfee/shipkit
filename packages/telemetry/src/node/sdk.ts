@@ -52,6 +52,7 @@ const NOISY_NEXT_SPAN_TYPES = new Set([
     'NextNodeServer.findPageComponents',
     'NextNodeServer.startResponse',
     'NextNodeServer.clientComponentLoading',
+    'NextNodeServer.getRequestHandler',
 ]);
 
 class FilteringSpanProcessor implements SpanProcessor {
@@ -82,13 +83,11 @@ class FilteringSpanProcessor implements SpanProcessor {
             if (typeof url === 'string' && url.includes('registry.npmjs.org'))
                 return;
 
-            if (typeof url === 'string' && url.includes('_rsc=')) return;
-            if (typeof target === 'string' && target.includes('_rsc=')) return;
-            if (span.attributes['next.rsc'] === true) return;
-
             if (
                 typeof target === 'string' &&
-                target.startsWith('/_next/static/')
+                (target.startsWith('/_next/') ||
+                    target.includes('__nextjs_') ||
+                    target.includes('.hot-update.'))
             )
                 return;
         }
@@ -102,10 +101,40 @@ class FilteringSpanProcessor implements SpanProcessor {
         }
 
         let route = span.attributes['http.route'];
-        if (!route && this._nextjs) {
+        if (this._nextjs) {
             const nextRoute = span.attributes['next.route'];
             if (typeof nextRoute === 'string') {
-                route = nextRoute;
+                route ??= nextRoute;
+                // Mutate the attributes object to ensure APM tools see the route
+                span.attributes['http.route'] = route;
+            }
+
+            const spanType = span.attributes['next.span_type'];
+            if (typeof spanType === 'string') {
+                const method = span.attributes['http.method'];
+                const attrs = span.attributes;
+
+                if (spanType === 'BaseServer.handleRequest') {
+                    // Enrich operation and resource names
+                    attrs['operation.name'] =
+                        typeof method === 'string' ? method : 'HTTP_REQUEST';
+
+                    if (typeof route === 'string') {
+                        attrs['resource.name'] = route;
+
+                        // RSC-aware span naming
+                        if (
+                            attrs['next.rsc'] &&
+                            typeof method === 'string' &&
+                            !span.name.startsWith('RSC ')
+                        ) {
+                            (span as unknown as { name: string }).name =
+                                `RSC ${method} ${route}`;
+                        }
+                    }
+                } else {
+                    attrs['operation.name'] = `next_js.${spanType}`;
+                }
             }
         }
 
@@ -256,8 +285,20 @@ export function initializeSdk(config: TelemetryConfig) {
                     if (req.method === 'OPTIONS') {
                         return true;
                     }
-                    const ignoredPaths = ['/', '/favicon.ico', '/health'];
-                    return ignoredPaths.includes(req.url ?? '');
+
+                    const url = req.url ?? '';
+                    if (url === '/favicon.ico' || url === '/health') {
+                        return true;
+                    }
+
+                    if (config.nextjs) {
+                        return (
+                            url.startsWith('/_next/') ||
+                            url.includes('__nextjs_')
+                        );
+                    }
+
+                    return url === '/';
                 },
             }),
             new PgInstrumentation(),
