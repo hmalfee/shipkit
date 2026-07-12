@@ -52,12 +52,6 @@ class BrowserFilteringSpanProcessor implements SpanProcessor {
     }
 }
 
-const DEFAULT_IGNORED_URLS: (string | RegExp)[] = [
-    /\/v1\/traces/,
-    /\/v1\/logs/,
-    /\/v1\/metrics/,
-];
-
 export interface BrowserTelemetryConfig {
     serviceName: string;
     serviceVersion?: string;
@@ -156,10 +150,9 @@ export function initBrowserTelemetry(config: BrowserTelemetryConfig) {
         });
     }
 
-    const allIgnoredUrls = [...DEFAULT_IGNORED_URLS, ...ignoredUrls];
-    if (nextjs) {
-        allIgnoredUrls.push(...NEXTJS_IGNORED_URLS);
-    }
+    const allIgnoredUrls = nextjs
+        ? [...ignoredUrls, ...NEXTJS_IGNORED_URLS]
+        : ignoredUrls;
 
     registerInstrumentations({
         instrumentations: [
