@@ -8,14 +8,14 @@
     ],
     "scripts": {
         "build": "turbo build",
-        "check": "pnpm run format:check && pnpm run lint && pnpm run typecheck && SKIP_ENV_VALIDATION=1 pnpm run knip",
+        "check": "pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run knip",
         "clean": "git clean -xdf .cache .turbo node_modules -e .env -e .env.*",
         "clean:full": "turbo run clean",
         "dev": "turbo dev",
         "format": "prettier --write .",
         "format:check": "prettier --check .",
         "generate": "turbo gen create",
-        "knip": "knip",
+        "knip": "SKIP_ENV_VALIDATION=1 knip",
         "lint": "oxlint . --deny-warnings",
         "typecheck": "turbo run typecheck"
     },
