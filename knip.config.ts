@@ -8,7 +8,7 @@ const config: KnipConfig = {
             entry: ['./turbo/generators/config.ts'],
         },
         'tooling/scripts': {
-            entry: ['bin/**/*.js'],
+            entry: ['bin/*.js', 'bin/**/index.js'],
         },
     },
     exclude: ['optionalPeerDependencies'], // Allows setting peer dependencies as optional

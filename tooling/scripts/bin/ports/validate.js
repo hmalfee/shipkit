@@ -25,16 +25,6 @@ export function validatePort(port) {
 }
 
 /**
- * Warns if port is in reserved range (< 1024).
- */
-export function checkReservedPort(port) {
-    if (port < RESERVED_PORT_LIMIT) {
-        return `Port ${port} is reserved (< 1024). May require root/sudo.`;
-    }
-    return null;
-}
-
-/**
  * Validates the entire port registry for conflicts.
  */
 export function validateRegistry(customRegistry = registry) {
@@ -54,9 +44,10 @@ export function validateRegistry(customRegistry = registry) {
         }
         seen.set(port, name);
 
-        const reserved = checkReservedPort(port);
-        if (reserved) {
-            console.warn(`Warning: ${reserved}`);
+        if (port < RESERVED_PORT_LIMIT) {
+            console.warn(
+                `Warning: Port ${port} is reserved (< 1024). May require root/sudo.`,
+            );
         }
     }
 
