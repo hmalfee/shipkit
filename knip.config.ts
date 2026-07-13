@@ -12,6 +12,7 @@ const config: KnipConfig = {
         },
     },
     exclude: ['optionalPeerDependencies'], // Allows setting peer dependencies as optional
+    ignoreBinaries: ['mktemp'],
 };
 
 export default config;
