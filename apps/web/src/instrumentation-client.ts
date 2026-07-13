@@ -1,3 +1,4 @@
+import { initPostHogWebAnalytics } from '@mento-mark/posthog';
 import { initBrowserTelemetry } from '@mento-mark/telemetry/browser';
 import {
     DebugIdEnrichingLogProcessor,
@@ -14,4 +15,15 @@ initBrowserTelemetry({
     extraSpanProcessors: [new DebugIdEnrichingSpanProcessor()],
     extraLogProcessors: [new DebugIdEnrichingLogProcessor()],
     nextjs: true,
+    ignoredUrls: [env.NEXT_PUBLIC_POSTHOG_PROXY_PATH].filter((p): p is string =>
+        Boolean(p),
+    ),
 });
+
+if (env.NEXT_PUBLIC_POSTHOG_KEY) {
+    initPostHogWebAnalytics({
+        apiKey: env.NEXT_PUBLIC_POSTHOG_KEY,
+        apiHost: env.NEXT_PUBLIC_POSTHOG_PROXY_PATH,
+        urlIgnoreList: [/^\/auth\/callback/], // Ignore auth callback UI/pages
+    });
+}

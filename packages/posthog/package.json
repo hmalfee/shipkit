@@ -1,0 +1,35 @@
+{
+    "name": "@mento-mark/posthog",
+    "type": "module",
+    "exports": {
+        ".": "./src/index.ts",
+        "./next": "./src/next.ts",
+        "./react": "./src/react.tsx"
+    },
+    "scripts": {
+        "clean": "git clean -xdf .cache .turbo node_modules",
+        "typecheck": "tsc"
+    },
+    "dependencies": {
+        "posthog-js": "^1.218.0"
+    },
+    "devDependencies": {
+        "@types/react": "catalog:"
+    },
+    "peerDependencies": {
+        "@tanstack/react-query": "catalog:",
+        "next": "catalog:",
+        "react": "catalog:"
+    },
+    "peerDependenciesMeta": {
+        "@tanstack/react-query": {
+            "optional": true
+        },
+        "next": {
+            "optional": true
+        },
+        "react": {
+            "optional": true
+        }
+    }
+}

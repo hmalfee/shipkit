@@ -15,9 +15,10 @@ export async function register() {
         await initTelemetry({
             serviceName: 'web',
             otelEndpoint: env.OTEL_URL,
-            ignoredRoutes: [env.NEXT_PUBLIC_OTEL_PROXY_PATH].filter(
-                (p): p is string => Boolean(p),
-            ),
+            ignoredRoutes: [
+                env.NEXT_PUBLIC_OTEL_PROXY_PATH,
+                env.NEXT_PUBLIC_POSTHOG_PROXY_PATH,
+            ].filter((p): p is string => Boolean(p)),
             ignoredUrls: ['posthog.com', env.OTEL_URL].filter(
                 (p): p is string => Boolean(p),
             ),
