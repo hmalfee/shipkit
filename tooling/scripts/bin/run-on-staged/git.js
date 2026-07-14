@@ -43,12 +43,13 @@ export async function installHook() {
         const content = await fs.readFile(hookPath, 'utf8');
         if (content.includes(HOOK_COMMAND)) {
             echo(
-                chalk.green(
+                chalk.yellow(
                     'run-on-staged already installed in pre-commit hook - skipping.',
                 ),
             );
             return;
         }
+        echo(chalk.blue('Setting up pre-commit hook...'));
         echo(
             chalk.yellow(
                 'Existing pre-commit hook found — preserving and appending run-on-staged.',
@@ -64,6 +65,8 @@ export async function installHook() {
         );
         return;
     }
+
+    echo(chalk.blue('Setting up pre-commit hook...'));
     await fs.writeFile(hookPath, `#!/bin/bash\n${HOOK_COMMAND}\n`);
     await $`chmod +x ${hookPath}`;
     echo(chalk.green('✓ Git pre-commit hook installed'));

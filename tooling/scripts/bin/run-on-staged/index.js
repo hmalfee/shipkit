@@ -14,13 +14,8 @@ async function main() {
         process.exit(0);
     }
 
-    if (flag === '--init') {
+    if (flag === '--setup') {
         await initConfig();
-        await installHook();
-        process.exit(0);
-    }
-
-    if (flag === '--install') {
         await installHook();
         process.exit(0);
     }

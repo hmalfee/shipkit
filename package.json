@@ -17,7 +17,7 @@
         "generate": "turbo gen create",
         "knip": "SKIP_ENV_VALIDATION=1 knip",
         "lint": "oxlint . --deny-warnings",
-        "prepare": "run-on-staged --install",
+        "prepare": "run-on-staged --setup",
         "typecheck": "turbo run typecheck"
     },
     "prettier": "@mento-mark/prettier-config",
