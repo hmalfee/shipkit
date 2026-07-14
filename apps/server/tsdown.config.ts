@@ -4,7 +4,7 @@ export default defineConfig({
     entry: ['./src/index.ts', './src/instrument.ts'],
     outDir: './dist',
     deps: {
-        alwaysBundle: [/@mento-mark\/.*/],
+        alwaysBundle: [/@shipkit\/.*/],
     },
     sourcemap: true,
     minify: true,

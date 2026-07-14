@@ -1,7 +1,7 @@
 import { RateLimiterRedis } from 'rate-limiter-flexible';
 
-import type { Redis } from '@mento-mark/db/redis';
-import type { Logger } from '@mento-mark/telemetry/logger';
+import type { Redis } from '@shipkit/db/redis';
+import type { Logger } from '@shipkit/telemetry/logger';
 import type { RateLimiterRes } from 'rate-limiter-flexible';
 
 interface RateLimitConfig {

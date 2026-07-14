@@ -1,4 +1,4 @@
-import type { Redis } from '@mento-mark/db/redis';
+import type { Redis } from '@shipkit/db/redis';
 import type { AuthConfig, AuthDatabase, Roles } from './config';
 
 import { createBetterAuthConfig } from './config';

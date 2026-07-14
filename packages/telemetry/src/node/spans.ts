@@ -7,7 +7,7 @@ import {
 
 import type { Span, SpanOptions } from '@opentelemetry/api';
 
-export const tracer = trace.getTracer('@mento-mark/telemetry');
+export const tracer = trace.getTracer('@shipkit/telemetry');
 
 /**
  * Starts a new active span.

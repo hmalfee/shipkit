@@ -1,14 +1,14 @@
 import { implement } from '@orpc/server';
 
-import { contract } from '@mento-mark/shared/orpc';
-import { captureORPCTemplate } from '@mento-mark/telemetry/node/orpc';
+import { contract } from '@shipkit/shared/orpc';
+import { captureORPCTemplate } from '@shipkit/telemetry/node/orpc';
 
 import { env } from '@/env';
 
-import type { Auth } from '@mento-mark/auth';
-import type { Database } from '@mento-mark/db/pg';
-import type { Redis } from '@mento-mark/db/redis';
-import type { Logger } from '@mento-mark/telemetry/logger';
+import type { Auth } from '@shipkit/auth';
+import type { Database } from '@shipkit/db/pg';
+import type { Redis } from '@shipkit/db/redis';
+import type { Logger } from '@shipkit/telemetry/logger';
 
 import { createRateLimit } from './rate-limiter';
 

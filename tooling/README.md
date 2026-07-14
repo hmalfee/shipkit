@@ -13,7 +13,7 @@ These packages export shared rules and setups to ensure consistency across the m
 **Usage:**
 
 1. **Install the required tool** in your consumer package (e.g., `typescript`, `oxlint`, `prettier`).
-2. **Install the config package** as a dev dependency (e.g., `@mento-mark/ts-config`).
+2. **Install the config package** as a dev dependency (e.g., `@shipkit/ts-config`).
 3. **Extend or import the preset** in your local configuration file according to the tool's standard mechanism.
 
 ### 2. Internal Utilities & CLIs (e.g., `ports`)

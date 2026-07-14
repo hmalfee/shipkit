@@ -1,9 +1,9 @@
-import { initPostHogWebAnalytics } from '@mento-mark/posthog';
-import { initBrowserTelemetry } from '@mento-mark/telemetry/browser';
+import { initPostHogWebAnalytics } from '@shipkit/posthog';
+import { initBrowserTelemetry } from '@shipkit/telemetry/browser';
 import {
     DebugIdEnrichingLogProcessor,
     DebugIdEnrichingSpanProcessor,
-} from '@mento-mark/telemetry/source-maps/next/client';
+} from '@shipkit/telemetry/source-maps/next/client';
 
 import pkg from '../package.json';
 import { env } from './env';

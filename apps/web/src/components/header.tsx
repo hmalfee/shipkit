@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { toast } from 'sonner';
 
-import { Button } from '@mento-mark/ui/components/button';
+import { Button } from '@shipkit/ui/components/button';
 
 import { api, useUtils } from '@/lib/api/client';
 

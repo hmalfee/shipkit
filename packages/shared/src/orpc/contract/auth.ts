@@ -1,6 +1,6 @@
 import { oc } from '@orpc/contract';
 
-import { rb } from '@mento-mark/orpc-utils/contract';
+import { rb } from '@shipkit/orpc-utils/contract';
 
 import {
     CallbackParamsSchema,

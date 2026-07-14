@@ -1,4 +1,4 @@
-import { logger } from '@mento-mark/telemetry/logger';
+import { logger } from '@shipkit/telemetry/logger';
 
 import type { Instrumentation } from 'next';
 
@@ -6,11 +6,11 @@ export async function register() {
     // oxlint-disable-next-line eslint-js/no-restricted-syntax
     if (process.env.NEXT_RUNTIME === 'nodejs') {
         const { env } = await import('./env');
-        const { initTelemetry } = await import('@mento-mark/telemetry/node');
+        const { initTelemetry } = await import('@shipkit/telemetry/node');
         const {
             SourceMapResolvingLogProcessor,
             SourceMapResolvingSpanProcessor,
-        } = await import('@mento-mark/telemetry/source-maps/next/server');
+        } = await import('@shipkit/telemetry/source-maps/next/server');
 
         await initTelemetry({
             serviceName: 'web',

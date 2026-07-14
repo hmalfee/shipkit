@@ -1,6 +1,6 @@
 import posthog from 'posthog-js';
 
-import { logger } from '@mento-mark/telemetry/logger';
+import { logger } from '@shipkit/telemetry/logger';
 
 export function initPostHogWebAnalytics({
     apiKey,

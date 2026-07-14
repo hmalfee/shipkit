@@ -3,19 +3,19 @@
 import { AlertCircleIcon } from 'lucide-react';
 import { useState } from 'react';
 
-import { OAUTH_PROVIDERS } from '@mento-mark/shared/constants';
+import { OAUTH_PROVIDERS } from '@shipkit/shared/constants';
 import {
     Alert,
     AlertDescription,
     AlertTitle,
-} from '@mento-mark/ui/components/alert';
-import { Button } from '@mento-mark/ui/components/button';
+} from '@shipkit/ui/components/alert';
+import { Button } from '@shipkit/ui/components/button';
 
 import { useOAuthPopup } from '@/hooks/use-oauth-popup';
 import { api } from '@/lib/api/client';
 
 import type { OAuthError } from '@/hooks/use-oauth-popup';
-import type { OAUTH_PROVIDER_IDS } from '@mento-mark/shared/constants';
+import type { OAUTH_PROVIDER_IDS } from '@shipkit/shared/constants';
 
 export function OAuthButtons() {
     const { openOAuthPopup } = useOAuthPopup();

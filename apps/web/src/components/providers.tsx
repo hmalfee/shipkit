@@ -3,8 +3,8 @@
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { useState } from 'react';
 
-import { QueryIdentitySync } from '@mento-mark/posthog/react';
-import { Toaster } from '@mento-mark/ui/components/sonner';
+import { QueryIdentitySync } from '@shipkit/posthog/react';
+import { Toaster } from '@shipkit/ui/components/sonner';
 
 import { api, APIProvider } from '@/lib/api/client';
 import { createQueryClient } from '@/lib/api/query-client';

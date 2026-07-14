@@ -23,7 +23,7 @@ export interface BuildResourceOptions {
 
 export function buildResource(options: BuildResourceOptions): Resource {
     return resourceFromAttributes({
-        [ATTR_SERVICE_NAMESPACE]: 'mento-mark',
+        [ATTR_SERVICE_NAMESPACE]: 'shipkit',
         [ATTR_SERVICE_NAME]: options.serviceName,
         [ATTR_SERVICE_VERSION]: options.serviceVersion ?? 'unknown',
         [ATTR_DEPLOYMENT_ENVIRONMENT_NAME]: options.environment,

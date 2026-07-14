@@ -1,7 +1,7 @@
 import { oc } from '@orpc/contract';
 import z from 'zod';
 
-import { rb } from '@mento-mark/orpc-utils/contract';
+import { rb } from '@shipkit/orpc-utils/contract';
 
 import {
     CreateTodoBodySchema,

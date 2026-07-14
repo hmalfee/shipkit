@@ -5,8 +5,8 @@ import { Loader } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useTransition } from 'react';
 
-import { logger } from '@mento-mark/telemetry/logger';
-import { Button } from '@mento-mark/ui/components/button';
+import { logger } from '@shipkit/telemetry/logger';
+import { Button } from '@shipkit/ui/components/button';
 
 import { isOffline, isServerDown } from '@/lib/api/query-client';
 

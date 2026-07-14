@@ -1,4 +1,4 @@
-import { handleAuthError } from '@mento-mark/auth/orpc';
+import { handleAuthError } from '@shipkit/auth/orpc';
 
 import { env } from '@/env';
 

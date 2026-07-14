@@ -2,7 +2,7 @@ import { defineConfig } from 'oxlint';
 
 import base, {
     defaultNoRestrictedSyntaxRules,
-} from '@mento-mark/oxlint-config/base';
+} from '@shipkit/oxlint-config/base';
 
 export default defineConfig({
     extends: [base],

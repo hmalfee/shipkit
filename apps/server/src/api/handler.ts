@@ -4,10 +4,10 @@ import { onError, ORPCError, ValidationError } from '@orpc/server';
 import { ZodToJsonSchemaConverter } from '@orpc/zod/zod4';
 import z from 'zod';
 
-import { createAuth } from '@mento-mark/auth';
-import { createDb } from '@mento-mark/db/pg';
-import { createRedisClient } from '@mento-mark/db/redis';
-import { logger } from '@mento-mark/telemetry/logger';
+import { createAuth } from '@shipkit/auth';
+import { createDb } from '@shipkit/db/pg';
+import { createRedisClient } from '@shipkit/db/redis';
+import { logger } from '@shipkit/telemetry/logger';
 
 import { env } from '@/env';
 

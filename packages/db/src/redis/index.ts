@@ -1,6 +1,6 @@
 import IORedis from 'ioredis';
 
-import { logger } from '@mento-mark/telemetry/logger';
+import { logger } from '@shipkit/telemetry/logger';
 
 let redisInstance: IORedis | undefined;
 

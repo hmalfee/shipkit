@@ -1,7 +1,7 @@
 import { MoveLeft } from 'lucide-react';
 import Link from 'next/link';
 
-import { Button } from '@mento-mark/ui/components/button';
+import { Button } from '@shipkit/ui/components/button';
 
 export default function NotFound() {
     return (

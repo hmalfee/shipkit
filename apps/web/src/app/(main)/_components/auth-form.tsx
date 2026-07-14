@@ -4,9 +4,9 @@ import { useForm } from '@tanstack/react-form';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
-import { Button } from '@mento-mark/ui/components/button';
-import { Field, FieldError, FieldLabel } from '@mento-mark/ui/components/field';
-import { Input } from '@mento-mark/ui/components/input';
+import { Button } from '@shipkit/ui/components/button';
+import { Field, FieldError, FieldLabel } from '@shipkit/ui/components/field';
+import { Input } from '@shipkit/ui/components/input';
 
 import { api, useUtils } from '@/lib/api/client';
 

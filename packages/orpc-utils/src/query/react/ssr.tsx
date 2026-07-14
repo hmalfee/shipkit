@@ -2,7 +2,7 @@ import { isContractProcedure } from '@orpc/contract';
 import { createTanstackQueryUtils } from '@orpc/tanstack-query';
 import { dehydrate, HydrationBoundary } from '@tanstack/react-query';
 
-import { logger } from '@mento-mark/telemetry/logger';
+import { logger } from '@shipkit/telemetry/logger';
 
 import type { FetchQueryOptions, QueryClient } from '@tanstack/react-query';
 import type { ReactNode } from 'react';

@@ -2,8 +2,8 @@
 
 import { useEffect, useRef } from 'react';
 
-import { logger } from '@mento-mark/telemetry/logger';
-import { Button } from '@mento-mark/ui/components/button';
+import { logger } from '@shipkit/telemetry/logger';
+import { Button } from '@shipkit/ui/components/button';
 
 import { isOffline, isServerDown } from '@/lib/api/query-client';
 

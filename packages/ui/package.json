@@ -1,5 +1,5 @@
 {
-    "name": "@mento-mark/ui",
+    "name": "@shipkit/ui",
     "type": "module",
     "exports": {
         "./globals.css": "./src/styles/globals.css",

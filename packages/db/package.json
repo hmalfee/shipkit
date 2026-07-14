@@ -1,5 +1,5 @@
 {
-    "name": "@mento-mark/db",
+    "name": "@shipkit/db",
     "type": "module",
     "exports": {
         "./pg": "./src/pg/index.ts",
@@ -18,7 +18,7 @@
         "typecheck": "tsc"
     },
     "dependencies": {
-        "@mento-mark/env": "workspace:*",
+        "@shipkit/env": "workspace:*",
         "drizzle-orm": "^0.45.1",
         "ioredis": "^5.10.1",
         "pg": "^8.17.1"

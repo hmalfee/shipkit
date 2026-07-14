@@ -1,8 +1,8 @@
 'use client';
 
-import { createFetchClient } from '@mento-mark/orpc-utils/query';
-import { createQueryApi } from '@mento-mark/orpc-utils/query/react';
-import { contract } from '@mento-mark/shared/orpc';
+import { createFetchClient } from '@shipkit/orpc-utils/query';
+import { createQueryApi } from '@shipkit/orpc-utils/query/react';
+import { contract } from '@shipkit/shared/orpc';
 
 import { env } from '@/env';
 

@@ -1,5 +1,5 @@
 {
-    "name": "@mento-mark/oxlint-config",
+    "name": "@shipkit/oxlint-config",
     "type": "module",
     "exports": {
         "./base": "./base.ts",

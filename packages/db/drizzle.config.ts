@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'drizzle-kit';
 import { z } from 'zod';
 
-import { createEnv } from '@mento-mark/env';
+import { createEnv } from '@shipkit/env';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

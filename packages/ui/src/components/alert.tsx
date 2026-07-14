@@ -1,7 +1,7 @@
 import { cva } from 'class-variance-authority';
 import * as React from 'react';
 
-import { cn } from '@mento-mark/ui/lib/utils';
+import { cn } from '@shipkit/ui/lib/utils';
 
 import type { VariantProps } from 'class-variance-authority';
 

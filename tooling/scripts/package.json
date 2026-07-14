@@ -1,5 +1,5 @@
 {
-    "name": "@mento-mark/scripts",
+    "name": "@shipkit/scripts",
     "private": true,
     "type": "module",
     "bin": {
@@ -16,6 +16,6 @@
         "zx": "^8.8.5"
     },
     "devDependencies": {
-        "@mento-mark/ts-config": "workspace:*"
+        "@shipkit/ts-config": "workspace:*"
     }
 }

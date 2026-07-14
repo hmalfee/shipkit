@@ -70,7 +70,7 @@ const AUTH_CODE_TO_STATUS: Record<keyof typeof BASE_ERROR_CODES, string> = {
 };
 
 /**
- * Handles `@mento-mark/auth`'s errors by matching them against your `errors` object provided by the oRPC contract.
+ * Handles `@shipkit/auth`'s errors by matching them against your `errors` object provided by the oRPC contract.
  *
  * Primary strategy: check `err.body.code` against AUTH_CODE_TO_STATUS registry to convert
  * better-auth semantic error codes to contract error keys (e.g., USER_ALREADY_EXISTS -> CONFLICT).

@@ -1,5 +1,5 @@
 {
-    "extends": "@mento-mark/ts-config/base",
+    "extends": "@shipkit/ts-config/base",
     "compilerOptions": {
         "jsx": "react-jsx"
     }

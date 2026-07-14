@@ -182,7 +182,7 @@ const commands = {
     help() {
         const topic = args[0];
         const help = {
-            default: `Ports CLI — Manage service ports in mento-mark monorepo
+            default: `Ports CLI — Manage service ports in shipkit monorepo
 Usage: ports <command> [options]
 Commands:
   get <service>              Get port for a service

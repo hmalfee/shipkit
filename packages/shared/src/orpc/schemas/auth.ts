@@ -1,6 +1,6 @@
 import z from 'zod';
 
-import { OAUTH_PROVIDER_IDS } from '@mento-mark/shared/constants';
+import { OAUTH_PROVIDER_IDS } from '@shipkit/shared/constants';
 
 export const SignUpBodySchema = z.object({
     name: z.string().min(1).max(255),

@@ -2,8 +2,8 @@ import { redisStorage } from '@better-auth/redis-storage';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 
-import type { Redis } from '@mento-mark/db/redis';
-import type { USER_ROLE_VALUES } from '@mento-mark/shared/constants';
+import type { Redis } from '@shipkit/db/redis';
+import type { USER_ROLE_VALUES } from '@shipkit/shared/constants';
 import type { TablesRelationalConfig } from 'drizzle-orm';
 import type { PgDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core';
 import type { OAuthProvidersConfig } from './social-providers';
@@ -27,7 +27,7 @@ export type AuthConfig = {
 /**
  * When you modify this config (add plugins, additional fields, etc.), regenerate
  * the schema by running:
- *   pnpm --filter @mento-mark/auth auth:generate
+ *   pnpm --filter @shipkit/auth auth:generate
  *
  * Then apply changes from src/auth.temp.ts to packages/db/src/pg/schema/auth.ts,
  * making sure to use authSchema.table instead of pgTable from drizzle-orm/pg-core.
@@ -39,7 +39,7 @@ export function createBetterAuthConfig(
     config: AuthConfig,
 ) {
     return betterAuth({
-        appName: 'mento-mark',
+        appName: 'shipkit',
         secret: config.secret,
         database: drizzleAdapter(db, {
             provider: 'pg',

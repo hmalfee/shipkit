@@ -1,5 +1,5 @@
 {
-    "name": "@mento-mark/prettier-config",
+    "name": "@shipkit/prettier-config",
     "type": "module",
     "exports": {
         ".": "./index.ts"

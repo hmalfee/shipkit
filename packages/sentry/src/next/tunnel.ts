@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import { logger } from '@mento-mark/telemetry/logger';
+import { logger } from '@shipkit/telemetry/logger';
 
 import type { NextRequest } from 'next/server';
 
@@ -24,7 +24,7 @@ function parseSentryDSN(dsn: string) {
  * @example
  * ```ts
  * // app/api/ingest-st/route.ts
- * import { createSentryTunnelHandler } from '@mento-mark/sentry/next';
+ * import { createSentryTunnelHandler } from '@shipkit/sentry/next';
  *
  * const handler = createSentryTunnelHandler(process.env.NEXT_PUBLIC_SENTRY_DSN);
  * export { handler as GET, handler as POST };

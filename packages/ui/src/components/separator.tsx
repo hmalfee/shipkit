@@ -2,7 +2,7 @@
 
 import { Separator as SeparatorPrimitive } from '@base-ui/react/separator';
 
-import { cn } from '@mento-mark/ui/lib/utils';
+import { cn } from '@shipkit/ui/lib/utils';
 
 function Separator({
     className,

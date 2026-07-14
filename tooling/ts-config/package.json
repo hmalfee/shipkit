@@ -1,5 +1,5 @@
 {
-    "name": "@mento-mark/ts-config",
+    "name": "@shipkit/ts-config",
     "exports": {
         "./base": "./base.json"
     },

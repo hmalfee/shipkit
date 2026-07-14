@@ -4,13 +4,13 @@ import { Moon, Sun } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import * as React from 'react';
 
-import { Button } from '@mento-mark/ui/components/button';
+import { Button } from '@shipkit/ui/components/button';
 import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuTrigger,
-} from '@mento-mark/ui/components/dropdown-menu';
+} from '@shipkit/ui/components/dropdown-menu';
 
 export function ModeToggle() {
     const { setTheme } = useTheme();

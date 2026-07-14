@@ -3,9 +3,9 @@ import 'server-only';
 import { cookies } from 'next/headers';
 import { cache } from 'react';
 
-import { createFetchClient } from '@mento-mark/orpc-utils/query';
-import { createSSRHelpers } from '@mento-mark/orpc-utils/query/react';
-import { contract } from '@mento-mark/shared/orpc';
+import { createFetchClient } from '@shipkit/orpc-utils/query';
+import { createSSRHelpers } from '@shipkit/orpc-utils/query/react';
+import { contract } from '@shipkit/shared/orpc';
 
 import { env } from '@/env';
 

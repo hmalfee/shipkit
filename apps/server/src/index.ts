@@ -2,8 +2,8 @@ import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 
-import { logger } from '@mento-mark/telemetry/logger';
-import { traceHonoRequest } from '@mento-mark/telemetry/node/hono';
+import { logger } from '@shipkit/telemetry/logger';
+import { traceHonoRequest } from '@shipkit/telemetry/node/hono';
 
 import { orpc } from './api/handler';
 import { env } from './env';

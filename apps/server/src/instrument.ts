@@ -1,5 +1,5 @@
-import { logger } from '@mento-mark/telemetry/logger';
-import { initTelemetry } from '@mento-mark/telemetry/node';
+import { logger } from '@shipkit/telemetry/logger';
+import { initTelemetry } from '@shipkit/telemetry/node';
 
 import pkg from '../package.json';
 import { env } from './env';

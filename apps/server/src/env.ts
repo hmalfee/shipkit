@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { createEnv } from '@mento-mark/env';
+import { createEnv } from '@shipkit/env';
 
 export const env = createEnv({
     server: {

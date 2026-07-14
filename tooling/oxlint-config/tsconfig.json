@@ -1,4 +1,4 @@
 {
-    "extends": "@mento-mark/ts-config/base",
+    "extends": "@shipkit/ts-config/base",
     "include": ["base.ts", "next.ts"]
 }

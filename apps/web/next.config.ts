@@ -1,5 +1,5 @@
-import { withRewriteProxy } from '@mento-mark/posthog/next';
-import { withTelemetrySourceMaps } from '@mento-mark/telemetry/source-maps/next/server';
+import { withRewriteProxy } from '@shipkit/posthog/next';
+import { withTelemetrySourceMaps } from '@shipkit/telemetry/source-maps/next/server';
 
 import { env } from '@/env';
 

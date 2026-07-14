@@ -12,11 +12,11 @@
     },
     "iconLibrary": "lucide",
     "aliases": {
-        "components": "@mento-mark/ui/components",
-        "utils": "@mento-mark/ui/lib/utils",
-        "hooks": "@mento-mark/ui/hooks",
-        "lib": "@mento-mark/ui/lib",
-        "ui": "@mento-mark/ui/components"
+        "components": "@shipkit/ui/components",
+        "utils": "@shipkit/ui/lib/utils",
+        "hooks": "@shipkit/ui/hooks",
+        "lib": "@shipkit/ui/lib",
+        "ui": "@shipkit/ui/components"
     },
     "menuColor": "default",
     "menuAccent": "subtle",

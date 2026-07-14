@@ -1,5 +1,5 @@
 {
-    "name": "@mento-mark/telemetry",
+    "name": "@shipkit/telemetry",
     "type": "module",
     "exports": {
         "./node": "./src/node/index.ts",

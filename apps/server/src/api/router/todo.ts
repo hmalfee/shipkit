@@ -1,5 +1,5 @@
-import { and, desc, eq } from '@mento-mark/db/pg';
-import { todos } from '@mento-mark/db/pg/schema';
+import { and, desc, eq } from '@shipkit/db/pg';
+import { todos } from '@shipkit/db/pg/schema';
 
 import { cr, os } from '../base';
 

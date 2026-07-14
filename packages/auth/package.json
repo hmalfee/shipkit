@@ -1,5 +1,5 @@
 {
-    "name": "@mento-mark/auth",
+    "name": "@shipkit/auth",
     "type": "module",
     "exports": {
         ".": "./src/index.ts",
@@ -15,8 +15,8 @@
         "better-auth": "catalog:"
     },
     "devDependencies": {
-        "@mento-mark/db": "workspace:*",
-        "@mento-mark/ts-config": "workspace:*",
+        "@shipkit/db": "workspace:*",
+        "@shipkit/ts-config": "workspace:*",
         "drizzle-orm": "^0.45.2",
         "typescript": "catalog:"
     }

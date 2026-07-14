@@ -3,9 +3,9 @@
 import { cva } from 'class-variance-authority';
 import { useMemo } from 'react';
 
-import { Label } from '@mento-mark/ui/components/label';
-import { Separator } from '@mento-mark/ui/components/separator';
-import { cn } from '@mento-mark/ui/lib/utils';
+import { Label } from '@shipkit/ui/components/label';
+import { Separator } from '@shipkit/ui/components/separator';
+import { cn } from '@shipkit/ui/lib/utils';
 
 import type { VariantProps } from 'class-variance-authority';
 

@@ -8,7 +8,7 @@ import { Loader } from 'lucide-react';
 import { createElement } from 'react';
 import { toast } from 'sonner';
 
-import { isDefinedError, ORPCError } from '@mento-mark/orpc-utils/query';
+import { isDefinedError, ORPCError } from '@shipkit/orpc-utils/query';
 
 export const isOffline = (e: Error) =>
     (typeof navigator !== 'undefined' && !navigator.onLine) ||

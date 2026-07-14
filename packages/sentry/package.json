@@ -1,5 +1,5 @@
 {
-    "name": "@mento-mark/sentry",
+    "name": "@shipkit/sentry",
     "type": "module",
     "exports": {
         "./react": "./src/react.ts",
@@ -15,8 +15,8 @@
         "@sentry/react": "10.56.0"
     },
     "devDependencies": {
-        "@mento-mark/ts-config": "workspace:*",
         "@opentelemetry/api": "catalog:",
+        "@shipkit/ts-config": "workspace:*",
         "typescript": "catalog:"
     },
     "peerDependencies": {

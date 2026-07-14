@@ -1,5 +1,5 @@
 {
-    "name": "@mento-mark/orpc-utils",
+    "name": "@shipkit/orpc-utils",
     "private": true,
     "type": "module",
     "exports": {
@@ -19,7 +19,7 @@
         "react": "catalog:"
     },
     "devDependencies": {
-        "@mento-mark/ts-config": "workspace:*",
+        "@shipkit/ts-config": "workspace:*",
         "@types/react": "catalog:",
         "typescript": "catalog:"
     }

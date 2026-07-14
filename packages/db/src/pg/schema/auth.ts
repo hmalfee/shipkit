@@ -9,7 +9,7 @@ import {
     uuid,
 } from 'drizzle-orm/pg-core';
 
-import { USER_ROLE_VALUES } from '@mento-mark/shared/constants';
+import { USER_ROLE_VALUES } from '@shipkit/shared/constants';
 
 export const authSchema = pgSchema('auth');
 const pgTable = authSchema.table;

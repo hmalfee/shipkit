@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
-import { getActiveSpan } from '@mento-mark/telemetry/node';
-import { createOtelIngestHandler } from '@mento-mark/telemetry/source-maps/next/server';
+import { getActiveSpan } from '@shipkit/telemetry/node';
+import { createOtelIngestHandler } from '@shipkit/telemetry/source-maps/next/server';
 
 import { env } from '@/env';
 

@@ -3,7 +3,7 @@
 import { hashKey, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo } from 'react';
 
-import { posthog } from '@mento-mark/posthog';
+import { posthog } from '@shipkit/posthog';
 
 import type { QueryKey } from '@tanstack/react-query';
 

@@ -1,5 +1,5 @@
 {
-    "name": "@mento-mark/shared",
+    "name": "@shipkit/shared",
     "type": "module",
     "exports": {
         "./orpc": "./src/orpc/index.ts",
@@ -10,11 +10,11 @@
         "typecheck": "tsc"
     },
     "dependencies": {
-        "@mento-mark/orpc-utils": "workspace:*",
-        "@orpc/contract": "catalog:"
+        "@orpc/contract": "catalog:",
+        "@shipkit/orpc-utils": "workspace:*"
     },
     "devDependencies": {
-        "@mento-mark/ts-config": "workspace:*",
+        "@shipkit/ts-config": "workspace:*",
         "better-auth": "catalog:",
         "typescript": "catalog:"
     }

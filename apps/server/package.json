@@ -11,13 +11,13 @@
     },
     "dependencies": {
         "@hono/node-server": "^1.14.4",
-        "@mento-mark/auth": "workspace:*",
-        "@mento-mark/db": "workspace:*",
-        "@mento-mark/env": "workspace:*",
         "@orpc/json-schema": "catalog:",
         "@orpc/openapi": "catalog:",
         "@orpc/server": "catalog:",
         "@orpc/zod": "catalog:",
+        "@shipkit/auth": "workspace:*",
+        "@shipkit/db": "workspace:*",
+        "@shipkit/env": "workspace:*",
         "hono": "^4.8.2",
         "rate-limiter-flexible": "^11.1.0"
     },

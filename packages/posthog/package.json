@@ -1,5 +1,5 @@
 {
-    "name": "@mento-mark/posthog",
+    "name": "@shipkit/posthog",
     "type": "module",
     "exports": {
         ".": "./src/index.ts",

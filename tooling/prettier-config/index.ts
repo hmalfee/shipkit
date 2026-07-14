@@ -17,7 +17,7 @@ const config: Config = {
         '<THIRD_PARTY_MODULES>', // External deps (react, next, lodash)
         '',
         // 1. Shared Monorepo Packages (Internal Workspace)
-        '^@mento-mark/(.*)$',
+        '^@shipkit/(.*)$',
         '',
         // 2. App-local Path Aliases (Absolute)
         '^~/(.*)$',

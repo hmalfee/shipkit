@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-import { logger } from '@mento-mark/telemetry/logger';
+import { logger } from '@shipkit/telemetry/logger';
 
 import type { NextRequest } from 'next/server';
 

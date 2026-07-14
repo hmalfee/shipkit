@@ -1,4 +1,4 @@
-import type { OAUTH_PROVIDER_IDS } from '@mento-mark/shared/constants';
+import type { OAUTH_PROVIDER_IDS } from '@shipkit/shared/constants';
 import type { betterAuth } from 'better-auth';
 
 type BetterAuthOAuthProviders = NonNullable<
