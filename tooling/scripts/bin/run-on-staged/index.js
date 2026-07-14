@@ -3,7 +3,11 @@ import { chalk, echo } from 'zx';
 
 import { runCheck } from './checks.js';
 import { initConfig, loadConfig, printUsage } from './config.js';
-import { initEnvironment, registerCleanup } from './environment.js';
+import {
+    hideUnstagedChanges,
+    registerRestoreOnExit,
+    restoreUnstagedChanges,
+} from './environment.js';
 import { findRepoRoot, installHook, verifyGitState } from './git.js';
 
 async function main() {
@@ -28,8 +32,14 @@ async function main() {
 
     await verifyGitState(repoRoot);
     const config = loadConfig(repoRoot);
-    const tempDir = await initEnvironment(repoRoot);
-    registerCleanup(tempDir);
+
+    // Register signal handler first with empty state ref
+    const stateRef = { hadChanges: false, restored: false };
+    registerRestoreOnExit(stateRef);
+
+    // Hide unstaged changes — mutates stateRef fields
+    const state = await hideUnstagedChanges(repoRoot);
+    Object.assign(stateRef, state);
 
     echo(
         chalk.blue(
@@ -37,16 +47,23 @@ async function main() {
         ),
     );
 
+    let failed = false;
     for (const check of config.checks) {
         const ok = await runCheck(
             check.name,
             check.command,
             check.env ?? {},
-            tempDir,
+            repoRoot,
         );
-        if (!ok) process.exit(1);
+        if (!ok) {
+            failed = true;
+            break;
+        }
     }
 
+    await restoreUnstagedChanges(stateRef);
+
+    if (failed) process.exit(1);
     echo(chalk.green('\n✓ All checks passed'));
 }
 

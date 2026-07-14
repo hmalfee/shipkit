@@ -6,7 +6,7 @@ export function printUsage() {
     echo(
         chalk.blue(`Usage: run-on-staged [--help | --setup]
 
-Run configured checks against the staged index in an isolated environment.
+Run configured checks against staged files (unstaged changes are temporarily hidden).
 
 Commands:
   run-on-staged           Run all checks from config in isolated staged env
