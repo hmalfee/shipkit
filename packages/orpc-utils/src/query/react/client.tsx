@@ -166,11 +166,13 @@ type UtilsClient<TClient, TContract> = TClient extends (
     : {
           invalidateQuery: () => Promise<void>;
       } & {
-          [K in keyof TClient & keyof TContract as IsMutation<
-              TContract[K]
-          > extends true
-              ? never
-              : K]: UtilsClient<TClient[K], TContract[K]>;
+          [
+              K in keyof TClient & keyof TContract as IsMutation<
+                  TContract[K]
+              > extends true
+                  ? never
+                  : K
+          ]: UtilsClient<TClient[K], TContract[K]>;
       };
 
 // ── Utils Proxy ──────────────────────────────────────────────────────
@@ -191,8 +193,7 @@ function buildUtilsProxy(
                 if (prop === 'invalidateQuery') {
                     const fn = async () => {
                         const keyFn = queryUtilsNode.key as
-                            | (() => unknown[])
-                            | undefined;
+                            (() => unknown[]) | undefined;
                         if (keyFn) {
                             await queryClient.invalidateQueries({
                                 queryKey: keyFn(),
@@ -204,11 +205,9 @@ function buildUtilsProxy(
                 }
 
                 const contractChild = contractNode[prop] as
-                    | ContractNode
-                    | undefined;
+                    ContractNode | undefined;
                 const queryUtilsChild = queryUtilsNode[prop] as
-                    | Record<string, unknown>
-                    | undefined;
+                    Record<string, unknown> | undefined;
 
                 if (!contractChild || !queryUtilsChild) return undefined;
 
@@ -298,11 +297,9 @@ function enhance(
 
             const clientChild = target[prop];
             const contractChild = contractNode[prop] as
-                | ContractNode
-                | undefined;
+                ContractNode | undefined;
             const queryUtilsChild = queryUtilsNode[prop] as
-                | Record<string, unknown>
-                | undefined;
+                Record<string, unknown> | undefined;
 
             if (clientChild === undefined) return undefined;
 
@@ -335,8 +332,7 @@ function enhance(
                                           def.inputSchema !== undefined;
                                       let input: unknown;
                                       let opts:
-                                          | Record<string, unknown>
-                                          | undefined;
+                                          Record<string, unknown> | undefined;
 
                                       if (hasInput) {
                                           input = args[0];

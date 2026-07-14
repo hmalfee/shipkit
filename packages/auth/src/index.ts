@@ -31,9 +31,9 @@ export type StrictSession = Omit<DefaultSession, 'user'> & {
 };
 
 export type Auth = {
-    [K in keyof BetterAuthAPI as K extends 'getSession'
-        ? never
-        : K]: BetterAuthAPI[K] extends (options?: infer O) => infer R
+    [
+        K in keyof BetterAuthAPI as K extends 'getSession' ? never : K
+    ]: BetterAuthAPI[K] extends (options?: infer O) => infer R
         ? NonNullable<O> extends { body: infer B }
             ? (body: B) => R
             : () => R

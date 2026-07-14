@@ -73,8 +73,7 @@ export class DebugIdEnrichingSpanProcessor implements SpanProcessor {
         for (const event of span.events) {
             if (event.name !== 'exception') continue;
             const st = event.attributes?.['exception.stacktrace'] as
-                | string
-                | undefined;
+                string | undefined;
             if (!st) continue;
             const ids = extractDebugIds(st);
             if (ids.length) {
@@ -102,8 +101,7 @@ export class DebugIdEnrichingSpanProcessor implements SpanProcessor {
 export class DebugIdEnrichingLogProcessor implements LogRecordProcessor {
     onEmit(logRecord: SdkLogRecord): void {
         const st = logRecord.attributes['exception.stacktrace'] as
-            | string
-            | undefined;
+            string | undefined;
         if (!st) return;
         const ids = extractDebugIds(st);
         if (ids.length) {

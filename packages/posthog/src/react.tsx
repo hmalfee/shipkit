@@ -8,14 +8,7 @@ import { posthog } from '@shipkit/posthog';
 import type { QueryKey } from '@tanstack/react-query';
 
 type Primitive =
-    | string
-    | number
-    | boolean
-    | bigint
-    | symbol
-    | undefined
-    | null
-    | Date;
+    string | number | boolean | bigint | symbol | undefined | null | Date;
 
 // depth limiter to avoid TS "excessively deep" errors on recursive/large types
 type Prev = [never, 0, 1, 2, 3, 4, 5];
@@ -28,9 +21,8 @@ type PathImpl<T, K extends keyof T, D extends number> = K extends string
           : D extends 0
             ? K
             : NonNullable<T[K]> extends object
-              ?
-                    | K
-                    | `${K}.${PathImpl<NonNullable<T[K]>, keyof NonNullable<T[K]>, Prev[D]>}`
+              ? | K
+                | `${K}.${PathImpl<NonNullable<T[K]>, keyof NonNullable<T[K]>, Prev[D]>}`
               : K
     : never;
 
@@ -79,8 +71,7 @@ export function QueryIdentitySync<TData>({
     useEffect(() => {
         function sync(data: TData | undefined) {
             const userId = getByPath(data, identifierAccessor) as
-                | string
-                | undefined;
+                string | undefined;
             const currentDistinctId = posthog.get_distinct_id();
 
             if (userId) {

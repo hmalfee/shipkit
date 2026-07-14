@@ -9,8 +9,7 @@ export default function createFetchClient<TContract extends AnyContractRouter>(
     options: {
         url: string;
         headers?: () =>
-            | Record<string, string>
-            | Promise<Record<string, string>>;
+            Record<string, string> | Promise<Record<string, string>>;
         fetch?: typeof fetch;
     },
 ) {

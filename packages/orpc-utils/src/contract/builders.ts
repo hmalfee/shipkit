@@ -77,10 +77,7 @@ type ValidInputShape = {
 
 /** Response codes that represent HTTP redirects (3xx). */
 type RedirectCode =
-    | 'MOVED_PERMANENTLY'
-    | 'FOUND'
-    | 'TEMPORARY_REDIRECT'
-    | 'PERMANENT_REDIRECT';
+    'MOVED_PERMANENTLY' | 'FOUND' | 'TEMPORARY_REDIRECT' | 'PERMANENT_REDIRECT';
 
 /**
  * Wraps a single response entry into the appropriate shape:
@@ -335,11 +332,9 @@ function handleResponses(
 
     if (redirectCode) {
         const orpcMeta = (target as Record<string, unknown>)['~orpc'] as
-            | Record<string, unknown>
-            | undefined;
+            Record<string, unknown> | undefined;
         const existingRoute = orpcMeta?.route as
-            | Record<string, unknown>
-            | undefined;
+            Record<string, unknown> | undefined;
         builder = (builder as BuilderWithRouteMethod).$route({
             ...existingRoute,
             successStatus: RESPONSE_STATUS[redirectCode],

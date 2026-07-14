@@ -5,7 +5,6 @@ const config: Config = {
     semi: true,
     singleQuote: true,
     plugins: [
-        '@prettier/plugin-oxc',
         '@ianvs/prettier-plugin-sort-imports',
         'prettier-plugin-tailwindcss',
         'prettier-plugin-packagejson',

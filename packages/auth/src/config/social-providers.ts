@@ -6,7 +6,9 @@ type BetterAuthOAuthProviders = NonNullable<
 >;
 
 type OAuthProviders = {
-    [K in (typeof OAUTH_PROVIDER_IDS)[number]]: K extends keyof BetterAuthOAuthProviders
+    [
+        K in (typeof OAUTH_PROVIDER_IDS)[number]
+    ]: K extends keyof BetterAuthOAuthProviders
         ? BetterAuthOAuthProviders[K]
         : never;
 };
@@ -52,7 +54,9 @@ export function buildOAuthProviders(
             },
         ]),
     ) as {
-        [K in keyof typeof oauthProvidersConfig]: (typeof oauthProvidersConfig)[K] & {
+        [
+            K in keyof typeof oauthProvidersConfig
+        ]: (typeof oauthProvidersConfig)[K] & {
             redirectURI?: string;
         };
     } satisfies OAuthProviders;

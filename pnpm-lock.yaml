@@ -550,9 +550,6 @@ importers:
       '@ianvs/prettier-plugin-sort-imports':
         specifier: ^4.7.1
         version: 4.7.1(@prettier/plugin-oxc@0.1.4)(prettier@3.9.5)
-      '@prettier/plugin-oxc':
-        specifier: 0.1.4
-        version: 0.1.4
       prettier-plugin-packagejson:
         specifier: ^3.0.2
         version: 3.0.2(prettier@3.9.5)
@@ -9171,7 +9168,8 @@ snapshots:
   '@oxc-parser/binding-win32-x64-msvc@0.137.0':
     optional: true
 
-  '@oxc-project/types@0.125.0': {}
+  '@oxc-project/types@0.125.0':
+    optional: true
 
   '@oxc-project/types@0.127.0': {}
 
@@ -9322,6 +9320,7 @@ snapshots:
   '@prettier/plugin-oxc@0.1.4':
     dependencies:
       oxc-parser: 0.125.0
+    optional: true
 
   '@protobufjs/aspromise@1.1.2': {}
 
@@ -12083,6 +12082,7 @@ snapshots:
       '@oxc-parser/binding-win32-arm64-msvc': 0.125.0
       '@oxc-parser/binding-win32-ia32-msvc': 0.125.0
       '@oxc-parser/binding-win32-x64-msvc': 0.125.0
+    optional: true
 
   oxc-parser@0.137.0:
     dependencies:

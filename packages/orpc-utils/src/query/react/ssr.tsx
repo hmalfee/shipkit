@@ -47,11 +47,13 @@ type ServerClient<TClient, TContract> = TClient extends (
           }
         : never
     : {
-          [K in keyof TClient & keyof TContract as IsMutation<
-              TContract[K]
-          > extends true
-              ? never
-              : K]: ServerClient<TClient[K], TContract[K]>;
+          [
+              K in keyof TClient & keyof TContract as IsMutation<
+                  TContract[K]
+              > extends true
+                  ? never
+                  : K
+          ]: ServerClient<TClient[K], TContract[K]>;
       };
 
 // ── Factory ──────────────────────────────────────────────────────────
@@ -79,11 +81,9 @@ export function createSSRHelpers<
                         return Reflect.get(target, prop) as unknown;
 
                     const contractChild = contractNode[prop] as
-                        | ContractNode
-                        | undefined;
+                        ContractNode | undefined;
                     const queryUtilsChild = queryUtilsNode[prop] as
-                        | Record<string, unknown>
-                        | undefined;
+                        Record<string, unknown> | undefined;
 
                     if (!contractChild) return undefined;
 
@@ -115,12 +115,10 @@ export function createSSRHelpers<
                                 if (hasInput) {
                                     input = args[0];
                                     opts = args[1] as
-                                        | Record<string, unknown>
-                                        | undefined;
+                                        Record<string, unknown> | undefined;
                                 } else {
                                     opts = args[0] as
-                                        | Record<string, unknown>
-                                        | undefined;
+                                        Record<string, unknown> | undefined;
                                 }
 
                                 const mergedOpts =
