@@ -13,7 +13,7 @@ export const defaultNoRestrictedSyntaxRules = [
         selector:
             "MemberExpression[object.name='process'][property.name='env']",
         message:
-            "Do not use process.env directly. Use createEnv from '@mento-mark/env' to create a validated env instance.",
+            "Do not use process.env directly. Use createEnv from '@shipkit/env' to create a validated env instance.",
     },
 ] as const;
 

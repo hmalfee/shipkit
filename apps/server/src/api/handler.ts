@@ -33,7 +33,7 @@ const createHandler = async () => {
                 schemaConverters: [new ZodToJsonSchemaConverter()],
                 specGenerateOptions: {
                     info: {
-                        title: 'MentoMark API',
+                        title: 'shipkit API',
                         version: '1.0.0',
                     },
                 },

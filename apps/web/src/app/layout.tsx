@@ -17,8 +17,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-    title: 'MentoMark',
-    description: 'MentoMark',
+    title: 'shipkit',
+    description: 'shipkit',
     icons: {
         icon: 'data:,', // Prevents the browser from requesting an external favicon
     },
