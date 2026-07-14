@@ -14,6 +14,7 @@
         "eslint-plugin-n": "^18.1.0",
         "eslint-plugin-react": "^7.37.5",
         "eslint-plugin-react-hooks": "^7.1.1",
+        "eslint-plugin-react-x": "^5.14.8",
         "oxlint-plugin-eslint": "^1.62.0",
         "oxlint-tsgolint": "^0.22.1"
     }
