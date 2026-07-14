@@ -1,7 +1,7 @@
 import type { KnipConfig } from 'knip';
 
 const config: KnipConfig = {
-    ignoreDependencies: [/eslint|prettier|oxlint|tailwindcss/i], // Ignore dependencies (and related dependencies to these dependencies) that are used implicitly and not directly imported in the codebase.
+    ignoreDependencies: [/eslint|prettier|oxlint|tailwindcss|commitlint/i], // Ignore dependencies (and related dependencies to these dependencies) that are used implicitly and not directly imported in the codebase.
     workspaces: {
         // root workspace
         '.': {

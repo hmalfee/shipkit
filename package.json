@@ -17,8 +17,13 @@
         "generate": "turbo gen create",
         "knip": "SKIP_ENV_VALIDATION=1 knip",
         "lint": "oxlint . --deny-warnings",
-        "prepare": "run-on-staged --setup",
+        "prepare": "run-on-staged --setup && setup-commitlint",
         "typecheck": "turbo run typecheck"
+    },
+    "commitlint": {
+        "extends": [
+            "@commitlint/config-conventional"
+        ]
     },
     "prettier": "@mento-mark/prettier-config",
     "dependencies": {
@@ -27,6 +32,8 @@
         "zod": "catalog:"
     },
     "devDependencies": {
+        "@commitlint/cli": "^21.2.1",
+        "@commitlint/config-conventional": "^21.2.0",
         "@mento-mark/oxlint-config": "workspace:*",
         "@mento-mark/prettier-config": "workspace:*",
         "@mento-mark/scripts": "workspace:*",
