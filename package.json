@@ -7,13 +7,13 @@
         "tooling/*"
     ],
     "scripts": {
-        "build": "turbo build",
-        "check": "pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm run knip",
+        "build": "turbo run build",
+        "check": "turbo run format:check lint typecheck knip",
         "clean": "git clean -xdf .cache .turbo node_modules -e .env -e .env.*",
         "clean:full": "turbo run clean",
-        "dev": "turbo dev",
-        "format": "prettier --write .",
-        "format:check": "prettier --check .",
+        "dev": "turbo run dev",
+        "format": "prettier --cache --write .",
+        "format:check": "prettier --cache --check .",
         "generate": "turbo gen create",
         "knip": "SKIP_ENV_VALIDATION=1 knip",
         "lint": "oxlint . --deny-warnings",
@@ -55,19 +55,19 @@
         "checks": [
             {
                 "name": "Format",
-                "command": "pnpm run format:check"
+                "command": "turbo run format:check"
             },
             {
                 "name": "Lint",
-                "command": "pnpm run lint"
+                "command": "turbo run lint"
             },
             {
                 "name": "Typecheck",
-                "command": "pnpm run typecheck"
+                "command": "turbo run typecheck"
             },
             {
                 "name": "Knip",
-                "command": "pnpm run knip"
+                "command": "turbo run knip"
             }
         ]
     }

@@ -1,10 +1,13 @@
 {
     "$schema": "https://turbo.build/schema.json",
     "ui": "tui",
+    "globalEnv": ["NODE_ENV", "CI", "SKIP_ENV_VALIDATION"],
+    "globalDependencies": [".env", ".env.*"],
+    // Note: Tasks without '//# ' run in all workspaces. Tasks with '//# ' run only at the monorepo root.
     "tasks": {
         "build": {
             "dependsOn": ["^build"],
-            "inputs": ["$TURBO_DEFAULT$", ".env*"],
+            "inputs": ["$TURBO_DEFAULT$"],
             "outputs": [
                 "dist/**",
                 ".next/**",
@@ -13,10 +16,23 @@
             ]
         },
         "typecheck": {
+            "dependsOn": ["^typecheck"],
             "outputs": [".cache/tsbuildinfo.json"]
         },
-        "knip": {
+        "//#knip": {
             "outputs": []
+        },
+        "//#lint": {
+            "inputs": [
+                "**/*.{ts,tsx,js,jsx,mjs,cjs}",
+                "!**/.turbo/**",
+                "!**/.cache/**"
+            ],
+            "outputs": []
+        },
+        "//#format:check": {
+            // use prettier's own cache for more granular caching
+            "cache": false
         },
         "dev": {
             "dependsOn": ["^dev"],
