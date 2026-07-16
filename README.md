@@ -1,18 +1,50 @@
 # shipkit
 
-A full-stack TypeScript starter template built for speed, type safety, and great developer experience.
+A production-ready, full-stack **TypeScript** starter template — built to help you ship fast without cutting corners on production readiness. Auth, database, observability, and tooling are wired up from day one, so you can focus on building your product instead of your infrastructure.
 
 ## Tech Stack
 
-- **API:** Hono + oRPC (OpenAPI mode) + Zod
-- **Frontend:** Next.js (App Router) + TanStack Query + oRPC client
-- **Database:** Drizzle ORM + PostgreSQL + Redis
-- **Auth:** better-auth
-- **Styling:** Tailwind CSS v4 + shadcn/ui
-- **Observability:** OpenTelemetry + LogTape (OTel SemConv logger)
-- **Tooling:** pnpm workspaces, Turborepo, oxlint, Prettier, TypeScript strict
+**Frontend**
+
+- [Next.js](https://nextjs.org) (App Router) — React framework
+- [TanStack Query](https://tanstack.com/query) — server state & data fetching
+- [TanStack Form](https://tanstack.com/form) — type-safe forms
+- [Tailwind CSS](https://tailwindcss.com) v4 — utility-first styling
+- [shadcn/ui](https://ui.shadcn.com) — accessible, unstyled UI primitives
+
+**Backend**
+
+- [Hono](https://hono.dev) — fast, lightweight web framework
+- [oRPC](https://orpc.unnoq.com) — end-to-end type-safe APIs with OpenAPI support
+- [Zod](https://zod.dev) — schema validation
+
+**Database**
+
+- [Drizzle ORM](https://orm.drizzle.team) — type-safe SQL ORM
+- [PostgreSQL](https://www.postgresql.org) — primary database
+- [Redis](https://redis.io) — caching & session storage
+
+**Auth**
+
+- [better-auth](https://www.better-auth.com) — modern authentication for TypeScript
+
+**Observability**
+
+- [OpenTelemetry](https://opentelemetry.io) — unified tracing, metrics & error monitoring for both frontend and backend
+- [LogTape](https://logtape.org) — structured logging
+- [PostHog](https://posthog.com) — product analytics
+
+**Tooling**
+
+- [Turborepo](https://turbo.build) + [pnpm](https://pnpm.io) workspaces — monorepo build system
+- [oxlint](https://oxc.rs) — fast linting
+- [Prettier](https://prettier.io) — code formatting
+- [Knip](https://knip.dev) — unused code & dependency detection
+- TypeScript strict mode across the entire stack
 
 ## Quick Start
+
+**Prerequisites:** Node.js 22.x, pnpm 10.x
 
 1. **Install dependencies**
 
@@ -21,33 +53,58 @@ A full-stack TypeScript starter template built for speed, type safety, and great
     ```
 
 2. **Set up environment variables**
-   Copy `.env.example` to `.env` in the root and respective apps/packages.
 
-3. **Start development server**
+    Copy `.env.example` to `.env` in the root and in each app/package that needs it.
+
+3. **Start the dev server**
+
     ```bash
     pnpm dev
     ```
 
-## Development Commands
+    This spins up Postgres, Redis, the Hono API, and the Next.js frontend together.
 
-Run these from the repository root:
+## Project Structure
 
-- `pnpm dev` - Starts all apps and dependent packages
-- `pnpm build` - Builds all apps and packages via Turborepo
-- `pnpm check` - Runs format checking, linting, typechecking, and knip
-- `pnpm format` - Formats the codebase with Prettier
-- `pnpm lint` - Runs oxlint across the entire repo
+```
+apps/
+  server/   → Hono API (oRPC + better-auth)
+  web/      → Next.js frontend
+packages/
+  auth/     → better-auth configuration
+  db/       → Drizzle schema, Postgres & Redis clients
+  shared/   → shared oRPC contracts & Zod schemas
+  ui/       → shadcn/ui component library
+  telemetry/→ OpenTelemetry, logging & Sentry setup
+tooling/
+  scripts/  → internal CLI utilities (port management, git hooks, etc.)
+  ...       → shared TypeScript, oxlint & Prettier configs
+```
+
+## Scripts
+
+Run from the repository root:
+
+| Command       | Description                                 |
+| ------------- | ------------------------------------------- |
+| `pnpm dev`    | Start all apps and their dependencies       |
+| `pnpm build`  | Build all apps and packages via Turborepo   |
+| `pnpm check`  | Run format check, lint, typecheck, and knip |
+| `pnpm format` | Format the codebase with Prettier           |
+| `pnpm lint`   | Lint the codebase with oxlint               |
 
 ## Database
 
-Schema files are located in `packages/db/src/pg/schema/`.
+Schema files live in `packages/db/src/pg/schema/`.
 
-- `pnpm --filter @shipkit/db db:push` - Pushes schema changes to your database
-- `pnpm --filter @shipkit/db studio:postgres` - Opens Drizzle Studio
+```bash
+pnpm --filter @shipkit/db db:push         # push schema changes to your database
+pnpm --filter @shipkit/db studio:postgres # open Drizzle Studio
+```
 
 ## UI Components
 
-Add new shadcn components using the UI package:
+Add new [shadcn/ui](https://ui.shadcn.com) components via the `ui` package:
 
 ```bash
 pnpm --filter @shipkit/ui ui:add [component]
