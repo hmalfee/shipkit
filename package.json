@@ -17,7 +17,7 @@
         "generate": "turbo gen create",
         "knip": "SKIP_ENV_VALIDATION=1 knip",
         "lint": "oxlint . --deny-warnings",
-        "prepare": "run-on-staged --setup && setup-commitlint",
+        "prepare": "husky",
         "typecheck": "turbo run typecheck"
     },
     "commitlint": {
@@ -40,6 +40,7 @@
         "@shipkit/ts-config": "workspace:*",
         "@turbo/gen": "^2.9.8",
         "@types/node": "^22.13.14",
+        "husky": "^9.1.7",
         "knip": "^6.12.0",
         "oxlint": "1.62.0",
         "prettier": "^3.8.3",
@@ -51,24 +52,11 @@
         "node": "22.x",
         "pnpm": "10.x"
     },
-    "run-on-staged": {
-        "checks": [
-            {
-                "name": "Format",
-                "command": "turbo run format:check"
-            },
-            {
-                "name": "Lint",
-                "command": "turbo run lint"
-            },
-            {
-                "name": "Typecheck",
-                "command": "turbo run typecheck"
-            },
-            {
-                "name": "Knip",
-                "command": "turbo run knip"
-            }
-        ]
-    }
+    "run-on-staged": [
+        "pnpm install",
+        "turbo run format:check",
+        "turbo run lint",
+        "turbo run typecheck",
+        "turbo run knip"
+    ]
 }

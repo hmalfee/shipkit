@@ -1,14 +1,25 @@
+import { execFileSync, execSync } from 'node:child_process';
+
 import { $, chalk, echo, fs, path } from 'zx';
 
-const HOOK_COMMAND = 'pnpm exec run-on-staged';
+const STASH_MSG = 'run-on-staged automatic backup';
+const GIT = 'git -c submodule.recurse=false';
+
+function git(repoRoot) {
+    return (pieces, ...values) => {
+        const prefixed = [`${GIT} ${pieces[0]}`, ...pieces.slice(1)];
+        return $({ cwd: repoRoot })(prefixed, ...values);
+    };
+}
 
 export function findRepoRoot() {
-    let dir = process.cwd();
-    while (dir !== '/') {
-        if (fs.existsSync(path.join(dir, '.git'))) return dir;
-        dir = path.dirname(dir);
+    try {
+        return execSync('git rev-parse --show-toplevel', {
+            encoding: 'utf8',
+        }).trim();
+    } catch {
+        return null;
     }
-    return null;
 }
 
 export async function verifyGitState(repoRoot) {
@@ -18,7 +29,7 @@ export async function verifyGitState(repoRoot) {
     }
 
     if ((await $`git rev-parse HEAD`.nothrow().quiet()).exitCode !== 0) {
-        echo(chalk.yellow('Initial commit — skipping pre-commit checks.'));
+        echo(chalk.yellow('Initial commit — skipping tasks.'));
         process.exit(0);
     }
 
@@ -31,43 +42,129 @@ export async function verifyGitState(repoRoot) {
     }
 }
 
-export async function installHook() {
-    const root = findRepoRoot();
-    if (!root) {
-        echo(chalk.red('Not a git repository.'));
-        process.exit(1);
+export async function hideUnstagedChanges(repoRoot) {
+    const hasDiff =
+        (await git(repoRoot)`diff --quiet`.nothrow().quiet()).exitCode !== 0;
+
+    const untrackedOut = (
+        await git(repoRoot)`ls-files --others --exclude-standard`.quiet()
+    ).stdout.trim();
+    const hasUntracked = untrackedOut.length > 0;
+
+    if (!hasDiff && !hasUntracked) {
+        return { hadChanges: false, restored: false };
     }
 
-    const hookPath = path.join(root, '.git', 'hooks', 'pre-commit');
-    if (fs.existsSync(hookPath)) {
-        const content = await fs.readFile(hookPath, 'utf8');
-        if (content.includes(HOOK_COMMAND)) {
-            echo(
-                chalk.yellow(
-                    'run-on-staged already installed in pre-commit hook - skipping.',
-                ),
-            );
-            return;
-        }
-        echo(chalk.blue('Setting up pre-commit hook...'));
+    const includeUntracked = hasUntracked ? ['--include-untracked'] : [];
+    await git(
+        repoRoot,
+    )`stash push --keep-index ${includeUntracked} --message ${STASH_MSG}`
+        .nothrow()
+        .quiet();
+
+    echo(chalk.dim('(if process is killed: git stash pop --index)\n'));
+
+    return { hadChanges: true, restored: false, repoRoot };
+}
+
+export async function restoreUnstagedChanges(state) {
+    if (!state.hadChanges || state.restored) return;
+    state.restored = true;
+
+    const stashRef = await findStashRef(state.repoRoot);
+    if (!stashRef) return;
+
+    await git(state.repoRoot)`reset --hard HEAD`.nothrow().quiet();
+    const result = await git(
+        state.repoRoot,
+    )`stash pop --quiet --index ${stashRef}`
+        .nothrow()
+        .quiet();
+
+    if (result.exitCode !== 0) {
         echo(
             chalk.yellow(
-                'Existing pre-commit hook found — preserving and appending run-on-staged.',
+                'Warning: stash pop had conflicts. Your changes are preserved in the stash — run `git stash show` to inspect.',
             ),
         );
-        await fs.writeFile(
-            hookPath,
-            `${content.trimEnd()}\\n\\n${HOOK_COMMAND}\\n`,
-        );
-        await $`chmod +x ${hookPath}`;
-        echo(
-            chalk.green('✓ run-on-staged appended to existing pre-commit hook'),
-        );
-        return;
     }
+}
 
-    echo(chalk.blue('Setting up pre-commit hook...'));
-    await fs.writeFile(hookPath, `#!/bin/bash\n${HOOK_COMMAND}\n`);
-    await $`chmod +x ${hookPath}`;
-    echo(chalk.green('✓ Git pre-commit hook installed'));
+async function findStashRef(repoRoot) {
+    const list = (await git(repoRoot)`stash list --format=${'%gd %gs'}`.quiet())
+        .stdout;
+    for (const line of list.split('\n')) {
+        if (line.includes(STASH_MSG)) {
+            return line.split(' ')[0];
+        }
+    }
+    return null;
+}
+
+function restoreSync(state) {
+    if (!state.hadChanges || state.restored) return;
+    state.restored = true;
+
+    try {
+        const list = execFileSync(
+            'git',
+            [
+                '-c',
+                'submodule.recurse=false',
+                'stash',
+                'list',
+                '--format=%gd %gs',
+            ],
+            { cwd: state.repoRoot, encoding: 'utf8' },
+        );
+        for (const line of list.split('\n')) {
+            if (line.includes(STASH_MSG)) {
+                const ref = line.split(' ')[0];
+                execFileSync(
+                    'git',
+                    [
+                        '-c',
+                        'submodule.recurse=false',
+                        'reset',
+                        '--hard',
+                        'HEAD',
+                    ],
+                    {
+                        cwd: state.repoRoot,
+                        stdio: 'ignore',
+                    },
+                );
+                execFileSync(
+                    'git',
+                    [
+                        '-c',
+                        'submodule.recurse=false',
+                        'stash',
+                        'pop',
+                        '--quiet',
+                        '--index',
+                        ref,
+                    ],
+                    {
+                        cwd: state.repoRoot,
+                        stdio: 'ignore',
+                    },
+                );
+                break;
+            }
+        }
+    } catch {
+        // ponytail: best-effort restore on crash — stash is still in reflog if this fails
+    }
+}
+
+export function registerRestoreOnExit(stateRef) {
+    const onExit = () => restoreSync(stateRef);
+    const onSignal = (code) => () => {
+        restoreSync(stateRef);
+        process.exit(128 + code);
+    };
+    process.on('exit', onExit);
+    process.on('SIGINT', onSignal(2));
+    process.on('SIGTERM', onSignal(15));
 }

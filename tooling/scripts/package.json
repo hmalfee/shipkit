@@ -5,8 +5,7 @@
     "bin": {
         "next-standalone-postbuild": "./bin/next-standalone-postbuild.js",
         "ports": "./bin/ports/index.js",
-        "run-on-staged": "./bin/run-on-staged/index.js",
-        "setup-commitlint": "./bin/setup-commitlint.js"
+        "run-on-staged": "./bin/run-on-staged/index.js"
     },
     "scripts": {
         "postinstall": "chmod +x ./bin/*.js ./bin/*/index.js",

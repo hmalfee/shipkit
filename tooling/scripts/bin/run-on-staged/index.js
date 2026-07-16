@@ -1,29 +1,29 @@
 #!/usr/bin/env node
-import { chalk, echo } from 'zx';
+import { chalk, echo, fs, path } from 'zx';
 
-import { runCheck } from './checks.js';
-import { initConfig, loadConfig, printUsage } from './config.js';
 import {
+    findRepoRoot,
     hideUnstagedChanges,
     registerRestoreOnExit,
     restoreUnstagedChanges,
-} from './environment.js';
-import { findRepoRoot, installHook, verifyGitState } from './git.js';
+    verifyGitState,
+} from './git.js';
+import { runTask } from './tasks.js';
+
+function loadConfig(repoRoot) {
+    const pkgPath = path.join(repoRoot, 'package.json');
+    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+    if (pkg['run-on-staged']) return pkg['run-on-staged'];
+
+    const rcPath = path.join(repoRoot, '.run-on-staged.json');
+    if (fs.existsSync(rcPath))
+        return JSON.parse(fs.readFileSync(rcPath, 'utf8'));
+
+    echo(chalk.red('No run-on-staged config found.'));
+    process.exit(1);
+}
 
 async function main() {
-    const flag = process.argv[2];
-
-    if (flag === '--help') {
-        printUsage();
-        process.exit(0);
-    }
-
-    if (flag === '--setup') {
-        await initConfig();
-        await installHook();
-        process.exit(0);
-    }
-
     const repoRoot = findRepoRoot();
     if (!repoRoot) {
         echo(chalk.red('Not a git repository.'));
@@ -33,6 +33,10 @@ async function main() {
     await verifyGitState(repoRoot);
     const config = loadConfig(repoRoot);
 
+    const tasks = Array.isArray(config)
+        ? config.map((command) => ({ name: command, command, env: {} }))
+        : config.tasks || [];
+
     // Register signal handler first with empty state ref
     const stateRef = { hadChanges: false, restored: false };
     registerRestoreOnExit(stateRef);
@@ -41,18 +45,14 @@ async function main() {
     const state = await hideUnstagedChanges(repoRoot);
     Object.assign(stateRef, state);
 
-    echo(
-        chalk.blue(
-            `\nRunning ${config.checks.length} check(s) on staged files...\n`,
-        ),
-    );
+    echo(chalk.blue(`\nRunning ${tasks.length} task(s) on staged files...\n`));
 
     let failed = false;
-    for (const check of config.checks) {
-        const ok = await runCheck(
-            check.name,
-            check.command,
-            check.env ?? {},
+    for (const task of tasks) {
+        const ok = await runTask(
+            task.name,
+            task.command,
+            task.env ?? {},
             repoRoot,
         );
         if (!ok) {
@@ -64,7 +64,7 @@ async function main() {
     await restoreUnstagedChanges(stateRef);
 
     if (failed) process.exit(1);
-    echo(chalk.green('\n✓ All checks passed'));
+    echo(chalk.green('\n✓ All tasks passed'));
 }
 
 main();

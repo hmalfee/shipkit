@@ -63,3 +63,5 @@ coverage/
 
 next-env.d.ts
 repomix-output.md
+
+.husky/_
