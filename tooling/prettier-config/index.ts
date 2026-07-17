@@ -9,7 +9,9 @@ const config: Config = {
         'prettier-plugin-tailwindcss',
         'prettier-plugin-packagejson',
         'prettier-plugin-sh',
+        'prettier-plugin-sql',
     ],
+    language: 'postgresql',
     importOrder: [
         '<BUILTIN_MODULES>', // Node.js internals (fs, path, etc.)
         '',

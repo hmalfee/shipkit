@@ -54,6 +54,7 @@
     },
     "run-on-staged": [
         "pnpm install",
+        "turbo db:generate",
         "turbo run format:check",
         "turbo run lint",
         "turbo run typecheck",

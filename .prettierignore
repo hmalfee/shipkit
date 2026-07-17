@@ -15,3 +15,5 @@ turbo/generators/**/*.hbs
 
 # Exclude telemetry descriptor minified files
 packages/telemetry/src/**/otlp-descriptor.json
+
+packages/db/src/pg/migrations/meta
