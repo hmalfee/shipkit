@@ -18,6 +18,7 @@
         "@shipkit/auth": "workspace:*",
         "@shipkit/db": "workspace:*",
         "@shipkit/env": "workspace:*",
+        "@shipkit/telemetry": "workspace:*",
         "hono": "^4.8.2",
         "rate-limiter-flexible": "^11.1.0"
     },

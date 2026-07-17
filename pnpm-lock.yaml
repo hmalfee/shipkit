@@ -86,9 +86,6 @@ importers:
       '@shipkit/shared':
         specifier: workspace:*
         version: link:packages/shared
-      '@shipkit/telemetry':
-        specifier: workspace:*
-        version: link:packages/telemetry
       zod:
         specifier: 'catalog:'
         version: 4.4.3
@@ -162,6 +159,9 @@ importers:
       '@shipkit/env':
         specifier: workspace:*
         version: link:../../packages/env
+      '@shipkit/telemetry':
+        specifier: workspace:*
+        version: link:../../packages/telemetry
       hono:
         specifier: ^4.8.2
         version: 4.12.30
@@ -184,6 +184,9 @@ importers:
       '@shipkit/posthog':
         specifier: workspace:*
         version: link:../../packages/posthog
+      '@shipkit/telemetry':
+        specifier: workspace:*
+        version: link:../../packages/telemetry
       '@shipkit/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -261,6 +264,9 @@ importers:
       '@shipkit/env':
         specifier: workspace:*
         version: link:../env
+      '@shipkit/telemetry':
+        specifier: workspace:*
+        version: link:../telemetry
       drizzle-orm:
         specifier: ^0.45.1
         version: 0.45.2(@opentelemetry/api@1.9.1)(@types/better-sqlite3@7.6.13)(@types/pg@8.20.0)(better-sqlite3@9.6.0)(kysely@0.28.17)(pg@8.22.0)
@@ -301,6 +307,9 @@ importers:
       '@orpc/tanstack-query':
         specifier: 'catalog:'
         version: 1.14.8(@opentelemetry/api@1.9.1)(@orpc/client@1.14.8(@opentelemetry/api@1.9.1))(@tanstack/query-core@5.101.2)
+      '@shipkit/telemetry':
+        specifier: workspace:*
+        version: link:../telemetry
       '@tanstack/react-query':
         specifier: 'catalog:'
         version: 5.101.2(react@19.2.7)
@@ -320,6 +329,9 @@ importers:
 
   packages/posthog:
     dependencies:
+      '@shipkit/telemetry':
+        specifier: workspace:*
+        version: link:../telemetry
       '@tanstack/react-query':
         specifier: 'catalog:'
         version: 5.101.2(react@19.2.7)

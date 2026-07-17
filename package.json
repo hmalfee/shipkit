@@ -28,7 +28,6 @@
     "prettier": "@shipkit/prettier-config",
     "dependencies": {
         "@shipkit/shared": "workspace:*",
-        "@shipkit/telemetry": "workspace:*",
         "zod": "catalog:"
     },
     "devDependencies": {

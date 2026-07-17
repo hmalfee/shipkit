@@ -13,6 +13,7 @@
         "@shipkit/env": "workspace:*",
         "@shipkit/orpc-utils": "workspace:*",
         "@shipkit/posthog": "workspace:*",
+        "@shipkit/telemetry": "workspace:*",
         "@shipkit/ui": "workspace:*",
         "@tanstack/react-form": "^1.32.0",
         "@tanstack/react-query": "catalog:",
