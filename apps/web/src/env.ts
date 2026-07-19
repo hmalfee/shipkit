@@ -2,6 +2,8 @@ import { z } from 'zod';
 
 import { createEnv } from '@shipkit/env';
 
+process.env.NEXT_PUBLIC_ENV = process.env.NODE_ENV;
+
 export const env = createEnv({
     server: {
         PORT: z.coerce.number(),
