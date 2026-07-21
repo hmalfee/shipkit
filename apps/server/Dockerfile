@@ -45,5 +45,7 @@ RUN addgroup --system --gid 1001 nodejs \
 COPY --from=builder --chown=server:nodejs /app/apps/${APP_NAME}/dist ./dist
 
 USER server
+ENV NODE_ENV="production"
+ENV PORT=3000
 EXPOSE 3000
 CMD ["node", "--import", "./dist/instrument.mjs", "--enable-source-maps", "dist/index.mjs"]

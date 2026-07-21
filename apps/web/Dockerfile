@@ -62,5 +62,8 @@ RUN adduser --system --uid 1001 nextjs
 # So the standalone dir is self-contained — one COPY covers everything.
 COPY --from=builder --chown=nextjs:nodejs /app/apps/${APP_NAME}/.next/standalone ./
 USER nextjs
+ENV NODE_ENV="production"
+ENV PORT=3000
+ENV HOSTNAME="0.0.0.0"
 EXPOSE 3000
 CMD ["sh", "-c", "node apps/${APP_NAME}/server.js"]
