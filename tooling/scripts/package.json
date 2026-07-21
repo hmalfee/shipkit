@@ -3,6 +3,7 @@
     "private": true,
     "type": "module",
     "bin": {
+        "docker-build": "./bin/docker-build/index.js",
         "next-standalone-postbuild": "./bin/next-standalone-postbuild.js",
         "ports": "./bin/ports/index.js",
         "run-on-staged": "./bin/run-on-staged/index.js"
