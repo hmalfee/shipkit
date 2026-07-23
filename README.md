@@ -10,7 +10,7 @@ A production-ready, full-stack **TypeScript** starter template — built to help
 - [TanStack Query](https://tanstack.com/query) — server state & data fetching
 - [TanStack Form](https://tanstack.com/form) — type-safe forms
 - [Tailwind CSS](https://tailwindcss.com) v4 — utility-first styling
-- [shadcn/ui](https://ui.shadcn.com) — accessible, unstyled UI primitives
+- [shadcn/ui](https://ui.shadcn.com) (with [Base UI](https://base-ui.com/)) — accessible, unstyled UI primitives
 
 **Backend**
 
