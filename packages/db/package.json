@@ -10,7 +10,7 @@
         "clean": "git clean -xdf .cache .turbo node_modules -e .env -e .env.*",
         "db:generate": "SKIP_ENV_VALIDATION=1 drizzle-kit generate",
         "db:migrate": "drizzle-kit migrate",
-        "predev": "ports exec docker compose up -d --wait",
+        "predev": "docker compose up -d --wait",
         "dev": "pnpm db:migrate",
         "studio:postgres": "drizzle-kit studio",
         "studio:redis": "pnpx redis-commander",

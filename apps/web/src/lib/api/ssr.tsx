@@ -14,7 +14,7 @@ import { createQueryClient } from './query-client';
 const getQueryClient = cache(() => createQueryClient());
 
 const serverApi = createFetchClient(contract, {
-    url: `http://localhost:${env.SERVER_PORT}/`,
+    url: env.SERVER_URL,
     headers: async () => {
         const cookieStore = await cookies();
         return { cookie: cookieStore.toString() };

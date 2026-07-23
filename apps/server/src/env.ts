@@ -5,7 +5,8 @@ import { createEnv } from '@shipkit/env';
 export const env = createEnv({
     server: {
         PORT: z.coerce.number(),
-        WEB_PORT: z.coerce.number(),
+        SERVER_URL: z.url(),
+        WEB_URL: z.url(),
         POSTGRES_URL: z.url(),
         REDIS_URL: z.url(),
         AUTH_SECRET: z.string(),

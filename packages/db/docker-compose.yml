@@ -7,7 +7,7 @@ services:
             - POSTGRES_PASSWORD=password
             - POSTGRES_DB=postgres
         ports:
-            - '${POSTGRES_PORT}:5432'
+            - '5432:5432'
         volumes:
             - postgres_data:/var/lib/postgresql
         healthcheck:
@@ -20,7 +20,7 @@ services:
         image: redis:latest
         restart: always
         ports:
-            - '${REDIS_PORT}:6379'
+            - '6379:6379'
         volumes:
             - redis_data:/data
 

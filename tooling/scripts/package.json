@@ -5,8 +5,8 @@
     "bin": {
         "docker-build": "./bin/docker-build/index.js",
         "next-standalone-postbuild": "./bin/next-standalone-postbuild.js",
-        "ports": "./bin/ports/index.js",
-        "run-on-staged": "./bin/run-on-staged/index.js"
+        "run-on-staged": "./bin/run-on-staged/index.js",
+        "urls": "./bin/urls/index.js"
     },
     "scripts": {
         "postinstall": "chmod +x ./bin/*.js ./bin/*/index.js",

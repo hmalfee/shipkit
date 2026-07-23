@@ -28,7 +28,7 @@ app.use(traceHonoRequest());
 app.use(
     '/*',
     cors({
-        origin: [`http://localhost:${env.WEB_PORT}`],
+        origin: [env.WEB_URL],
         allowMethods: ['GET', 'POST', 'DELETE', 'PUT', 'PATCH'],
         allowHeaders: ['Content-Type', 'Authorization'],
         credentials: true,

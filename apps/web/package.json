@@ -2,11 +2,11 @@
     "name": "web",
     "type": "module",
     "scripts": {
-        "build": "ports exec next build",
+        "build": "next build",
         "postbuild": "next-standalone-postbuild",
         "clean": "git clean -xdf .cache .turbo node_modules .next -e .env -e .env.*",
-        "dev": "ports exec next dev",
-        "start": "ports exec node .next/standalone/apps/web/server.js",
+        "dev": "urls next dev",
+        "start": "node .next/standalone/apps/web/server.js",
         "typecheck": "tsc"
     },
     "dependencies": {
