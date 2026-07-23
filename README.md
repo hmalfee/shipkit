@@ -54,7 +54,13 @@ A production-ready, full-stack **TypeScript** starter template — built to help
 
 2. **Set up environment variables**
 
-    Copy `.env.example` to `.env` in the root and in each app/package that needs it.
+    Copy the `.example` files (like `.env.example`, `.env.ports.example`) to their respective paths without the `.example` extension. You can do this quickly by running:
+
+    ```bash
+    find . -name "*.example" -exec sh -c 'cp "$1" "${1%.example}"' _ {} \;
+    ```
+
+    **Important:** After copying the files, make sure to open them and replace the placeholder values (e.g., `<YOUR_GOOGLE_CLIENT_ID>`, `<YOUR_AUTH_SECRET>`, etc.) with your actual keys and credentials.
 
 3. **Start the dev server**
 
