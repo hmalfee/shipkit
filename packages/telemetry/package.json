@@ -64,6 +64,6 @@
         }
     },
     "optionalDependencies": {
-        "better-sqlite3": "^9"
+        "better-sqlite3": "^13.0.1"
     }
 }
