@@ -1,11 +1,6 @@
 {
     "name": "shipkit",
     "type": "module",
-    "workspaces": [
-        "apps/*",
-        "packages/*",
-        "tooling/*"
-    ],
     "scripts": {
         "build": "turbo run build",
         "check": "turbo run format:check lint typecheck knip",
@@ -46,10 +41,10 @@
         "turbo": "^2.8.12",
         "typescript": "catalog:"
     },
-    "packageManager": "pnpm@10.32.1",
+    "packageManager": "pnpm@11.15.1",
     "engines": {
-        "node": "22.x",
-        "pnpm": "10.x"
+        "node": "24.x",
+        "pnpm": "11.x"
     },
     "run-on-staged": [
         "pnpm install",

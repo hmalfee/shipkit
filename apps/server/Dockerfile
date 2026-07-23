@@ -8,14 +8,13 @@ ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 RUN apk add --no-cache libc6-compat bash
 RUN : "${PNPM_VERSION:?PNPM_VERSION build-arg is required}" \
-    && npm install -g "pnpm@${PNPM_VERSION}"
+    && corepack enable pnpm && corepack install -g "pnpm@${PNPM_VERSION}"
 
 FROM base AS pruner
 WORKDIR /app
-RUN pnpm add -g turbo@latest
 COPY . .
 ARG APP_NAME
-RUN turbo prune ${APP_NAME} --docker
+RUN pnpm dlx turbo@latest prune ${APP_NAME} --docker
 
 FROM base AS installer
 WORKDIR /app

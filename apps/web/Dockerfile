@@ -7,16 +7,14 @@ ARG PNPM_VERSION
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 RUN apk add --no-cache libc6-compat bash
-# Corepack fails in Node 22.23.1 due to an underlying undici bug, so we bootstrap pnpm via npm
 RUN : "${PNPM_VERSION:?PNPM_VERSION build-arg is required, e.g. --build-arg PNPM_VERSION=10.32.1}" \
-    && npm install -g "pnpm@${PNPM_VERSION}"
+    && corepack enable pnpm && corepack install -g "pnpm@${PNPM_VERSION}"
 
 FROM base AS pruner
 WORKDIR /app
-RUN pnpm add -g turbo@latest
 COPY . .
 ARG APP_NAME
-RUN turbo prune ${APP_NAME} --docker
+RUN pnpm dlx turbo@latest prune ${APP_NAME} --docker
 
 FROM base AS installer
 WORKDIR /app

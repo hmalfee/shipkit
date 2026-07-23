@@ -36,3 +36,8 @@ publicHoistPattern:
     - '*oxlint*'
 allowBuilds:
     better-sqlite3: true
+    core-js: false
+    esbuild: false
+    msw: false
+    protobufjs: false
+    sharp: false
