@@ -13,6 +13,7 @@
         "knip": "SKIP_ENV_VALIDATION=1 knip",
         "lint": "oxlint . --deny-warnings",
         "prepare": "husky",
+        "preview": "turbo run preview",
         "typecheck": "turbo run typecheck"
     },
     "commitlint": {

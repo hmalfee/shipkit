@@ -6,6 +6,7 @@
         "postbuild": "next-standalone-postbuild",
         "clean": "git clean -xdf .cache .turbo node_modules .next -e .env -e .env.*",
         "dev": "urls next dev",
+        "preview": "urls sh -c 'pnpm build && pnpm start'",
         "start": "node .next/standalone/apps/web/server.js",
         "typecheck": "tsc"
     },

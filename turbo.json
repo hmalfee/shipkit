@@ -39,19 +39,16 @@
             "cache": false,
             "persistent": true
         },
-        "predev": {
-            "cache": false
-        },
-        "start": {
-            "dependsOn": ["^build"],
-            "cache": false,
-            "persistent": true
-        },
         "clean": {
             "cache": false
         },
         "//#clean": {
             "cache": false
+        },
+        "preview": {
+            "dependsOn": ["^dev"],
+            "cache": false,
+            "persistent": true
         }
     }
 }

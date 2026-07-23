@@ -6,6 +6,7 @@
         "build": "tsdown",
         "clean": "git clean -xdf .cache .turbo node_modules dist -e .env -e .env.*",
         "dev": "NODE_ENV=development urls sh -c 'tsx src/env.ts && tsx watch --import ./src/instrument.ts ./src/index.ts'",
+        "preview": "urls sh -c 'pnpm build  && pnpm start'",
         "start": "NODE_ENV=production node --import ./dist/instrument.mjs --enable-source-maps dist/index.mjs",
         "typecheck": "tsc -b"
     },
