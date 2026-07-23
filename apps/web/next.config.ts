@@ -1,3 +1,5 @@
+import os from 'node:os';
+
 import { withRewriteProxy } from '@shipkit/posthog/next';
 import { withTelemetrySourceMaps } from '@shipkit/telemetry/source-maps/next/server';
 
@@ -7,6 +9,12 @@ import type { NextConfig } from 'next';
 
 import rootPkgJson from '../../package.json';
 import pkgJson from './package.json';
+
+const getLocalIp = () =>
+    Object.values(os.networkInterfaces())
+        .flat()
+        .find((iface) => iface?.family === 'IPv4' && !iface.internal)
+        ?.address ?? '127.0.0.1';
 
 const workspacePackages = Object.keys({
     ...pkgJson.dependencies,
@@ -21,6 +29,10 @@ let nextConfig: NextConfig = {
     logging: {
         browserToTerminal: true,
     },
+    env: {
+        NEXT_TELEMETRY_DISABLED: '1',
+    },
+    allowedDevOrigins: [getLocalIp()],
 };
 
 if (env.NEXT_PUBLIC_POSTHOG_PROXY_PATH) {
