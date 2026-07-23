@@ -41,3 +41,4 @@ allowBuilds:
     msw: false
     protobufjs: false
     sharp: false
+optimisticRepeatInstall: false
