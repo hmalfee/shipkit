@@ -59,9 +59,14 @@ RUN adduser --system --uid 1001 nextjs
 #   public/      → .next/standalone/apps/web/public
 # So the standalone dir is self-contained — one COPY covers everything.
 COPY --from=builder --chown=nextjs:nodejs /app/apps/${APP_NAME}/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/apps/${APP_NAME}/package.json ./
+# Next.js standalone output is copied to the root of /app, but package.json's "start"
+# script expects to run "node .next/standalone/apps/web/server.js". We create a symlink
+# so that the expected nested path correctly maps back to the root of our /app directory.
+RUN mkdir -p .next && ln -s /app .next/standalone
+
 USER nextjs
-ENV NODE_ENV="production"
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 EXPOSE 3000
-CMD ["sh", "-c", "node apps/${APP_NAME}/server.js"]
+CMD ["node", "--run", "start"]
