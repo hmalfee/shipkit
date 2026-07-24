@@ -3,6 +3,8 @@ import net from 'net';
 
 import { $, chalk, echo, fs, os, path } from 'zx';
 
+const DEFAULT_BASE = 'http://localhost';
+
 const getLocalIp = () =>
     Object.values(os.networkInterfaces())
         .flat()
@@ -18,21 +20,20 @@ const checkPortAvailable = (port) =>
             .listen(port, '0.0.0.0');
     });
 
-async function loadPorts(rootDir) {
-    const envPortsPath = path.join(rootDir, '.env.ports');
-    if (!fs.existsSync(envPortsPath)) {
-        echo(chalk.red('Error: .env.ports not found at the root of the repo.'));
+async function loadEnvUrls(rootDir) {
+    const envPath = path.join(rootDir, '.env.urls');
+    if (!fs.existsSync(envPath)) {
+        echo(chalk.red('Error: .env.urls not found at the root of the repo.'));
         process.exit(1);
     }
-    const lines = (await fs.readFile(envPortsPath, 'utf-8')).split('\n');
+    const lines = (await fs.readFile(envPath, 'utf-8')).split('\n');
     return Object.fromEntries(
         lines
             .map((l) => l.trim())
             .filter((l) => l && !l.startsWith('#'))
             .map((l) => l.split('='))
-            .filter(([key]) => key.endsWith('_PORT'))
             .map(([key, ...rest]) => [
-                key.replace('_PORT', ''),
+                key,
                 rest.join('=').split('#')[0].trim(),
             ]),
     );
@@ -49,7 +50,7 @@ async function resolveCurrentAppPort(ports) {
     if (!ports[prefix]) {
         echo(
             chalk.red(
-                `Error: Port for app '${appName}' (${prefix}_PORT) not found in .env.ports`,
+                `Error: Port for app '${appName}' (${prefix}_PORT) not found in .env.urls`,
             ),
         );
         process.exit(1);
@@ -59,7 +60,7 @@ async function resolveCurrentAppPort(ports) {
     if (port && !(await checkPortAvailable(port))) {
         echo(
             chalk.red(
-                `\n❌ Error: Port ${port} for app '${appName}' is already in use. Please free up the port or change it in .env.ports before starting.\n`,
+                `\n  Error: Port ${port} for app '${appName}' is already in use.\n  Free it or change it in .env.urls.\n`,
             ),
         );
         process.exit(1);
@@ -68,22 +69,32 @@ async function resolveCurrentAppPort(ports) {
 }
 
 async function main() {
-    const rawArgs = process.argv.slice(2);
-    const isNetwork = rawArgs.includes('--network');
-    const args = rawArgs.filter((arg) => arg !== '--network');
-
+    const args = process.argv.slice(2);
     const rootDir = (await $`git rev-parse --show-toplevel`).stdout.trim();
-    const ports = await loadPorts(rootDir);
+
+    const env = await loadEnvUrls(rootDir);
+
+    const resolveBase = (val) =>
+        (val ?? DEFAULT_BASE).replace('{IP}', getLocalIp());
+    const internalBase = resolveBase(env.INTERNAL_BASE);
+    const publicBase = resolveBase(env.PUBLIC_BASE);
+
+    const ports = Object.fromEntries(
+        Object.entries(env)
+            .filter(([key]) => key.endsWith('_PORT'))
+            .map(([key, val]) => [key.replace('_PORT', ''), val]),
+    );
 
     const useNextjs = ['js', 'ts', 'mjs'].some((ext) =>
         fs.existsSync(path.join(process.cwd(), `next.config.${ext}`)),
     );
-    const hostname = isNetwork ? getLocalIp() : 'localhost';
 
     for (const [prefix, port] of Object.entries(ports)) {
-        const url = `http://${hostname}:${port}`;
-        process.env[`${prefix}_URL`] = url;
-        if (useNextjs) process.env[`NEXT_PUBLIC_${prefix}_URL`] = url;
+        process.env[`INTERNAL_${prefix}_URL`] = `${internalBase}:${port}`;
+        process.env[`${prefix}_URL`] = `${publicBase}:${port}`;
+        if (useNextjs) {
+            process.env[`NEXT_PUBLIC_${prefix}_URL`] = `${publicBase}:${port}`;
+        }
     }
 
     const currentPort = await resolveCurrentAppPort(ports);

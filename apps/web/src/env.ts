@@ -7,7 +7,7 @@ process.env.NEXT_PUBLIC_ENV = process.env.NODE_ENV;
 export const env = createEnv({
     server: {
         PORT: z.coerce.number(),
-        SERVER_URL: z.url(),
+        INTERNAL_SERVER_URL: z.url(),
         OTEL_URL: z.url().optional(),
     },
     clientPrefix: 'NEXT_PUBLIC_',

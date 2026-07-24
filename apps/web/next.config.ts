@@ -10,7 +10,7 @@ import type { NextConfig } from 'next';
 import rootPkgJson from '../../package.json';
 import pkgJson from './package.json';
 
-const getLocalIp = () =>
+const lanIp =
     Object.values(os.networkInterfaces())
         .flat()
         .find((iface) => iface?.family === 'IPv4' && !iface.internal)
@@ -32,7 +32,7 @@ let nextConfig: NextConfig = {
     env: {
         NEXT_TELEMETRY_DISABLED: '1',
     },
-    allowedDevOrigins: [getLocalIp()],
+    allowedDevOrigins: [lanIp, lanIp + '.sslip.io'],
 };
 
 if (env.NEXT_PUBLIC_POSTHOG_PROXY_PATH) {
