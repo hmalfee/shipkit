@@ -85,16 +85,9 @@ async function main() {
             .map(([key, val]) => [key.replace('_PORT', ''), val]),
     );
 
-    const useNextjs = ['js', 'ts', 'mjs'].some((ext) =>
-        fs.existsSync(path.join(process.cwd(), `next.config.${ext}`)),
-    );
-
     for (const [prefix, port] of Object.entries(ports)) {
         process.env[`INTERNAL_${prefix}_URL`] = `${internalBase}:${port}`;
         process.env[`${prefix}_URL`] = `${publicBase}:${port}`;
-        if (useNextjs) {
-            process.env[`NEXT_PUBLIC_${prefix}_URL`] = `${publicBase}:${port}`;
-        }
     }
 
     const currentPort = await resolveCurrentAppPort(ports);

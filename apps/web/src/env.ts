@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { createEnv } from '@shipkit/env';
 
 process.env.NEXT_PUBLIC_ENV = process.env.NODE_ENV;
+process.env.NEXT_PUBLIC_SERVER_URL = process.env.SERVER_URL;
 
 export const env = createEnv({
     server: {
