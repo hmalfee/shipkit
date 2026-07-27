@@ -31,8 +31,12 @@ COPY --from=pruner /app/out/full/ .
 # remote cache here, so running through turbo adds complexity of turbo.json's
 # environment variables handling for example with no benefit.
 ARG APP_NAME
+ENV PORT=3000
+ARG ENV_HASH
 RUN --mount=type=secret,id=env_build,target=/tmp/.env.build \
-    if [ -s /tmp/.env.build ]; then \
+    # Force cache bust on env changes
+    : "${ENV_HASH}" \
+    && if [ -s /tmp/.env.build ]; then \
       set -a && . /tmp/.env.build && set +a; \
     fi \
     && pnpm --filter=${APP_NAME} run build

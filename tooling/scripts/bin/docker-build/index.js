@@ -112,11 +112,19 @@ try {
     const secretArgs = envFilePath
         ? ['--secret', `id=env_build,src=${envFilePath}`]
         : [];
+    let envHashArgs = [];
+    if (envFilePath) {
+        const crypto = await import('crypto');
+        const content = await fs.readFile(envFilePath, 'utf8');
+        const hash = crypto.createHash('sha256').update(content).digest('hex');
+        envHashArgs = ['--build-arg', `ENV_HASH=${hash}`];
+    }
     echo(chalk.green(`Running docker build for ${appName}...`));
     await $({ cwd: tmp, stdio: 'inherit' })`docker build \
         --build-arg NODE_VERSION=${nodeVersion} \
         --build-arg PNPM_VERSION=${pnpmVersion} \
         --build-arg APP_NAME=${appName} \
+        ${envHashArgs} \
         ${secretArgs} \
         -f ${dockerfilePath} \
         -t ${appName} \
