@@ -38,6 +38,16 @@ export function createBetterAuthConfig(
     baseURL: string,
     config: AuthConfig,
 ) {
+    const host = new URL(baseURL).hostname;
+    // For sslip.io, the domain contains the IP address (e.g. 192.168.0.107.sslip.io) which is 6 parts
+    // For standard domains, we take the top level and second level domain (e.g. example.com)
+    const sharedDomain =
+        host === 'localhost'
+            ? undefined
+            : host.endsWith('.sslip.io')
+              ? host.split('.').slice(-6).join('.')
+              : host.split('.').slice(-2).join('.');
+
     return betterAuth({
         appName: 'shipkit',
         secret: config.secret,
@@ -73,6 +83,14 @@ export function createBetterAuthConfig(
                 generateId: false, // let Drizzle handle UUID generation
             },
             cookiePrefix: 'auth:',
+            ...(sharedDomain
+                ? {
+                      crossSubDomainCookies: {
+                          enabled: true,
+                          domain: sharedDomain,
+                      },
+                  }
+                : {}),
         },
         secondaryStorage: redisStorage({
             client: sessionCache,
