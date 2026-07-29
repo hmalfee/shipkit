@@ -5,7 +5,7 @@ A wrapper around `docker build` that ensures a clean working tree and automatica
 ## Usage
 
 ```sh
-pnpm docker-build < app-name > [--build-env-file= < path > ]
+pnpm docker-build [--cache-ref= < app-name > [--build-env-file= < path > ] < image-ref > ]
 ```
 
 ## Arguments
@@ -14,6 +14,8 @@ pnpm docker-build < app-name > [--build-env-file= < path > ]
 - `--build-env-file`: _(Optional)_ Path to an `.env` file to inject as a build secret.
     - You can use `{APP_FOLDER}` in the path, which will dynamically reference the app's directory.
     - Example: `--build-env-file={APP_FOLDER}/.env`
+- `--cache-ref`: _(Optional)_ Registry image reference to use as a BuildKit cache backend to persist build layers across CI runs.
+    - Example: `--cache-ref=registry.example.com/myapp/web:buildcache`
 
 ## How it works
 

@@ -6,9 +6,15 @@ $.verbose = false;
 const args = process.argv.slice(2);
 const appName = args.find((a) => !a.startsWith('--'));
 const envFileArg = args.find((a) => a.startsWith('--build-env-file='));
+const cacheRefArg = args.find((a) => a.startsWith('--cache-ref='));
+const cacheRef = cacheRefArg?.split('=').slice(1).join('=') ?? null;
 
 if (!appName) {
-    echo(chalk.red('Usage: docker-build <app-name> [--build-env-file=<path>]'));
+    echo(
+        chalk.red(
+            'Usage: docker-build <app-name> [--build-env-file=<path>] [--cache-ref=<image-ref>]',
+        ),
+    );
     process.exit(1);
 }
 
@@ -119,6 +125,14 @@ try {
         const hash = crypto.createHash('sha256').update(content).digest('hex');
         envHashArgs = ['--build-arg', `ENV_HASH=${hash}`];
     }
+    const cacheArgs = cacheRef
+        ? [
+              '--cache-from',
+              `type=registry,ref=${cacheRef}`,
+              '--cache-to',
+              `type=registry,ref=${cacheRef},mode=max`,
+          ]
+        : [];
     echo(chalk.green(`Running docker build for ${appName}...`));
     await $({ cwd: tmp, stdio: 'inherit' })`docker build \
         --build-arg NODE_VERSION=${nodeVersion} \
@@ -126,6 +140,7 @@ try {
         --build-arg APP_NAME=${appName} \
         ${envHashArgs} \
         ${secretArgs} \
+        ${cacheArgs} \
         -f ${dockerfilePath} \
         -t ${appName} \
         .`;

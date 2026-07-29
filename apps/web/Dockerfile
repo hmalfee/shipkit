@@ -21,15 +21,21 @@ WORKDIR /app
 # better-sqlite3 requires Python and build tools to compile native addons
 RUN apk add --no-cache python3 make g++
 COPY --from=pruner /app/out/json/ .
-RUN pnpm install --frozen-lockfile
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
+    pnpm install --frozen-lockfile
 
 FROM base AS builder
 WORKDIR /app
 COPY --from=installer /app .
 COPY --from=pruner /app/out/full/ .
-# Plain pnpm instead of turbo: turbo is only used above for prune. There is no
-# remote cache here, so running through turbo adds complexity of turbo.json's
-# environment variables handling for example with no benefit.
+# We use turbo here only for `prune` — the build itself runs through plain
+# pnpm, not `turbo run build`. Reasons:
+# - Our internal packages have no build scripts, so there's no per-package
+#   task turbo could cache — the consumer app bundles everything from source.
+# - We already run `turbo affected` before this Dockerfile is invoked, so
+#   this app is confirmed affected and will build regardless.
+# - There's no remote cache here, so turbo would only add turbo.json's
+#   env-var handling for no caching benefit.
 ARG APP_NAME
 ENV PORT=3000
 ARG ENV_HASH

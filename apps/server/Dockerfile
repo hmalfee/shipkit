@@ -19,7 +19,8 @@ RUN pnpm dlx turbo@latest prune ${APP_NAME} --docker
 FROM base AS installer
 WORKDIR /app
 COPY --from=pruner /app/out/json/ .
-RUN pnpm install --frozen-lockfile
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
+    pnpm install --frozen-lockfile
 
 FROM base AS builder
 WORKDIR /app
