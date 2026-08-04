@@ -4,6 +4,7 @@
     "type": "module",
     "bin": {
         "docker-build": "./bin/docker-build/index.js",
+        "dokploy": "./bin/dokploy/index.js",
         "next-standalone-postbuild": "./bin/next-standalone-postbuild.js",
         "run-on-staged": "./bin/run-on-staged/index.js",
         "urls": "./bin/urls.js"
@@ -13,6 +14,7 @@
         "typecheck": "tsc"
     },
     "dependencies": {
+        "@dokploy/sdk": "^0.29.4",
         "zx": "^8.8.5"
     },
     "devDependencies": {

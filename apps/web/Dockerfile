@@ -14,7 +14,8 @@ FROM base AS pruner
 WORKDIR /app
 COPY . .
 ARG APP_NAME
-RUN pnpm dlx turbo@latest prune ${APP_NAME} --docker
+ARG TURBO_VERSION
+RUN pnpm dlx turbo@${TURBO_VERSION} prune ${APP_NAME} --docker
 
 FROM base AS installer
 WORKDIR /app
@@ -22,7 +23,11 @@ WORKDIR /app
 RUN apk add --no-cache python3 make g++
 COPY --from=pruner /app/out/json/ .
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
-    pnpm install --frozen-lockfile
+    pnpm install \
+    --frozen-lockfile \
+    --network-concurrency=64 \
+    --config.trustLockfile=true \
+    --config.audit=false
 
 FROM base AS builder
 WORKDIR /app
@@ -39,7 +44,8 @@ COPY --from=pruner /app/out/full/ .
 ARG APP_NAME
 ENV PORT=3000
 ARG ENV_HASH
-RUN --mount=type=secret,id=env_build,target=/tmp/.env.build \
+RUN --mount=type=cache,id=next-cache-${APP_NAME},target=/app/apps/${APP_NAME}/.next/cache \
+    --mount=type=secret,id=env_build,target=/tmp/.env.build \
     # Force cache bust on env changes
     : "${ENV_HASH}" \
     && if [ -s /tmp/.env.build ]; then \

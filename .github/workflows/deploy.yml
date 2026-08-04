@@ -1,0 +1,268 @@
+# Why SSH tunnels: Dokploy sits behind Cloudflare Zero Trust, and both the
+# Docker registry and Postgres are private (not exposed to the internet).
+# CI still needs to push images, deploy, and run migrations, so everything
+# routes through one SSH connection to the host:
+#
+# - Dokploy API     -> plain SSH port-forward (`ssh -L`); Dokploy binds to
+#                      the VM's host network.
+# - Docker Registry -> plain SSH port-forward too, since the registry is a
+#                      Dokploy compose app bound to the host port (5000).
+#                      Forwarding to 127.0.0.1 makes Docker treat it as
+#                      insecure/HTTP automatically, no daemon.json needed.
+#                      (Binding to host port from Dokploy — not recommended
+#                      for regular apps — use knowing the implications well.)
+# - Postgres        -> double jump: SSH into the host, then `docker exec`
+#                      into the Dokploy container, since Postgres is only
+#                      reachable from inside the Swarm network.
+
+name: Deploy to Dokploy via SSH
+
+on:
+    push:
+        branches: [main]
+
+concurrency:
+    group: production-deploy
+    cancel-in-progress: false
+
+jobs:
+    deploy:
+        name: Detect & Deploy Affected Apps
+        runs-on: ubuntu-latest
+        env:
+            SSH_USER: ${{ secrets.SSH_USER || 'root' }}
+            SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
+            SSH_HOST: ${{ secrets.SSH_HOST }}
+            SSH_KEY: ${{ secrets.SSH_KEY }}
+            DOKPLOY_PORT: ${{ secrets.DOKPLOY_PORT || '3000' }}
+            DOKPLOY_URL: http://127.0.0.1:${{ secrets.DOKPLOY_PORT || '3000' }}
+            DOKPLOY_API_KEY: ${{ secrets.DOKPLOY_API_KEY }}
+            DOKPLOY_PROJECT_BASE_DOMAIN: ${{ secrets.DOKPLOY_PROJECT_BASE_DOMAIN }}
+            REGISTRY_PORT: ${{ secrets.REGISTRY_PORT || '5000' }}
+            REGISTRY_URL: http://127.0.0.1:${{ secrets.REGISTRY_PORT || '5000' }}
+            DOKPLOY_GENERATED: /tmp/dokploy_generated.env
+        steps:
+            - uses: actions/checkout@v7
+              with:
+                  fetch-depth: 0 # Fetches all history for all branches and tags
+
+            - name: Read versions from package.json
+              id: versions
+              run: |
+                  echo "name=$(jq -r '.name' package.json)" >> $GITHUB_OUTPUT
+                  echo "node=$(jq -r '.engines.node | split(".")[0]' package.json)" >> $GITHUB_OUTPUT
+                  echo "pnpm=$(jq -r '.packageManager | split("@")[1]' package.json)" >> $GITHUB_OUTPUT
+                  echo "turbo=$(jq -r '.devDependencies.turbo' package.json)" >> $GITHUB_OUTPUT
+
+            - uses: pnpm/action-setup@v6
+              with:
+                  version: ${{ steps.versions.outputs.pnpm }}
+
+            - name: Configure pnpm store
+              run: pnpm config set store-dir ~/.local/share/pnpm/store
+
+            - uses: actions/setup-node@v7
+              with:
+                  node-version: ${{ steps.versions.outputs.node }}
+                  cache: pnpm
+
+            - name: Install dependencies
+              run: >
+                  pnpm install
+                  --filter shipkit... 
+                  --filter @shipkit/db... 
+                  --frozen-lockfile 
+                  --ignore-scripts 
+                  --config.trustLockfile=true 
+                  --config.audit=false 
+                  --network-concurrency=64
+
+            - name: Detect affected apps
+              id: detect
+              run: |
+                  set -e
+                  if [ -n "$AFFECTED_APPS_OVERRIDE" ]; then
+                      echo "Using override: $AFFECTED_APPS_OVERRIDE"
+                      AFFECTED_APPS="$AFFECTED_APPS_OVERRIDE"
+                  else
+                      # turbo ls --affected does not allow --filter, so we filter by path in jq
+                      AFFECTED_APPS=$(pnpm dlx turbo@${{ steps.versions.outputs.turbo }} ls --affected --output=json 2>/dev/null | sed -n '/^{/,$p' | jq -r '.packages.items[] | select(.path | startswith("apps/")) | .name' | xargs | tr ' ' ',')
+                  fi
+                  echo "affected_apps=$AFFECTED_APPS" >> "$GITHUB_OUTPUT"
+                  echo "Affected apps: $AFFECTED_APPS"
+
+            - name: Validate required secrets
+              if: steps.detect.outputs.affected_apps != ''
+              run: |
+                  required="SSH_KEY SSH_HOST DOKPLOY_API_KEY DOKPLOY_PROJECT_BASE_DOMAIN"
+                  missing=""
+                  for var in $required; do
+                      [ -z "${!var}" ] && missing="$missing $var"
+                  done
+                  if [ -n "$missing" ]; then
+                      echo "::error::Missing required secrets:$missing"
+                      exit 1
+                  fi
+
+            - name: Setup SSH key & tunnel to Dokploy
+              if: steps.detect.outputs.affected_apps != ''
+              run: |
+                  mkdir -p ~/.ssh
+                  if echo "$SSH_KEY" | grep -q "BEGIN"; then
+                      echo "$SSH_KEY" > ~/.ssh/dokploy_ci
+                  else
+                      echo "$SSH_KEY" | base64 -d > ~/.ssh/dokploy_ci
+                  fi
+                  chmod 600 ~/.ssh/dokploy_ci
+                  ssh-keyscan -p "$SSH_PORT" -H "$SSH_HOST" >> ~/.ssh/known_hosts
+                  ssh -4 -fNMS /tmp/dokploy_ssh.sock \
+                      -p "$SSH_PORT" \
+                      -L 127.0.0.1:"$DOKPLOY_PORT":localhost:"$DOKPLOY_PORT" \
+                      -L 127.0.0.1:"$REGISTRY_PORT":localhost:"$REGISTRY_PORT" \
+                      -i ~/.ssh/dokploy_ci \
+                      "$SSH_USER@$SSH_HOST"
+                  sleep 1
+
+            - name: Ensure project
+              if: steps.detect.outputs.affected_apps != ''
+              run: pnpm exec dokploy ensure-project --name "${{ steps.versions.outputs.name }}"
+
+            - name: Ensure databases
+              if: steps.detect.outputs.affected_apps != ''
+              run: |
+                  PROJECT_ID=$(grep "^DOKPLOY_PROJECT_ID=" "$DOKPLOY_GENERATED" | cut -d= -f2)
+                  pnpm exec dokploy ensure-db --project "$PROJECT_ID" --postgres --redis
+
+            - name: Run postgres tunnel & migrations
+              if: steps.detect.outputs.affected_apps != ''
+              run: |
+                  # Source the generated vars so they are in process.env for Node
+                  set -a
+                  source "$DOKPLOY_GENERATED"
+                  set +a
+
+                  node - << 'EOJS'
+                  const { spawn } = require('child_process');
+                  const net = require('net');
+
+                  const pgHost = process.env.POSTGRES_APP_NAME;
+                  const pgPort = 5432;
+                  const localPort = 15432;
+
+                  const server = net.createServer((socket) => {
+                      const relay = `docker exec -i $(docker ps -q --filter "name=dokploy.1.") node -e "
+                          const s = require('net').connect(${pgPort}, '${pgHost}');
+                          process.stdin.pipe(s).pipe(process.stdout);
+                          s.on('error', () => process.exit(1));
+                      "`;
+                      const ssh = spawn('ssh', ['-S', '/tmp/dokploy_ssh.sock', 'placeholder', relay]);
+                      socket.pipe(ssh.stdin);
+                      ssh.stdout.pipe(socket);
+                      ssh.on('error', (err) => console.error('SSH bridge error:', err.message));
+                      socket.on('close', () => ssh.kill());
+                  });
+
+                  server.listen(localPort, '127.0.0.1', () => {
+                      console.log(`Postgres tunnel ready on 127.0.0.1:${localPort}, waiting 2 seconds for DB to initialize...`);
+                      
+                      let attempts = 0;
+                      const runMigrate = () => {
+                          attempts++;
+                          console.log(`Migration attempt ${attempts}...`);
+                          const child = spawn('pnpm', ['--filter', '@shipkit/db', 'run', 'db:migrate'], {
+                              stdio: 'inherit',
+                              env: {
+                                  ...process.env,
+                                  POSTGRES_URL: `postgresql://${process.env.POSTGRES_USER}:${process.env.POSTGRES_PASSWORD}@127.0.0.1:${localPort}/${process.env.POSTGRES_DB}`,
+                              },
+                          });
+
+                          child.on('close', (code) => {
+                              if (code !== 0) {
+                                  if (attempts < 5) {
+                                      console.log('Migration failed, retrying in 3 seconds...');
+                                      setTimeout(runMigrate, 3000);
+                                  } else {
+                                      server.close();
+                                      process.exit(code);
+                                  }
+                              } else {
+                                  console.log('Migrations complete.');
+                                  server.close();
+                              }
+                          });
+                      };
+                      
+                      setTimeout(runMigrate, 2000);
+                  });
+                  EOJS
+
+            - name: Ensure Apps
+              if: steps.detect.outputs.affected_apps != ''
+              run: |
+                  PROJECT_ID=$(grep "^DOKPLOY_PROJECT_ID=" "$DOKPLOY_GENERATED" | cut -d= -f2)
+                  pnpm exec dokploy ensure-apps --project "$PROJECT_ID" --names "${{ steps.detect.outputs.affected_apps }}" --base-domain "$DOKPLOY_PROJECT_BASE_DOMAIN"
+
+            - name: Consolidate environment
+              if: steps.detect.outputs.affected_apps != ''
+              env:
+                  SECRETS_JSON: ${{ toJSON(secrets) }}
+              run: |
+                  echo "$SECRETS_JSON" | jq -r '
+                      to_entries[]
+                      | select(.key | test("^(GITHUB_TOKEN|SSH_|DOKPLOY_|REGISTRY)"; "i") | not)
+                      | "\(.key)=\(.value)"
+                  ' >> "$DOKPLOY_GENERATED"
+
+            - name: Build and Push Docker Images
+              id: build
+              if: steps.detect.outputs.affected_apps != ''
+              run: |
+                  IFS=',' read -ra APPS <<< "${{ steps.detect.outputs.affected_apps }}"
+
+                  # Strip http:// prefix from REGISTRY_URL for docker tags
+                  REG_HOST="${REGISTRY_URL#http://}"
+
+                  APPS_BUILT=""
+
+                  for app in "${APPS[@]}"; do
+                      echo "Building $app..."
+
+                      APP_ID_VAR="APP_ID_$(echo "$app" | tr '[:lower:]-' '[:upper:]_')"
+                      APP_ID=$(grep "^${APP_ID_VAR}=" "$DOKPLOY_GENERATED" | cut -d= -f2)
+
+                      IMAGE="${REG_HOST}/shipkit/${app}:${{ github.sha }}"
+                      CACHE_REF="${REG_HOST}/shipkit/${app}:buildcache"
+
+                      pnpm exec docker-build "$app" \
+                          --build-env-file="$DOKPLOY_GENERATED" \
+                          --cache-ref="${CACHE_REF}" \
+
+                      docker tag "$app" "$IMAGE"
+                      docker push "$IMAGE"
+
+                      APPS_BUILT="${APPS_BUILT}${app}:${APP_ID}:${IMAGE},"
+                  done
+
+                  echo "apps_built=${APPS_BUILT%,}" >> "$GITHUB_OUTPUT"
+
+            - name: Deploy to Dokploy
+              if: steps.detect.outputs.affected_apps != ''
+              run: |
+                  PROJECT_ID=$(grep "^DOKPLOY_PROJECT_ID=" "$DOKPLOY_GENERATED" | cut -d= -f2)
+                  IFS=',' read -ra BUILT <<< "${{ steps.build.outputs.apps_built }}"
+                  for entry in "${BUILT[@]}"; do
+                      APP_NAME="$(echo "$entry" | cut -d: -f1)"
+                      APP_ID="$(echo "$entry" | cut -d: -f2)"
+                      IMAGE="$(echo "$entry" | cut -d: -f3-)"
+                      echo "Deploying app $APP_NAME (ID: $APP_ID)..."
+                      pnpm exec dokploy deploy \
+                          --project "$PROJECT_ID" \
+                          --app-id "$APP_ID" \
+                          --image "$IMAGE" \
+                          --env-file "$DOKPLOY_GENERATED"
+                  done
+
+            - name: Close all tunnels
+              if: always()
+              run: ssh -S /tmp/dokploy_ssh.sock -O exit placeholder || true

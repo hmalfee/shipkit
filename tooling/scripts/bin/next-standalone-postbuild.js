@@ -74,11 +74,11 @@ if (await fs.pathExists('public')) {
     echo(chalk.green('✓ Copied public files'));
 }
 
-// 4. Clean up all directories/files in .next EXCEPT standalone
+// 4. Clean up all directories/files in .next EXCEPT standalone and cache (since it can speed up subsequent builds).
 await spinner(
     'Cleaning up non-standalone artifacts…',
     () =>
-        $`find ${NEXT_DIR} -mindepth 1 -maxdepth 1 ! -name standalone -exec rm -rf {} +`,
+        $`find ${NEXT_DIR} -mindepth 1 -maxdepth 1 ! -name standalone ! -name cache -exec rm -rf {} +`,
 );
 echo(chalk.green('✓ Cleaned up non-standalone Next.js artifacts'));
 

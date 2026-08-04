@@ -34,10 +34,11 @@ if (!(await fs.pathExists(rootPkgPath))) {
 const rootPkg = await fs.readJson(rootPkgPath);
 const nodeVersion = rootPkg.engines?.node?.split('.')[0];
 const pnpmVersion = rootPkg.packageManager?.split('@')[1];
-if (!nodeVersion || !pnpmVersion) {
+const turboVersion = rootPkg.devDependencies?.turbo;
+if (!nodeVersion || !pnpmVersion || !turboVersion) {
     echo(
         chalk.red(
-            'Error: root package.json must have engines.node and packageManager fields.',
+            'Error: root package.json must have engines.node, packageManager, and devDependencies.turbo fields.',
         ),
     );
     process.exit(1);
@@ -93,28 +94,23 @@ if (envFileArg) {
     }
 }
 
-const files = (await $`git -C ${root} ls-files -c -o --exclude-standard`).stdout
-    .trim()
-    .split('\n');
-const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'docker-build-'));
-let fallbackToCopy = false;
+// Ensure a docker-container builder exists — required for type=registry cache and
+// cross-build --mount=type=cache persistence. Uses network=host so it can reach
+// insecure registries on 127.0.0.1 (the SSH-tunneled registry in CI).
+const BUILDER_NAME = 'shipkit-builder';
 try {
-    echo(chalk.blue(`Creating clean working tree in ${tmp}...`));
-    for (const f of files) {
-        if (!f) continue;
-        const src = path.join(root, f);
-        const dest = path.join(tmp, f);
-        await fs.ensureDir(path.dirname(dest));
-        try {
-            if (!fallbackToCopy) await fs.link(src, dest);
-            else await fs.copy(src, dest);
-        } catch (e) {
-            if (e.code === 'EXDEV') {
-                fallbackToCopy = true;
-                await fs.copy(src, dest);
-            } else throw e;
-        }
-    }
+    await $`docker buildx inspect ${BUILDER_NAME}`.quiet();
+    echo(chalk.blue(`Using existing buildx builder: ${BUILDER_NAME}`));
+} catch {
+    echo(chalk.blue(`Creating buildx builder: ${BUILDER_NAME}...`));
+    await $`docker buildx create \
+        --name ${BUILDER_NAME} \
+        --driver docker-container \
+        --driver-opt network=host \
+        --bootstrap`;
+}
+
+try {
     const secretArgs = envFilePath
         ? ['--secret', `id=env_build,src=${envFilePath}`]
         : [];
@@ -130,24 +126,79 @@ try {
               '--cache-from',
               `type=registry,ref=${cacheRef}`,
               '--cache-to',
-              `type=registry,ref=${cacheRef},mode=max`,
+              `type=registry,ref=${cacheRef},mode=min`,
           ]
         : [];
-    echo(chalk.green(`Running docker build for ${appName}...`));
-    await $({ cwd: tmp, stdio: 'inherit' })`docker build \
-        --build-arg NODE_VERSION=${nodeVersion} \
-        --build-arg PNPM_VERSION=${pnpmVersion} \
-        --build-arg APP_NAME=${appName} \
-        ${envHashArgs} \
-        ${secretArgs} \
-        ${cacheArgs} \
-        -f ${dockerfilePath} \
-        -t ${appName} \
-        .`;
+    echo(chalk.blue(`Packaging build context for ${appName}...`));
+
+    const files = (
+        await $`git -C ${root} ls-files -c -o --exclude-standard`
+    ).stdout
+        .trim()
+        .split('\n')
+        .filter(Boolean);
+
+    // Build context breakdown by top-level path — cheap insurance against
+    // silent bloat (e.g. a store-dir or cache folder landing in the repo
+    // and slipping past .gitignore).
+    const dirSizes = {};
+    for (const f of files) {
+        let size = 0;
+        try {
+            size = (await fs.stat(path.join(root, f))).size;
+        } catch {}
+        const top = f.split('/').slice(0, 3).join('/');
+        dirSizes[top] = (dirSizes[top] ?? 0) + size;
+    }
+    const sorted = Object.entries(dirSizes).sort((a, b) => b[1] - a[1]);
+    echo(chalk.yellow(`Build context breakdown (${files.length} files):`));
+    for (const [dir, size] of sorted.slice(0, 25)) {
+        echo(`  ${(size / 1024 / 1024).toFixed(2)}MB  ${dir}`);
+    }
+
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'docker-build-'));
+    let fallbackToCopy = false;
+    try {
+        echo(chalk.blue(`Creating clean working tree in ${tmp}...`));
+        for (const f of files) {
+            const src = path.join(root, f);
+            const dest = path.join(tmp, f);
+            await fs.ensureDir(path.dirname(dest));
+            try {
+                if (!fallbackToCopy) await fs.link(src, dest);
+                else await fs.copy(src, dest);
+            } catch (e) {
+                if (e.code === 'EXDEV') {
+                    fallbackToCopy = true;
+                    await fs.copy(src, dest);
+                } else throw e;
+            }
+        }
+
+        echo(chalk.green(`Running docker buildx build for ${appName}...`));
+        // --load: write the built image into the local Docker image store
+        // (docker-container driver doesn't do this by default)
+        await $({
+            cwd: tmp,
+            stdio: 'inherit',
+        })`docker buildx build \
+            --builder ${BUILDER_NAME} \
+            --build-arg NODE_VERSION=${nodeVersion} \
+            --build-arg PNPM_VERSION=${pnpmVersion} \
+            --build-arg TURBO_VERSION=${turboVersion.replace('^', '').replace('~', '')} \
+            --build-arg APP_NAME=${appName} \
+            ${envHashArgs} \
+            ${secretArgs} \
+            ${cacheArgs} \
+            --load \
+            -f ${dockerfilePath} \
+            -t ${appName} \
+            .`;
+    } finally {
+        await fs.rm(tmp, { recursive: true, force: true });
+    }
 } catch (e) {
     if (e.exitCode !== undefined) process.exit(e.exitCode);
     echo(chalk.red(e.stack || e));
     process.exit(1);
-} finally {
-    await fs.rm(tmp, { recursive: true, force: true });
 }

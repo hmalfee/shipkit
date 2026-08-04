@@ -14,13 +14,18 @@ FROM base AS pruner
 WORKDIR /app
 COPY . .
 ARG APP_NAME
-RUN pnpm dlx turbo@latest prune ${APP_NAME} --docker
+ARG TURBO_VERSION
+RUN pnpm dlx turbo@${TURBO_VERSION} prune ${APP_NAME} --docker
 
 FROM base AS installer
 WORKDIR /app
 COPY --from=pruner /app/out/json/ .
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
-    pnpm install --frozen-lockfile
+    pnpm install \
+    --frozen-lockfile \
+    --network-concurrency=64 \
+    --config.trustLockfile=true \
+    --config.audit=false
 
 FROM base AS builder
 WORKDIR /app

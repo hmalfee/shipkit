@@ -23,6 +23,7 @@
     },
     "prettier": "@shipkit/prettier-config",
     "dependencies": {
+        "@shipkit/scripts": "workspace:*",
         "@shipkit/shared": "workspace:*",
         "zod": "catalog:"
     },
@@ -31,7 +32,6 @@
         "@commitlint/config-conventional": "^21.2.0",
         "@shipkit/oxlint-config": "workspace:*",
         "@shipkit/prettier-config": "workspace:*",
-        "@shipkit/scripts": "workspace:*",
         "@shipkit/ts-config": "workspace:*",
         "@turbo/gen": "^2.9.8",
         "@types/node": "^22.13.14",
@@ -39,7 +39,7 @@
         "knip": "^6.12.0",
         "oxlint": "1.62.0",
         "prettier": "^3.8.3",
-        "turbo": "^2.8.12",
+        "turbo": "2.10.7",
         "typescript": "catalog:"
     },
     "packageManager": "pnpm@11.15.1",
