@@ -19,12 +19,12 @@ export function stringifyEnv(envObj) {
     return lines.length > 0 ? lines.join('\n') + '\n' : '';
 }
 
-export function requireProductionEnvironmentId(project) {
+export function requireEnvironmentId(project, envName = 'production') {
     const envId = project.environments?.find(
-        (e) => e.name === 'production',
+        (e) => e.name === envName,
     )?.environmentId;
     if (!envId) {
-        echo(chalk.red('Could not resolve production environmentId'));
+        echo(chalk.red(`Could not resolve "${envName}" environmentId`));
         process.exit(1);
     }
     return envId;

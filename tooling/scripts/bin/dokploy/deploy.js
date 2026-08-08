@@ -1,22 +1,27 @@
 import {
     applicationDeploy,
+    applicationOne,
     applicationSaveDockerProvider,
-    applicationUpdate,
-    projectOne,
-    projectUpdate,
+    applicationSaveEnvironment,
+    environmentOne,
+    environmentUpdate,
 } from '@dokploy/sdk';
 import { chalk, echo, fs } from 'zx';
 
 import { parseEnv, stringifyEnv, unwrap } from './utils.js';
 
-export async function deploy({ projectId, appId, image, envFile }) {
-    // 1. Resolve project
-    echo('Fetching project...');
-    const project = unwrap(
-        await projectOne({ query: { projectId } }),
-        'Failed to fetch project',
+export async function deploy({ appId, image, envFile }) {
+    // 1. Resolve app's environment directly from the app record
+    echo('Fetching app...');
+    const app = unwrap(
+        await applicationOne({ query: { applicationId: appId } }),
+        'Failed to fetch app',
     );
-    const envObj = parseEnv(project.env);
+    const envId = app.environmentId;
+    if (!envId) {
+        echo(chalk.red(`App ${appId} has no environmentId`));
+        process.exit(1);
+    }
 
     // 2. Read explicit env file
     if (!fs.existsSync(envFile)) {
@@ -27,30 +32,39 @@ export async function deploy({ projectId, appId, image, envFile }) {
     const fileContents = fs.readFileSync(envFile, 'utf-8');
     const buildEnv = parseEnv(fileContents);
 
-    for (const [k, v] of Object.entries(buildEnv)) {
-        envObj[k] = v;
-    }
+    // 3. Merge into the environment-level vars (not project-level), so
+    //    staging and production never collide.
+    const environment = unwrap(
+        await environmentOne({ query: { environmentId: envId } }),
+        'Failed to fetch environment',
+    );
+    const envObj = { ...parseEnv(environment.env ?? ''), ...buildEnv };
 
-    echo(`Pushing consolidated variables to project ${projectId}...`);
-    const projectEnvString = stringifyEnv(envObj);
+    echo(`Pushing consolidated variables to environment ${envId}...`);
     unwrap(
-        await projectUpdate({
-            body: { projectId, env: projectEnvString },
+        await environmentUpdate({
+            body: { environmentId: envId, env: stringifyEnv(envObj) },
         }),
-        'Failed to update project env',
+        'Failed to update environment env',
     );
 
-    // 3. Map project vars into the app (single call, referencing project level)
+    // 4. Map env vars into the app (referencing environment level)
     const appEnvString = Object.keys(envObj)
-        .map((k) => k + '=${{project.' + k + '}}\n')
+        .map((k) => k + '=${{environment.' + k + '}}\n')
         .join('');
 
-    echo(`Sending all vars to app (${appId}) in one API call...`);
-    await applicationUpdate({
-        body: { applicationId: appId, env: appEnvString },
+    echo(`Sending all vars to app (${appId})...`);
+    await applicationSaveEnvironment({
+        body: {
+            applicationId: appId,
+            env: appEnvString,
+            buildArgs: null,
+            buildSecrets: null,
+            createEnvFile: false,
+        },
     });
 
-    // 4. Deploy app
+    // 5. Deploy app
     echo(`Deploying ${image} (applicationId: ${appId})`);
 
     unwrap(

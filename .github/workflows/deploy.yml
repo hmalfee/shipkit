@@ -18,11 +18,13 @@
 name: Deploy to Dokploy via SSH
 
 on:
+    # DISABLED FOR NOW
+    workflow_dispatch:
     push:
-        branches: [main]
+        branches: [main, staging]
 
 concurrency:
-    group: production-deploy
+    group: deploy-${{ github.ref_name }}
     cancel-in-progress: false
 
 jobs:
@@ -34,13 +36,16 @@ jobs:
             SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
             SSH_HOST: ${{ secrets.SSH_HOST }}
             SSH_KEY: ${{ secrets.SSH_KEY }}
+
             DOKPLOY_PORT: ${{ secrets.DOKPLOY_PORT || '3000' }}
             DOKPLOY_URL: http://127.0.0.1:${{ secrets.DOKPLOY_PORT || '3000' }}
+            DOKPLOY_STAGING: ${{ github.ref_name == 'staging' && 'true' || 'false' }}
+            DOKPLOY_GENERATED: /tmp/dokploy_generated.env
             DOKPLOY_API_KEY: ${{ secrets.DOKPLOY_API_KEY }}
             DOKPLOY_PROJECT_BASE_DOMAIN: ${{ secrets.DOKPLOY_PROJECT_BASE_DOMAIN }}
+
             REGISTRY_PORT: ${{ secrets.REGISTRY_PORT || '5000' }}
             REGISTRY_URL: http://127.0.0.1:${{ secrets.REGISTRY_PORT || '5000' }}
-            DOKPLOY_GENERATED: /tmp/dokploy_generated.env
         steps:
             - uses: actions/checkout@v7
               with:
@@ -231,12 +236,12 @@ jobs:
                       APP_ID_VAR="APP_ID_$(echo "$app" | tr '[:lower:]-' '[:upper:]_')"
                       APP_ID=$(grep "^${APP_ID_VAR}=" "$DOKPLOY_GENERATED" | cut -d= -f2)
 
-                      IMAGE="${REG_HOST}/shipkit/${app}:${{ github.sha }}"
-                      CACHE_REF="${REG_HOST}/shipkit/${app}:buildcache"
+                      IMAGE="${REG_HOST}/shipkit/${app}:${{ github.sha }}-${{ github.ref_name }}"
+                      CACHE_REF="${REG_HOST}/shipkit/${app}:buildcache-${{ github.ref_name }}"
 
                       pnpm exec docker-build "$app" \
                           --build-env-file="$DOKPLOY_GENERATED" \
-                          --cache-ref="${CACHE_REF}" \
+                          --cache-ref="${CACHE_REF}"
 
                       docker tag "$app" "$IMAGE"
                       docker push "$IMAGE"
@@ -249,7 +254,6 @@ jobs:
             - name: Deploy to Dokploy
               if: steps.detect.outputs.affected_apps != ''
               run: |
-                  PROJECT_ID=$(grep "^DOKPLOY_PROJECT_ID=" "$DOKPLOY_GENERATED" | cut -d= -f2)
                   IFS=',' read -ra BUILT <<< "${{ steps.build.outputs.apps_built }}"
                   for entry in "${BUILT[@]}"; do
                       APP_NAME="$(echo "$entry" | cut -d: -f1)"
@@ -257,7 +261,6 @@ jobs:
                       IMAGE="$(echo "$entry" | cut -d: -f3-)"
                       echo "Deploying app $APP_NAME (ID: $APP_ID)..."
                       pnpm exec dokploy deploy \
-                          --project "$PROJECT_ID" \
                           --app-id "$APP_ID" \
                           --image "$IMAGE" \
                           --env-file "$DOKPLOY_GENERATED"

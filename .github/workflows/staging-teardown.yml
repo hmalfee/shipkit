@@ -1,0 +1,85 @@
+name: Stop Staging on Merge to Main
+on:
+    # DISABLED FOR NOW
+    workflow_dispatch:
+    # pull_request:
+    #     types: [closed]
+    #     branches: [main]
+
+concurrency:
+    group: staging-teardown
+    cancel-in-progress: false
+
+jobs:
+    teardown:
+        name: Stop Staging Environment
+        runs-on: ubuntu-latest
+        if: github.event.pull_request.merged == true && github.event.pull_request.head.ref == 'staging'
+        env:
+            SSH_USER: ${{ secrets.SSH_USER || 'root' }}
+            SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
+            SSH_HOST: ${{ secrets.SSH_HOST }}
+            SSH_KEY: ${{ secrets.SSH_KEY }}
+            DOKPLOY_PORT: ${{ secrets.DOKPLOY_PORT || '3000' }}
+            DOKPLOY_URL: http://127.0.0.1:${{ secrets.DOKPLOY_PORT || '3000' }}
+            DOKPLOY_API_KEY: ${{ secrets.DOKPLOY_API_KEY }}
+            DOKPLOY_GENERATED: /tmp/dokploy_generated.env
+        steps:
+            - uses: actions/checkout@v7
+              with:
+                  ref: main
+                  fetch-depth: 0
+
+            - name: Read versions from package.json
+              id: versions
+              run: |
+                  echo "name=$(jq -r '.name' package.json)" >> $GITHUB_OUTPUT
+                  echo "node=$(jq -r '.engines.node | split(".")[0]' package.json)" >> $GITHUB_OUTPUT
+                  echo "pnpm=$(jq -r '.packageManager | split("@")[1]' package.json)" >> $GITHUB_OUTPUT
+
+            - uses: pnpm/action-setup@v6
+              with:
+                  version: ${{ steps.versions.outputs.pnpm }}
+
+            - uses: actions/setup-node@v7
+              with:
+                  node-version: ${{ steps.versions.outputs.node }}
+                  cache: pnpm
+
+            - name: Install dependencies
+              run: >
+                  pnpm install
+                  --filter shipkit... 
+                  --filter @shipkit/db... 
+                  --frozen-lockfile 
+                  --ignore-scripts 
+                  --config.trustLockfile=true 
+                  --config.audit=false 
+                  --network-concurrency=64
+
+            - name: Setup SSH key & tunnel to Dokploy
+              run: |
+                  mkdir -p ~/.ssh
+                  if echo "$SSH_KEY" | grep -q "BEGIN"; then
+                      echo "$SSH_KEY" > ~/.ssh/dokploy_ci
+                  else
+                      echo "$SSH_KEY" | base64 -d > ~/.ssh/dokploy_ci
+                  fi
+                  chmod 600 ~/.ssh/dokploy_ci
+                  ssh-keyscan -p "$SSH_PORT" -H "$SSH_HOST" >> ~/.ssh/known_hosts
+                  ssh -4 -fNMS /tmp/dokploy_ssh.sock \
+                      -p "$SSH_PORT" \
+                      -L 127.0.0.1:"$DOKPLOY_PORT":localhost:"$DOKPLOY_PORT" \
+                      -i ~/.ssh/dokploy_ci \
+                      "$SSH_USER@$SSH_HOST"
+                  sleep 1
+
+            - name: Find staging project and stop
+              run: |
+                  pnpm exec dokploy ensure-project --name "${{ steps.versions.outputs.name }}" --staging
+                  PROJECT_ID=$(grep "^DOKPLOY_PROJECT_ID=" "$DOKPLOY_GENERATED" | cut -d= -f2)
+                  pnpm exec dokploy stop-project --project "$PROJECT_ID" --staging
+
+            - name: Close all tunnels
+              if: always()
+              run: ssh -S /tmp/dokploy_ssh.sock -O exit placeholder || true

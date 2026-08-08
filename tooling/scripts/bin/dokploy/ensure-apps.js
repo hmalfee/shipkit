@@ -1,22 +1,21 @@
+import { randomBytes } from 'node:crypto';
+
 import {
     applicationCreate,
     applicationOne,
+    applicationReadTraefikConfig,
+    applicationUpdateTraefikConfig,
     domainByApplicationId,
     domainCreate,
     projectOne,
+    securityCreate,
+    securityDelete,
     settingsGetWebServerSettings,
 } from '@dokploy/sdk';
-import { chalk, echo } from 'zx';
+import { chalk, echo, YAML } from 'zx';
 
-import {
-    appendGeneratedVars,
-    requireProductionEnvironmentId,
-    unwrap,
-} from './utils.js';
+import { appendGeneratedVars, requireEnvironmentId, unwrap } from './utils.js';
 
-// Ensures a single application exists, creating it if needed.
-// appName is only populated for pre-existing apps — matching the original
-// "resolve appName on demand via applicationOne for new apps" behavior.
 async function ensureApplication({ envId, applications, app }) {
     const existing = applications.find((a) => a.name === app);
     if (existing) {
@@ -45,8 +44,13 @@ async function ensureApplication({ envId, applications, app }) {
     return { applicationId: created.applicationId, appName: undefined };
 }
 
-// Ensures a domain exists for the application, creating one if needed.
-async function ensureDomain({ app, applicationId, projectName, baseDomain }) {
+async function ensureDomain({
+    app,
+    applicationId,
+    projectName,
+    baseDomain,
+    staging,
+}) {
     const domains =
         (await domainByApplicationId({ query: { applicationId } })).data ?? [];
     if (domains[0]?.host) {
@@ -71,7 +75,7 @@ async function ensureDomain({ app, applicationId, projectName, baseDomain }) {
         process.exit(1);
     }
 
-    const host = `${app}-${projectName}.${resolvedBaseDomain}`;
+    const host = `${app}-${projectName}${staging ? '-staging' : ''}.${resolvedBaseDomain}`;
     await domainCreate({
         body: {
             host,
@@ -87,7 +91,12 @@ async function ensureDomain({ app, applicationId, projectName, baseDomain }) {
     return host;
 }
 
-export async function ensureApps({ projectId, apps, baseDomain }) {
+export async function ensureApps({
+    projectId,
+    apps,
+    baseDomain,
+    staging = false,
+}) {
     if (!apps || apps.length === 0) {
         echo(chalk.yellow('No apps provided. Skipping.'));
         return;
@@ -99,7 +108,10 @@ export async function ensureApps({ projectId, apps, baseDomain }) {
         'Failed to fetch project',
     );
     const projectName = project.name;
-    const envId = requireProductionEnvironmentId(project);
+    const envId = requireEnvironmentId(
+        project,
+        staging ? 'staging' : 'production',
+    );
     const applications =
         project.environments?.find((e) => e.environmentId === envId)
             ?.applications ?? [];
@@ -113,10 +125,14 @@ export async function ensureApps({ projectId, apps, baseDomain }) {
             app,
             applicationId,
             projectName,
-            baseDomain,
+            baseDomain: baseDomain,
+            staging: Boolean(staging),
         });
 
-        // Resolve swarm appName (needed for internal URL)
+        if (staging) {
+            await applyStagingSecurity({ appId: applicationId });
+        }
+
         const appName =
             existingAppName ||
             unwrap(
@@ -136,4 +152,93 @@ export async function ensureApps({ projectId, apps, baseDomain }) {
     }
 
     appendGeneratedVars(lines);
+}
+
+async function applyStagingSecurity({ appId }) {
+    const app = unwrap(
+        await applicationOne({ query: { applicationId: appId } }),
+        'Failed to fetch app',
+    );
+    const { name: appName } = app;
+
+    // Reset security entries for a clean slate
+    for (const sec of app.security ?? []) {
+        await securityDelete({ body: { securityId: sec.securityId } });
+    }
+
+    const username = 'staging';
+    const password = randomBytes(16).toString('hex');
+    unwrap(
+        await securityCreate({
+            body: { applicationId: appId, username, password },
+        }),
+        `Failed to create basic auth for ${appName}`,
+    );
+    echo(
+        chalk.cyan(
+            `  Basic auth for ${appName} -> username: ${username}  password: ${password}`,
+        ),
+    );
+
+    // Load existing config; fall back to empty object if it's missing/unparsable
+    const { data } = await applicationReadTraefikConfig({
+        query: { applicationId: appId },
+    });
+    const currentConfigStr =
+        typeof data === 'string' ? data : (data?.traefikConfig ?? '');
+    let config;
+    try {
+        config = YAML.parse(currentConfigStr) || {};
+    } catch (e) {
+        echo(
+            chalk.yellow(
+                `  Warning: could not parse existing Traefik config for ${appName}, overwriting. (${e.message})`,
+            ),
+        );
+        config = {};
+    }
+
+    config.http ??= {};
+    config.http.middlewares ??= {};
+    config.http.routers ??= {};
+
+    const noindexMiddlewareName = `${appName}-staging-noindex`;
+    config.http.middlewares[noindexMiddlewareName] = {
+        headers: {
+            customResponseHeaders: {
+                'X-Robots-Tag': 'noindex, nofollow, noarchive',
+            },
+        },
+    };
+
+    // Attach noindex to the primary router (skip our own bypass router)
+    const routerKey = Object.keys(config.http.routers).find(
+        (k) => !k.endsWith('-cors-bypass'),
+    );
+    if (routerKey) {
+        const router = config.http.routers[routerKey];
+        router.middlewares ??= [];
+        if (!router.middlewares.includes(noindexMiddlewareName)) {
+            router.middlewares.push(noindexMiddlewareName);
+        }
+
+        // CORS preflight bypass: browsers never send credentials on OPTIONS,
+        // so BasicAuth would 401 them. Higher-priority rule routes them around it.
+        config.http.routers[`${appName}-staging-cors-bypass`] = {
+            rule: `${router.rule} && Method(\`OPTIONS\`)`,
+            service: router.service,
+            entryPoints: router.entryPoints,
+            middlewares: [noindexMiddlewareName],
+            ...(router.tls && { tls: router.tls }),
+        };
+    }
+
+    await applicationUpdateTraefikConfig({
+        body: { applicationId: appId, traefikConfig: YAML.stringify(config) },
+    });
+    echo(
+        chalk.cyan(
+            `  Traefik config updated for ${appName} (X-Robots-Tag: noindex, Basic Auth: enabled)`,
+        ),
+    );
 }

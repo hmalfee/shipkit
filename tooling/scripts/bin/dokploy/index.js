@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 import { client } from '@dokploy/sdk';
-import { chalk, echo, minimist } from 'zx';
+import { chalk, echo, fs, minimist } from 'zx';
 
 import { deploy } from './deploy.js';
 import { ensureApps } from './ensure-apps.js';
 import { ensureDb } from './ensure-db.js';
 import { ensureProject } from './ensure-project.js';
+import { stopProject } from './stop-project.js';
 
 const { DOKPLOY_URL, DOKPLOY_API_KEY } = process.env;
 
@@ -18,9 +19,6 @@ if (!DOKPLOY_URL || !DOKPLOY_API_KEY) {
     process.exit(1);
 }
 
-// Every flag is parsed as an explicit string/boolean so an ID-like value
-// (e.g. a purely numeric project name) is never silently coerced to a
-// Number by minimist's default parsing — same behavior as the old manual loop.
 const argv = minimist(process.argv.slice(2), {
     string: [
         'name',
@@ -31,7 +29,7 @@ const argv = minimist(process.argv.slice(2), {
         'image',
         'envFile',
     ],
-    boolean: ['postgres', 'redis', 'mongodb'],
+    boolean: ['postgres', 'redis', 'mongodb', 'staging'],
     alias: {
         baseDomain: 'base-domain',
         appId: 'app-id',
@@ -39,13 +37,16 @@ const argv = minimist(process.argv.slice(2), {
     },
 });
 
+const staging = argv.staging || process.env.DOKPLOY_STAGING === 'true';
+
 const USAGE = {
-    'ensure-project': 'dokploy ensure-project --name <name>',
+    'ensure-project': 'dokploy ensure-project --name <name> [--staging]',
     'ensure-db':
-        'dokploy ensure-db --project <id> [--postgres] [--redis] [--mongodb]',
+        'dokploy ensure-db --project <id> [--postgres] [--redis] [--mongodb] [--staging]',
     'ensure-apps':
-        'dokploy ensure-apps --project <id> --names <app1,app2,...> [--base-domain <domain>]',
-    deploy: 'dokploy deploy --project <id> --app-id <id> --image <full-image-ref> --env-file <path>',
+        'dokploy ensure-apps --project <id> --names <app1,app2,...> [--base-domain <domain>] [--staging]',
+    deploy: 'dokploy deploy --app-id <id> --image <full-image-ref> --env-file <path>',
+    'stop-project': 'dokploy stop-project --project <id> [--staging]',
 };
 
 function usageExit(message) {
@@ -67,7 +68,7 @@ async function run() {
     switch (command) {
         case 'ensure-project': {
             if (!argv.name) usageExit(USAGE[command]);
-            await ensureProject({ name: argv.name });
+            await ensureProject({ name: argv.name, staging });
             break;
         }
         case 'ensure-db': {
@@ -79,7 +80,11 @@ async function run() {
             if (!argv.project || !Object.values(dbs).some(Boolean)) {
                 usageExit(USAGE[command]);
             }
-            await ensureDb({ projectId: argv.project, dbs });
+            await ensureDb({
+                projectId: argv.project,
+                dbs,
+                staging,
+            });
             break;
         }
         case 'ensure-apps': {
@@ -92,18 +97,26 @@ async function run() {
                 projectId: argv.project,
                 apps,
                 baseDomain: argv.baseDomain,
+                staging,
             });
             break;
         }
         case 'deploy': {
-            if (!argv.project || !argv.appId || !argv.image || !argv.envFile) {
+            if (!argv.appId || !argv.image || !argv.envFile) {
                 usageExit(USAGE[command]);
             }
             await deploy({
-                projectId: argv.project,
                 appId: argv.appId,
                 image: argv.image,
                 envFile: argv.envFile,
+            });
+            break;
+        }
+        case 'stop-project': {
+            if (!argv.project) usageExit(USAGE[command]);
+            await stopProject({
+                projectId: argv.project,
+                staging,
             });
             break;
         }

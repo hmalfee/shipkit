@@ -17,11 +17,7 @@ import {
 } from '@dokploy/sdk';
 import { chalk, echo } from 'zx';
 
-import {
-    appendGeneratedVars,
-    requireProductionEnvironmentId,
-    unwrap,
-} from './utils.js';
+import { appendGeneratedVars, requireEnvironmentId, unwrap } from './utils.js';
 
 const rndPass = () => randomBytes(16).toString('hex');
 
@@ -118,13 +114,14 @@ async function ensureDatabase(type, { projectId, envId }) {
     const cfg = DB_TYPES[type];
     echo(`Verifying ${cfg.label} instance...`);
 
-    const items =
+    const allItems =
         (
             await unwrap(
                 await cfg.search({ query: { projectId } }),
                 `Failed to fetch ${cfg.label} instances`,
             )
         ).items ?? [];
+    const items = allItems.filter((item) => item.environmentId === envId);
 
     if (items.length > 1) {
         echo(
@@ -180,12 +177,15 @@ async function ensureDatabase(type, { projectId, envId }) {
     return cfg.buildEnvLines(db);
 }
 
-export async function ensureDb({ projectId, dbs }) {
+export async function ensureDb({ projectId, dbs, staging = false }) {
     const project = unwrap(
         await projectOne({ query: { projectId } }),
         'Failed to fetch project',
     );
-    const envId = requireProductionEnvironmentId(project);
+    const envId = requireEnvironmentId(
+        project,
+        staging ? 'staging' : 'production',
+    );
 
     const lines = [];
     for (const type of ['postgres', 'redis', 'mongodb']) {
