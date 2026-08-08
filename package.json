@@ -23,7 +23,6 @@
     },
     "prettier": "@shipkit/prettier-config",
     "dependencies": {
-        "@shipkit/scripts": "workspace:*",
         "@shipkit/shared": "workspace:*",
         "zod": "catalog:"
     },
@@ -32,6 +31,7 @@
         "@commitlint/config-conventional": "^21.2.0",
         "@shipkit/oxlint-config": "workspace:*",
         "@shipkit/prettier-config": "workspace:*",
+        "@shipkit/scripts": "workspace:*",
         "@shipkit/ts-config": "workspace:*",
         "@turbo/gen": "^2.9.8",
         "@types/node": "^22.13.14",

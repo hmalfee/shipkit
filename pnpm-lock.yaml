@@ -86,9 +86,6 @@ importers:
 
   .:
     dependencies:
-      '@shipkit/scripts':
-        specifier: workspace:*
-        version: link:tooling/scripts
       '@shipkit/shared':
         specifier: workspace:*
         version: link:packages/shared
@@ -108,6 +105,9 @@ importers:
       '@shipkit/prettier-config':
         specifier: workspace:*
         version: link:tooling/prettier-config
+      '@shipkit/scripts':
+        specifier: workspace:*
+        version: link:tooling/scripts
       '@shipkit/ts-config':
         specifier: workspace:*
         version: link:tooling/ts-config

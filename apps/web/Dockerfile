@@ -6,6 +6,7 @@ FROM node:${NODE_VERSION}-alpine AS base
 ARG PNPM_VERSION
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
+# Our scripts use `zx`, which requires bash.
 RUN apk add --no-cache libc6-compat bash
 RUN : "${PNPM_VERSION:?PNPM_VERSION build-arg is required, e.g. --build-arg PNPM_VERSION=10.32.1}" \
     && corepack enable pnpm && corepack install -g "pnpm@${PNPM_VERSION}"
@@ -67,7 +68,7 @@ RUN rm -rf /usr/local/lib/node_modules/npm \
 # libstdc++ is required at runtime for better-sqlite3's compiled native addon
 # (it's linked against it during the g++ build in the installer stage, but a
 # fresh alpine image doesn't have it unless you install it here)
-RUN apk add --no-cache bash libstdc++
+RUN apk add --no-cache libstdc++
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 # The postbuild script (next-standalone-postbuild) already copies:
