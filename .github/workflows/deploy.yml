@@ -18,10 +18,10 @@
 name: Deploy to Dokploy via SSH
 
 on:
-    # DISABLED FOR NOW
     workflow_dispatch:
-    push:
-        branches: [main, staging]
+    # DISABLED FOR NOW
+    # push:
+    #     branches: [main, staging]
 
 concurrency:
     group: deploy-${{ github.ref_name }}
