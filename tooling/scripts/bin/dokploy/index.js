@@ -21,9 +21,9 @@ if (!DOKPLOY_URL || !DOKPLOY_API_KEY) {
 
 const argv = minimist(process.argv.slice(2), {
     string: [
-        'name',
         'project',
-        'names',
+        'projectDir',
+        'appsDir',
         'baseDomain',
         'appId',
         'image',
@@ -34,17 +34,20 @@ const argv = minimist(process.argv.slice(2), {
         baseDomain: 'base-domain',
         appId: 'app-id',
         envFile: 'env-file',
+        appsDir: 'apps-dir',
+        projectDir: 'project-dir',
     },
 });
 
 const staging = argv.staging || process.env.DOKPLOY_STAGING === 'true';
 
 const USAGE = {
-    'ensure-project': 'dokploy ensure-project --name <name> [--staging]',
+    'ensure-project':
+        'dokploy ensure-project [--project-dir <path>] [--staging]',
     'ensure-db':
         'dokploy ensure-db --project <id> [--postgres] [--redis] [--mongodb] [--staging]',
     'ensure-apps':
-        'dokploy ensure-apps --project <id> --names <app1,app2,...> [--base-domain <domain>] [--staging]',
+        'dokploy ensure-apps --project <id> [--apps-dir <path>] [--base-domain <domain>] [--staging]',
     deploy: 'dokploy deploy --app-id <id> --image <full-image-ref> --env-file <path>',
     'stop-project': 'dokploy stop-project --project <id> [--staging]',
 };
@@ -67,8 +70,7 @@ client.setConfig({
 async function run() {
     switch (command) {
         case 'ensure-project': {
-            if (!argv.name) usageExit(USAGE[command]);
-            await ensureProject({ name: argv.name, staging });
+            await ensureProject({ projectDir: argv.projectDir, staging });
             break;
         }
         case 'ensure-db': {
@@ -88,14 +90,10 @@ async function run() {
             break;
         }
         case 'ensure-apps': {
-            if (!argv.project || !argv.names) usageExit(USAGE[command]);
-            const apps = argv.names
-                .split(',')
-                .map((a) => a.trim())
-                .filter(Boolean);
+            if (!argv.project) usageExit(USAGE[command]);
             await ensureApps({
                 projectId: argv.project,
-                apps,
+                appsDir: argv.appsDir,
                 baseDomain: argv.baseDomain,
                 staging,
             });
@@ -109,6 +107,7 @@ async function run() {
                 appId: argv.appId,
                 image: argv.image,
                 envFile: argv.envFile,
+                staging,
             });
             break;
         }

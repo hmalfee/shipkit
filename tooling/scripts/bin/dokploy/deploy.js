@@ -1,9 +1,11 @@
-import { chalk, echo, fs } from 'zx';
+import { createHash, randomBytes } from 'node:crypto';
+
+import { chalk, echo, fs, YAML } from 'zx';
 
 import { dp } from './dp.js';
 import { parseEnv, stringifyEnv } from './utils.js';
 
-export async function deploy({ appId, image, envFile }) {
+export async function deploy({ appId, image, envFile, staging = false }) {
     // 1. Resolve app's environment directly from the app record
     echo('Fetching app...');
     const app = await dp.applicationOne({ query: { applicationId: appId } });
@@ -66,4 +68,66 @@ export async function deploy({ appId, image, envFile }) {
         body: { applicationId: appId },
     });
     echo(`deploy response: ${JSON.stringify(deployRes)}`);
+
+    if (staging) {
+        await applyCredentials({ appId });
+    }
+}
+
+async function applyCredentials({ appId }) {
+    const app = await dp.applicationOne({ query: { applicationId: appId } });
+
+    const username = randomBytes(4).toString('hex');
+    const password = randomBytes(16).toString('hex');
+
+    const hash = createHash('sha1').update(password).digest('base64');
+    const htpasswd = `${username}:{SHA}${hash}`;
+
+    const data = await dp.applicationReadTraefikConfig({
+        query: { applicationId: appId },
+    });
+    const currentConfigStr =
+        typeof data === 'string' ? data : (data?.traefikConfig ?? '');
+    let config;
+    try {
+        config = YAML.parse(currentConfigStr) || {};
+    } catch (e) {
+        config = {};
+    }
+
+    config.http ??= {};
+    config.http.middlewares ??= {};
+    config.http.routers ??= {};
+
+    const authMiddlewareName = `${app.name}-staging-auth`;
+    config.http.middlewares[authMiddlewareName] = {
+        basicAuth: {
+            users: [htpasswd],
+        },
+    };
+
+    // Attach auth middleware to ALL primary routers (HTTP and HTTPS) but explicitly skip bypass routers
+    const routerKeys = Object.keys(config.http.routers).filter(
+        (k) =>
+            k.startsWith(`${app.appName}-router`) &&
+            !k.endsWith('-cors-bypass'),
+    );
+    for (const key of routerKeys) {
+        const router = config.http.routers[key];
+        router.middlewares ??= [];
+        if (!router.middlewares.includes(authMiddlewareName)) {
+            router.middlewares.push(authMiddlewareName);
+        }
+    }
+
+    await dp.applicationUpdateTraefikConfig({
+        body: { applicationId: appId, traefikConfig: YAML.stringify(config) },
+    });
+
+    echo('\n');
+    echo(chalk.bgCyan.black.bold(' 🔒 STAGING CREDENTIALS '));
+    echo(chalk.cyan(`  App:      ${chalk.white.bold(app.name)}`));
+    echo(chalk.cyan(`  Username: ${chalk.green.bold(username)}`));
+    echo(chalk.cyan(`  Password: ${chalk.green.bold(password)}`));
+    echo('\n');
 }

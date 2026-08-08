@@ -1,9 +1,27 @@
-import { chalk, echo } from 'zx';
+import path from 'node:path';
+
+import { chalk, echo, fs } from 'zx';
 
 import { dp } from './dp.js';
 import { appendGeneratedVars } from './utils.js';
 
-export async function ensureProject({ name, staging = false }) {
+export async function ensureProject({ projectDir = '.', staging = false }) {
+    let name;
+    try {
+        const pkgPath = path.resolve(projectDir, 'package.json');
+        const pkg = JSON.parse(await fs.readFile(pkgPath, 'utf8'));
+        if (!pkg.name) {
+            throw new Error(
+                `package.json in ${projectDir} is missing "name" property.`,
+            );
+        }
+        name = pkg.name;
+    } catch (err) {
+        throw new Error(
+            `Could not determine project name from ${projectDir}: ${err.message}`,
+        );
+    }
+
     const projects = await dp.projectAll();
     let project = projects.find((p) => p.name === name);
 

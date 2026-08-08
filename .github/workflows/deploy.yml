@@ -54,7 +54,6 @@ jobs:
             - name: Read versions from package.json
               id: versions
               run: |
-                  echo "name=$(jq -r '.name' package.json)" >> $GITHUB_OUTPUT
                   echo "node=$(jq -r '.engines.node | split(".")[0]' package.json)" >> $GITHUB_OUTPUT
                   echo "pnpm=$(jq -r '.packageManager | split("@")[1]' package.json)" >> $GITHUB_OUTPUT
                   echo "turbo=$(jq -r '.devDependencies.turbo' package.json)" >> $GITHUB_OUTPUT
@@ -130,7 +129,7 @@ jobs:
 
             - name: Ensure project
               if: steps.detect.outputs.affected_apps != ''
-              run: pnpm exec dokploy ensure-project --name "${{ steps.versions.outputs.name }}"
+              run: pnpm exec dokploy ensure-project
 
             - name: Ensure databases
               if: steps.detect.outputs.affected_apps != ''
@@ -206,7 +205,7 @@ jobs:
               if: steps.detect.outputs.affected_apps != ''
               run: |
                   PROJECT_ID=$(grep "^DOKPLOY_PROJECT_ID=" "$DOKPLOY_GENERATED" | cut -d= -f2)
-                  pnpm exec dokploy ensure-apps --project "$PROJECT_ID" --names "${{ steps.detect.outputs.affected_apps }}" --base-domain "$DOKPLOY_PROJECT_BASE_DOMAIN"
+                  pnpm exec dokploy ensure-apps --project "$PROJECT_ID" --base-domain "$DOKPLOY_PROJECT_BASE_DOMAIN"
 
             - name: Consolidate environment
               if: steps.detect.outputs.affected_apps != ''

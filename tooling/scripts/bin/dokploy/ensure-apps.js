@@ -1,9 +1,26 @@
-import { randomBytes } from 'node:crypto';
+import path from 'node:path';
 
-import { chalk, echo, YAML } from 'zx';
+import { chalk, echo, fs, YAML } from 'zx';
 
 import { dp } from './dp.js';
 import { appendGeneratedVars, requireEnvironmentId } from './utils.js';
+
+async function resolveAppNames(appsDir) {
+    const dir = path.resolve(appsDir);
+    const entries = await fs.readdir(dir, { withFileTypes: true });
+    const names = [];
+    for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
+        const pkgPath = path.join(dir, entry.name, 'package.json');
+        try {
+            const pkg = JSON.parse(await fs.readFile(pkgPath, 'utf8'));
+            if (pkg.name) names.push(pkg.name);
+        } catch {
+            // no package.json or no .name — skip silently
+        }
+    }
+    return names;
+}
 
 async function ensureApplication({ envId, applications, app }) {
     const existing = applications.find((a) => a.name === app);
@@ -76,12 +93,13 @@ async function ensureDomain({
 
 export async function ensureApps({
     projectId,
-    apps,
+    appsDir = './apps',
     baseDomain,
     staging = false,
 }) {
-    if (!apps || apps.length === 0) {
-        echo(chalk.yellow('No apps provided. Skipping.'));
+    const apps = await resolveAppNames(appsDir);
+    if (apps.length === 0) {
+        echo(chalk.yellow('No apps found in', appsDir, '. Skipping.'));
         return;
     }
     echo('Apps to ensure:', apps);
@@ -110,7 +128,7 @@ export async function ensureApps({
         });
 
         if (staging) {
-            await applyStagingSecurity({ appId: applicationId });
+            await applyTraefikStagingConfig({ appId: applicationId });
         }
 
         const appDetails = await dp.applicationOne({
@@ -132,28 +150,11 @@ export async function ensureApps({
     appendGeneratedVars(lines);
 }
 
-async function applyStagingSecurity({ appId }) {
+async function applyTraefikStagingConfig({ appId }) {
     const app = await dp.applicationOne({ query: { applicationId: appId } });
     const { name: appName } = app;
 
-    // Reset security entries for a clean slate
-    for (const sec of app.security ?? []) {
-        await dp.securityDelete({ body: { securityId: sec.securityId } });
-    }
-
-    const username = 'staging';
-    const password = randomBytes(16).toString('hex');
-    await dp.securityCreate({
-        body: { applicationId: appId, username, password },
-    });
-    echo(
-        chalk.cyan(
-            `  Basic auth for ${appName} -> username: ${username}  password: ${password}`,
-        ),
-    );
-
     // Load existing config; fall back to empty object if it's missing/unparsable
-    // applicationReadTraefikConfig uses raw API response object in case of parsing errors
     const data = await dp.applicationReadTraefikConfig({
         query: { applicationId: appId },
     });
@@ -184,12 +185,14 @@ async function applyStagingSecurity({ appId }) {
         },
     };
 
-    // Attach noindex to the primary router (skip our own bypass router)
-    const routerKey = Object.keys(config.http.routers).find(
-        (k) => !k.endsWith('-cors-bypass'),
+    // Attach noindex to ALL primary routers (HTTP and HTTPS), skipping bypass routers
+    const routerKeys = Object.keys(config.http.routers).filter(
+        (k) =>
+            k.startsWith(`${app.appName}-router`) &&
+            !k.endsWith('-cors-bypass'),
     );
-    if (routerKey) {
-        const router = config.http.routers[routerKey];
+    for (const key of routerKeys) {
+        const router = config.http.routers[key];
         router.middlewares ??= [];
         if (!router.middlewares.includes(noindexMiddlewareName)) {
             router.middlewares.push(noindexMiddlewareName);
@@ -197,7 +200,7 @@ async function applyStagingSecurity({ appId }) {
 
         // CORS preflight bypass: browsers never send credentials on OPTIONS,
         // so BasicAuth would 401 them. Higher-priority rule routes them around it.
-        config.http.routers[`${appName}-staging-cors-bypass`] = {
+        config.http.routers[`${key}-cors-bypass`] = {
             rule: `${router.rule} && Method(\`OPTIONS\`)`,
             service: router.service,
             entryPoints: router.entryPoints,
@@ -211,7 +214,7 @@ async function applyStagingSecurity({ appId }) {
     });
     echo(
         chalk.cyan(
-            `  Traefik config updated for ${appName} (X-Robots-Tag: noindex, Basic Auth: enabled)`,
+            `  Traefik config updated for ${appName} (X-Robots-Tag: noindex, CORS bypass configured)`,
         ),
     );
 }
