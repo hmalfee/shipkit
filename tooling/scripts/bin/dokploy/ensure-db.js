@@ -1,23 +1,9 @@
 import { randomBytes } from 'crypto';
 
-import {
-    mongoCreate,
-    mongoDeploy,
-    mongoOne,
-    mongoSearch,
-    postgresCreate,
-    postgresDeploy,
-    postgresOne,
-    postgresSearch,
-    projectOne,
-    redisCreate,
-    redisDeploy,
-    redisOne,
-    redisSearch,
-} from '@dokploy/sdk';
 import { chalk, echo } from 'zx';
 
-import { appendGeneratedVars, requireEnvironmentId, unwrap } from './utils.js';
+import { dp } from './dp.js';
+import { appendGeneratedVars, requireEnvironmentId } from './utils.js';
 
 const rndPass = () => randomBytes(16).toString('hex');
 
@@ -30,7 +16,7 @@ async function waitUntilRunning(
 ) {
     const deadline = Date.now() + timeout;
     while (Date.now() < deadline) {
-        const record = unwrap(await fetchFn(id), `Failed to poll ${label}`);
+        const record = await fetchFn(id);
         if (
             record.applicationStatus === 'running' ||
             record.applicationStatus === 'done'
@@ -53,10 +39,10 @@ const DB_TYPES = {
     postgres: {
         label: 'Postgres',
         idField: 'postgresId',
-        search: postgresSearch,
-        create: postgresCreate,
-        deploy: postgresDeploy,
-        one: postgresOne,
+        search: (q) => dp.postgresSearch(q),
+        create: (b) => dp.postgresCreate(b),
+        deploy: (b) => dp.postgresDeploy(b),
+        one: (q) => dp.postgresOne(q),
         buildCreateBody: (envId) => ({
             name: 'postgres',
             databaseName: 'app',
@@ -75,10 +61,10 @@ const DB_TYPES = {
     redis: {
         label: 'Redis',
         idField: 'redisId',
-        search: redisSearch,
-        create: redisCreate,
-        deploy: redisDeploy,
-        one: redisOne,
+        search: (q) => dp.redisSearch(q),
+        create: (b) => dp.redisCreate(b),
+        deploy: (b) => dp.redisDeploy(b),
+        one: (q) => dp.redisOne(q),
         buildCreateBody: (envId) => ({
             name: 'redis',
             databasePassword: rndPass(),
@@ -91,10 +77,10 @@ const DB_TYPES = {
     mongodb: {
         label: 'MongoDB',
         idField: 'mongoId',
-        search: mongoSearch,
-        create: mongoCreate,
-        deploy: mongoDeploy,
-        one: mongoOne,
+        search: (q) => dp.mongoSearch(q),
+        create: (b) => dp.mongoCreate(b),
+        deploy: (b) => dp.mongoDeploy(b),
+        one: (q) => dp.mongoOne(q),
         buildCreateBody: (envId) => ({
             name: 'mongodb',
             databaseUser: 'app',
@@ -114,13 +100,7 @@ async function ensureDatabase(type, { projectId, envId }) {
     const cfg = DB_TYPES[type];
     echo(`Verifying ${cfg.label} instance...`);
 
-    const allItems =
-        (
-            await unwrap(
-                await cfg.search({ query: { projectId } }),
-                `Failed to fetch ${cfg.label} instances`,
-            )
-        ).items ?? [];
+    const allItems = (await cfg.search({ query: { projectId } })).items ?? [];
     const items = allItems.filter((item) => item.environmentId === envId);
 
     if (items.length > 1) {
@@ -141,20 +121,14 @@ async function ensureDatabase(type, { projectId, envId }) {
         );
         db = items[0];
     } else {
-        const created = unwrap(
-            await cfg.create({ body: cfg.buildCreateBody(envId) }),
-            `Failed to create ${cfg.label} instance`,
-        );
+        const created = await cfg.create({ body: cfg.buildCreateBody(envId) });
         echo(
             chalk.green(
                 `  ${cfg.label} -> created instance ${created[cfg.idField]}`,
             ),
         );
 
-        await unwrap(
-            await cfg.deploy({ body: { [cfg.idField]: created[cfg.idField] } }),
-            `Failed to deploy ${cfg.label} instance`,
-        );
+        await cfg.deploy({ body: { [cfg.idField]: created[cfg.idField] } });
 
         db = { [cfg.idField]: created[cfg.idField], applicationStatus: 'idle' };
     }
@@ -168,20 +142,14 @@ async function ensureDatabase(type, { projectId, envId }) {
         );
         echo(chalk.green(`  ${cfg.label} is running!`));
     } else {
-        db = unwrap(
-            await cfg.one({ query: { [cfg.idField]: db[cfg.idField] } }),
-            `Failed to fetch ${cfg.label} details`,
-        );
+        db = await cfg.one({ query: { [cfg.idField]: db[cfg.idField] } });
     }
 
     return cfg.buildEnvLines(db);
 }
 
 export async function ensureDb({ projectId, dbs, staging = false }) {
-    const project = unwrap(
-        await projectOne({ query: { projectId } }),
-        'Failed to fetch project',
-    );
+    const project = await dp.projectOne({ query: { projectId } });
     const envId = requireEnvironmentId(
         project,
         staging ? 'staging' : 'production',

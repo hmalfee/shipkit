@@ -1,15 +1,10 @@
-import {
-    environmentByProjectId,
-    environmentCreate,
-    projectAll,
-    projectCreate,
-} from '@dokploy/sdk';
 import { chalk, echo } from 'zx';
 
-import { appendGeneratedVars, unwrap } from './utils.js';
+import { dp } from './dp.js';
+import { appendGeneratedVars } from './utils.js';
 
 export async function ensureProject({ name, staging = false }) {
-    const projects = unwrap(await projectAll(), 'Failed to list projects');
+    const projects = await dp.projectAll();
     let project = projects.find((p) => p.name === name);
 
     if (project) {
@@ -19,12 +14,9 @@ export async function ensureProject({ name, staging = false }) {
             ),
         );
     } else {
-        await projectCreate({ body: { name, description: '' } });
+        await dp.projectCreate({ body: { name, description: '' } });
 
-        const updatedProjects = unwrap(
-            await projectAll(),
-            'Failed to list projects after creation',
-        );
+        const updatedProjects = await dp.projectAll();
         project = updatedProjects.find((p) => p.name === name);
 
         if (!project) {
@@ -50,10 +42,9 @@ async function ensureEnvironment(projectId, staging) {
         return;
     }
 
-    const environments = unwrap(
-        await environmentByProjectId({ query: { projectId } }),
-        'Failed to list environments',
-    );
+    const environments = await dp.environmentByProjectId({
+        query: { projectId },
+    });
 
     let env = environments.find((e) => e.name === 'staging');
     if (env?.environmentId) {
@@ -63,17 +54,13 @@ async function ensureEnvironment(projectId, staging) {
             ),
         );
     } else {
-        unwrap(
-            await environmentCreate({
-                body: { name: 'staging', projectId },
-            }),
-            `Failed to create staging environment`,
-        );
+        await dp.environmentCreate({
+            body: { name: 'staging', projectId },
+        });
 
-        const updated = unwrap(
-            await environmentByProjectId({ query: { projectId } }),
-            'Failed to list environments after creation',
-        );
+        const updated = await dp.environmentByProjectId({
+            query: { projectId },
+        });
         env = updated.find((e) => e.name === 'staging');
         if (!env?.environmentId) {
             throw new Error('Failed to find newly created staging environment');

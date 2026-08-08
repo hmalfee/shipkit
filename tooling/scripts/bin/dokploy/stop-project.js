@@ -1,19 +1,10 @@
-import {
-    applicationStop,
-    mongoStop,
-    postgresStop,
-    projectOne,
-    redisStop,
-} from '@dokploy/sdk';
 import { chalk, echo } from 'zx';
 
-import { requireEnvironmentId, unwrap } from './utils.js';
+import { dp } from './dp.js';
+import { requireEnvironmentId } from './utils.js';
 
 export async function stopProject({ projectId, staging = false }) {
-    const project = unwrap(
-        await projectOne({ query: { projectId } }),
-        'Failed to fetch project',
-    );
+    const project = await dp.projectOne({ query: { projectId } });
 
     const envName = staging ? 'staging' : 'production';
     const envId = requireEnvironmentId(project, envName);
@@ -26,12 +17,9 @@ export async function stopProject({ projectId, staging = false }) {
     for (const app of env.applications ?? []) {
         echo(`  Stopping app ${app.name}...`);
         try {
-            unwrap(
-                await applicationStop({
-                    body: { applicationId: app.applicationId },
-                }),
-                'Failed',
-            );
+            await dp.applicationStop({
+                body: { applicationId: app.applicationId },
+            });
             echo(chalk.green(`  Stopped app ${app.name}`));
         } catch (e) {
             echo(
@@ -45,10 +33,7 @@ export async function stopProject({ projectId, staging = false }) {
     for (const db of env.postgres ?? []) {
         echo(`  Stopping postgres ${db.name}...`);
         try {
-            unwrap(
-                await postgresStop({ body: { postgresId: db.postgresId } }),
-                'Failed',
-            );
+            await dp.postgresStop({ body: { postgresId: db.postgresId } });
             echo(chalk.green(`  Stopped postgres ${db.name}`));
         } catch (e) {
             echo(
@@ -62,10 +47,7 @@ export async function stopProject({ projectId, staging = false }) {
     for (const db of env.redis ?? []) {
         echo(`  Stopping redis ${db.name}...`);
         try {
-            unwrap(
-                await redisStop({ body: { redisId: db.redisId } }),
-                'Failed',
-            );
+            await dp.redisStop({ body: { redisId: db.redisId } });
             echo(chalk.green(`  Stopped redis ${db.name}`));
         } catch (e) {
             echo(
@@ -79,10 +61,7 @@ export async function stopProject({ projectId, staging = false }) {
     for (const db of env.mongos ?? []) {
         echo(`  Stopping mongo ${db.name}...`);
         try {
-            unwrap(
-                await mongoStop({ body: { mongoId: db.mongoId } }),
-                'Failed',
-            );
+            await dp.mongoStop({ body: { mongoId: db.mongoId } });
             echo(chalk.green(`  Stopped mongo ${db.name}`));
         } catch (e) {
             echo(

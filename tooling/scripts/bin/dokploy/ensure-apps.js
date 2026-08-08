@@ -1,20 +1,9 @@
 import { randomBytes } from 'node:crypto';
 
-import {
-    applicationCreate,
-    applicationOne,
-    applicationReadTraefikConfig,
-    applicationUpdateTraefikConfig,
-    domainByApplicationId,
-    domainCreate,
-    projectOne,
-    securityCreate,
-    securityDelete,
-    settingsGetWebServerSettings,
-} from '@dokploy/sdk';
 import { chalk, echo, YAML } from 'zx';
 
-import { appendGeneratedVars, requireEnvironmentId, unwrap } from './utils.js';
+import { dp } from './dp.js';
+import { appendGeneratedVars, requireEnvironmentId } from './utils.js';
 
 async function ensureApplication({ envId, applications, app }) {
     const existing = applications.find((a) => a.name === app);
@@ -26,12 +15,9 @@ async function ensureApplication({ envId, applications, app }) {
         };
     }
 
-    const created = unwrap(
-        await applicationCreate({
-            body: { name: app, appName: app, environmentId: envId },
-        }),
-        `Failed to create app ${app}`,
-    );
+    const created = await dp.applicationCreate({
+        body: { name: app, appName: app, environmentId: envId },
+    });
     if (!created.applicationId) {
         echo(
             chalk.red(
@@ -52,7 +38,7 @@ async function ensureDomain({
     staging,
 }) {
     const domains =
-        (await domainByApplicationId({ query: { applicationId } })).data ?? [];
+        (await dp.domainByApplicationId({ query: { applicationId } })) ?? [];
     if (domains[0]?.host) {
         echo(`  ${app} -> domain already exists: http://${domains[0].host}`);
         return domains[0].host;
@@ -60,10 +46,7 @@ async function ensureDomain({
 
     let resolvedBaseDomain = baseDomain;
     if (!resolvedBaseDomain) {
-        const settings = unwrap(
-            await settingsGetWebServerSettings(),
-            'Failed to get web server settings',
-        );
+        const settings = await dp.settingsGetWebServerSettings();
         resolvedBaseDomain = settings.host;
     }
     if (!resolvedBaseDomain) {
@@ -76,7 +59,7 @@ async function ensureDomain({
     }
 
     const host = `${app}-${projectName}${staging ? '-staging' : ''}.${resolvedBaseDomain}`;
-    await domainCreate({
+    await dp.domainCreate({
         body: {
             host,
             port: 3000,
@@ -103,10 +86,7 @@ export async function ensureApps({
     }
     echo('Apps to ensure:', apps);
 
-    const project = unwrap(
-        await projectOne({ query: { projectId } }),
-        'Failed to fetch project',
-    );
+    const project = await dp.projectOne({ query: { projectId } });
     const projectName = project.name;
     const envId = requireEnvironmentId(
         project,
@@ -133,12 +113,10 @@ export async function ensureApps({
             await applyStagingSecurity({ appId: applicationId });
         }
 
-        const appName =
-            existingAppName ||
-            unwrap(
-                await applicationOne({ query: { applicationId } }),
-                `Failed to fetch details for ${app}`,
-            ).appName;
+        const appDetails = await dp.applicationOne({
+            query: { applicationId },
+        });
+        const appName = existingAppName || appDetails.appName;
 
         const key = app.toUpperCase().replace(/-/g, '_');
         lines.push(
@@ -155,25 +133,19 @@ export async function ensureApps({
 }
 
 async function applyStagingSecurity({ appId }) {
-    const app = unwrap(
-        await applicationOne({ query: { applicationId: appId } }),
-        'Failed to fetch app',
-    );
+    const app = await dp.applicationOne({ query: { applicationId: appId } });
     const { name: appName } = app;
 
     // Reset security entries for a clean slate
     for (const sec of app.security ?? []) {
-        await securityDelete({ body: { securityId: sec.securityId } });
+        await dp.securityDelete({ body: { securityId: sec.securityId } });
     }
 
     const username = 'staging';
     const password = randomBytes(16).toString('hex');
-    unwrap(
-        await securityCreate({
-            body: { applicationId: appId, username, password },
-        }),
-        `Failed to create basic auth for ${appName}`,
-    );
+    await dp.securityCreate({
+        body: { applicationId: appId, username, password },
+    });
     echo(
         chalk.cyan(
             `  Basic auth for ${appName} -> username: ${username}  password: ${password}`,
@@ -181,7 +153,8 @@ async function applyStagingSecurity({ appId }) {
     );
 
     // Load existing config; fall back to empty object if it's missing/unparsable
-    const { data } = await applicationReadTraefikConfig({
+    // applicationReadTraefikConfig uses raw API response object in case of parsing errors
+    const data = await dp.applicationReadTraefikConfig({
         query: { applicationId: appId },
     });
     const currentConfigStr =
@@ -233,7 +206,7 @@ async function applyStagingSecurity({ appId }) {
         };
     }
 
-    await applicationUpdateTraefikConfig({
+    await dp.applicationUpdateTraefikConfig({
         body: { applicationId: appId, traefikConfig: YAML.stringify(config) },
     });
     echo(

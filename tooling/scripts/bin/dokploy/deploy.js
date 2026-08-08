@@ -1,22 +1,12 @@
-import {
-    applicationDeploy,
-    applicationOne,
-    applicationSaveDockerProvider,
-    applicationSaveEnvironment,
-    environmentOne,
-    environmentUpdate,
-} from '@dokploy/sdk';
 import { chalk, echo, fs } from 'zx';
 
-import { parseEnv, stringifyEnv, unwrap } from './utils.js';
+import { dp } from './dp.js';
+import { parseEnv, stringifyEnv } from './utils.js';
 
 export async function deploy({ appId, image, envFile }) {
     // 1. Resolve app's environment directly from the app record
     echo('Fetching app...');
-    const app = unwrap(
-        await applicationOne({ query: { applicationId: appId } }),
-        'Failed to fetch app',
-    );
+    const app = await dp.applicationOne({ query: { applicationId: appId } });
     const envId = app.environmentId;
     if (!envId) {
         echo(chalk.red(`App ${appId} has no environmentId`));
@@ -34,19 +24,15 @@ export async function deploy({ appId, image, envFile }) {
 
     // 3. Merge into the environment-level vars (not project-level), so
     //    staging and production never collide.
-    const environment = unwrap(
-        await environmentOne({ query: { environmentId: envId } }),
-        'Failed to fetch environment',
-    );
+    const environment = await dp.environmentOne({
+        query: { environmentId: envId },
+    });
     const envObj = { ...parseEnv(environment.env ?? ''), ...buildEnv };
 
     echo(`Pushing consolidated variables to environment ${envId}...`);
-    unwrap(
-        await environmentUpdate({
-            body: { environmentId: envId, env: stringifyEnv(envObj) },
-        }),
-        'Failed to update environment env',
-    );
+    await dp.environmentUpdate({
+        body: { environmentId: envId, env: stringifyEnv(envObj) },
+    });
 
     // 4. Map env vars into the app (referencing environment level)
     const appEnvString = Object.keys(envObj)
@@ -54,7 +40,7 @@ export async function deploy({ appId, image, envFile }) {
         .join('');
 
     echo(`Sending all vars to app (${appId})...`);
-    await applicationSaveEnvironment({
+    await dp.applicationSaveEnvironment({
         body: {
             applicationId: appId,
             env: appEnvString,
@@ -67,21 +53,17 @@ export async function deploy({ appId, image, envFile }) {
     // 5. Deploy app
     echo(`Deploying ${image} (applicationId: ${appId})`);
 
-    unwrap(
-        await applicationSaveDockerProvider({
-            body: {
-                applicationId: appId,
-                dockerImage: image,
-                username: '',
-                password: '',
-                registryUrl: '',
-            },
-        }),
-        `Failed to save Docker provider for ${appId}`,
-    );
-    const deployRes = unwrap(
-        await applicationDeploy({ body: { applicationId: appId } }),
-        `Failed to deploy ${appId}`,
-    );
+    await dp.applicationSaveDockerProvider({
+        body: {
+            applicationId: appId,
+            dockerImage: image,
+            username: '',
+            password: '',
+            registryUrl: '',
+        },
+    });
+    const deployRes = await dp.applicationDeploy({
+        body: { applicationId: appId },
+    });
     echo(`deploy response: ${JSON.stringify(deployRes)}`);
 }

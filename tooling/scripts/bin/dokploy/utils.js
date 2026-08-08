@@ -1,10 +1,5 @@
 import { chalk, echo, fs } from 'zx';
 
-export const unwrap = (res, msg) => {
-    if (res.error) throw new Error(`${msg}: ${JSON.stringify(res.error)}`);
-    return res.data;
-};
-
 export function parseEnv(envString) {
     const env = {};
     for (const line of (envString || '').split('\n')) {
