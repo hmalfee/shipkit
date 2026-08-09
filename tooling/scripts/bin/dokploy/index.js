@@ -39,7 +39,7 @@ const argv = minimist(process.argv.slice(2), {
     },
 });
 
-const staging = argv.staging || process.env.DOKPLOY_STAGING === 'true';
+const staging = argv.staging || process.env.GITHUB_REF_NAME === 'staging';
 
 const USAGE = {
     'ensure-project':

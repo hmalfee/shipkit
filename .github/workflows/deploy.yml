@@ -39,7 +39,6 @@ jobs:
 
             DOKPLOY_PORT: ${{ secrets.DOKPLOY_PORT || '3000' }}
             DOKPLOY_URL: http://127.0.0.1:${{ secrets.DOKPLOY_PORT || '3000' }}
-            DOKPLOY_STAGING: ${{ github.ref_name == 'staging' && 'true' || 'false' }}
             DOKPLOY_GENERATED: /tmp/dokploy_generated.env
             DOKPLOY_API_KEY: ${{ secrets.DOKPLOY_API_KEY }}
             DOKPLOY_PROJECT_BASE_DOMAIN: ${{ secrets.DOKPLOY_PROJECT_BASE_DOMAIN }}
