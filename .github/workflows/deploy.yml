@@ -133,7 +133,7 @@ jobs:
             - name: Ensure databases
               if: steps.detect.outputs.affected_apps != ''
               run: |
-                  PROJECT_ID=$(grep "^DOKPLOY_PROJECT_ID=" "$DOKPLOY_GENERATED" | cut -d= -f2)
+                  PROJECT_ID=$(grep "^DOKPLOY_PROJECT_ID=" "$DOKPLOY_GENERATED" | cut -d= -f2-)
                   pnpm exec dokploy ensure-db --project "$PROJECT_ID" --postgres --redis
 
             - name: Run postgres tunnel & migrations
@@ -144,66 +144,12 @@ jobs:
                   source "$DOKPLOY_GENERATED"
                   set +a
 
-                  node - << 'EOJS'
-                  const { spawn } = require('child_process');
-                  const net = require('net');
-
-                  const pgHost = process.env.POSTGRES_APP_NAME;
-                  const pgPort = 5432;
-                  const localPort = 15432;
-
-                  const server = net.createServer((socket) => {
-                      const relay = `docker exec -i $(docker ps -q --filter "name=dokploy.1.") node -e "
-                          const s = require('net').connect(${pgPort}, '${pgHost}');
-                          process.stdin.pipe(s).pipe(process.stdout);
-                          s.on('error', () => process.exit(1));
-                      "`;
-                      const ssh = spawn('ssh', ['-S', '/tmp/dokploy_ssh.sock', 'placeholder', relay]);
-                      socket.pipe(ssh.stdin);
-                      ssh.stdout.pipe(socket);
-                      ssh.on('error', (err) => console.error('SSH bridge error:', err.message));
-                      socket.on('close', () => ssh.kill());
-                  });
-
-                  server.listen(localPort, '127.0.0.1', () => {
-                      console.log(`Postgres tunnel ready on 127.0.0.1:${localPort}, waiting 2 seconds for DB to initialize...`);
-                      
-                      let attempts = 0;
-                      const runMigrate = () => {
-                          attempts++;
-                          console.log(`Migration attempt ${attempts}...`);
-                          const child = spawn('pnpm', ['--filter', '@shipkit/db', 'run', 'db:migrate'], {
-                              stdio: 'inherit',
-                              env: {
-                                  ...process.env,
-                                  POSTGRES_URL: `postgresql://${process.env.POSTGRES_USER}:${process.env.POSTGRES_PASSWORD}@127.0.0.1:${localPort}/${process.env.POSTGRES_DB}`,
-                              },
-                          });
-
-                          child.on('close', (code) => {
-                              if (code !== 0) {
-                                  if (attempts < 5) {
-                                      console.log('Migration failed, retrying in 3 seconds...');
-                                      setTimeout(runMigrate, 3000);
-                                  } else {
-                                      server.close();
-                                      process.exit(code);
-                                  }
-                              } else {
-                                  console.log('Migrations complete.');
-                                  server.close();
-                              }
-                          });
-                      };
-                      
-                      setTimeout(runMigrate, 2000);
-                  });
-                  EOJS
+                  node .github/scripts/pg-tunnel-migrate.mjs
 
             - name: Ensure Apps
               if: steps.detect.outputs.affected_apps != ''
               run: |
-                  PROJECT_ID=$(grep "^DOKPLOY_PROJECT_ID=" "$DOKPLOY_GENERATED" | cut -d= -f2)
+                  PROJECT_ID=$(grep "^DOKPLOY_PROJECT_ID=" "$DOKPLOY_GENERATED" | cut -d= -f2-)
                   pnpm exec dokploy ensure-apps --project "$PROJECT_ID" --base-domain "$DOKPLOY_PROJECT_BASE_DOMAIN"
 
             - name: Consolidate environment
@@ -232,7 +178,7 @@ jobs:
                       echo "Building $app..."
 
                       APP_ID_VAR="APP_ID_$(echo "$app" | tr '[:lower:]-' '[:upper:]_')"
-                      APP_ID=$(grep "^${APP_ID_VAR}=" "$DOKPLOY_GENERATED" | cut -d= -f2)
+                      APP_ID=$(grep "^${APP_ID_VAR}=" "$DOKPLOY_GENERATED" | cut -d= -f2-)
 
                       IMAGE="${REG_HOST}/shipkit/${app}:${{ github.sha }}-${{ github.ref_name }}"
                       CACHE_REF="${REG_HOST}/shipkit/${app}:buildcache-${{ github.ref_name }}"

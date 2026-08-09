@@ -28,7 +28,8 @@ catalog:
     tailwindcss: ^4.1.18
     typescript: ^6
     zod: ^4.1.13
-# Below along with package.json's engines field enforces Node.js version 22 (tsx watch broken on Node 24.12+, see privatenumber/tsx#767)
+    tsx: ^4.23.1
+# Below along with package.json's engines field enforces Node.js version from package.json
 engineStrict: true
 publicHoistPattern:
     - '*eslint*'

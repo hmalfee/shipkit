@@ -10,7 +10,8 @@
         "clean": "git clean -xdf .cache .turbo node_modules -e .env -e .env.*",
         "db:generate": "SKIP_ENV_VALIDATION=1 drizzle-kit generate",
         "db:migrate": "drizzle-kit migrate",
-        "dev": "docker compose up -d --wait && pnpm db:migrate",
+        "db:seed": "tsx src/pg/seed.ts",
+        "dev": "docker compose up -d --wait && pnpm db:migrate && pnpm db:seed",
         "studio:postgres": "drizzle-kit studio",
         "studio:redis": "pnpx redis-commander",
         "typecheck": "tsc"
@@ -23,7 +24,9 @@
         "pg": "^8.17.1"
     },
     "devDependencies": {
+        "@faker-js/faker": "^10.5.0",
         "@types/pg": "^8.16.0",
-        "drizzle-kit": "^0.31.8"
+        "drizzle-kit": "^0.31.8",
+        "tsx": "catalog:"
     }
 }

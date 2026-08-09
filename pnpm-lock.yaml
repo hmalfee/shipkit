@@ -72,6 +72,9 @@ catalogs:
     tailwindcss:
       specifier: ^4.1.18
       version: 4.3.2
+    tsx:
+      specifier: ^4.23.1
+      version: 4.23.1
     typescript:
       specifier: ^6
       version: 6.0.3
@@ -176,7 +179,7 @@ importers:
         specifier: ^0.21.9
         version: 0.21.10(oxc-resolver@11.21.3)(typescript@6.0.3)
       tsx:
-        specifier: ^4.23.1
+        specifier: 'catalog:'
         version: 4.23.1
 
   apps/web:
@@ -283,12 +286,18 @@ importers:
         specifier: ^8.17.1
         version: 8.22.0
     devDependencies:
+      '@faker-js/faker':
+        specifier: ^10.5.0
+        version: 10.5.0
       '@types/pg':
         specifier: ^8.16.0
         version: 8.20.0
       drizzle-kit:
         specifier: ^0.31.8
         version: 0.31.10
+      tsx:
+        specifier: 'catalog:'
+        version: 4.23.1
 
   packages/env:
     dependencies:
@@ -1535,6 +1544,10 @@ packages:
   '@eslint/plugin-kit@0.4.1':
     resolution: {integrity: sha512-43/qtrDUokr7LJqoF2c3+RInu/t4zfrpYdoSDfYyhg52rwLV6TnOvdG4fXm7IkSB3wErkcmJS9iEhjVtOSEjjA==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
+
+  '@faker-js/faker@10.5.0':
+    resolution: {integrity: sha512-bsxD8WLS5lIj7aaoCx1YJkktqYj5vlBUE6HWzu2Q51ksrGJ0H737ECCKlFU7Yf8Br45z9t99frBp/J7kzbMPAg==}
+    engines: {node: ^20.19.0 || ^22.13.0 || ^23.5.0 || >=24.0.0, npm: '>=10'}
 
   '@floating-ui/core@1.8.0':
     resolution: {integrity: sha512-0CIZ5itps/8x7BG8dEIhs53BvCUH2PCoogtakwRTut+Arm58sJooJ0AuZhLw2HJYIR5cMLNPBSS728sPho2khQ==}
@@ -7337,6 +7350,8 @@ snapshots:
     dependencies:
       '@eslint/core': 0.17.0
       levn: 0.4.1
+
+  '@faker-js/faker@10.5.0': {}
 
   '@floating-ui/core@1.8.0':
     dependencies:
