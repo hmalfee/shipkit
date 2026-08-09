@@ -13,7 +13,7 @@
         "db:seed": "tsx src/pg/seed.ts",
         "dev": "docker compose up -d --wait && pnpm db:migrate && pnpm db:seed",
         "studio:postgres": "drizzle-kit studio",
-        "studio:redis": "pnpx redis-commander",
+        "studio:redis": "redis-commander",
         "typecheck": "tsc"
     },
     "dependencies": {
@@ -27,6 +27,7 @@
         "@faker-js/faker": "^10.5.0",
         "@types/pg": "^8.16.0",
         "drizzle-kit": "^0.31.8",
+        "redis-commander": "^0.9.0",
         "tsx": "catalog:"
     }
 }

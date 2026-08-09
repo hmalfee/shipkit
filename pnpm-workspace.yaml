@@ -36,11 +36,13 @@ publicHoistPattern:
     - '*prettier*'
     - '*oxlint*'
 allowBuilds:
+    bcrypt: false
     better-sqlite3: true
     core-js: false
     esbuild: false
     msw: false
     protobufjs: false
+    redis-commander: false
     sharp: false
 optimisticRepeatInstall: false
 minimumReleaseAge: 10080
