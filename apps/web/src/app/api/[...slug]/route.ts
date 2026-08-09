@@ -1,78 +1,35 @@
-import { NextResponse } from 'next/server';
-
+import { createCatchAllRouter } from '@shipkit/shared/next/catch-all';
 import { getActiveSpan } from '@shipkit/telemetry/node';
 import { createOtelIngestHandler } from '@shipkit/telemetry/source-maps/next/server';
 
 import { env } from '@/env';
 
-import type { NextRequest } from 'next/server';
+import type { Routers } from '@shipkit/shared/next/catch-all';
 
 export const dynamic = 'force-dynamic';
 
-type Routers = Record<
-    string,
-    (
-        req: NextRequest,
-        context: {
-            params?: { path?: string[] } | Promise<{ path?: string[] }>;
-        },
-    ) => Response | Promise<Response>
->;
+const endpoints: Routers = {};
 
-/**
- * Route handlers keyed by URL prefix.
- *
- * Keys must start with `/` (e.g. `/v1/webhooks`, `/otel`).
- * Nesting is supported — a key like `/hello/world` matches
- * `/api/hello/world` and any deeper segments are forwarded
- * to the handler as `params.path`.
- *
- * Note: `beforeFiles`/`afterFiles` rewrites in next.config take
- * precedence over this catch-all — only unmatched or fallback
- * rewrites reach here.
- */
-const routers: Routers = {};
-
-// Register the OpenTelemetry ingest handler if the proxy path is configured.
 if (env.NEXT_PUBLIC_OTEL_PROXY_PATH) {
-    const path = env.NEXT_PUBLIC_OTEL_PROXY_PATH.replace(/^\/api\//, '/');
-    routers[path] = createOtelIngestHandler(env.OTEL_URL);
+    endpoints[env.NEXT_PUBLIC_OTEL_PROXY_PATH + '/*'] = createOtelIngestHandler(
+        env.OTEL_URL,
+    );
 }
 
-async function handler(
-    req: NextRequest,
-    { params }: { params: Promise<{ slug: string[] }> },
-) {
-    const { slug } = await params;
-
-    const span = getActiveSpan();
-
-    for (let i = slug.length; i > 0; i--) {
-        const prefix = '/' + slug.slice(0, i).join('/');
-        const router = routers[prefix];
-        if (router) {
-            // When using catch-all, Next.js sets the `next.route` attribute to the catch-all route
-            // (e.g. `/api/[...slug]`) instead of the actual route (e.g. `/api/hello/world`). This
-            // is not ideal for observability, so we set a `http.route` attribute to the resolved
-            // route for better observability.
-            span?.setAttribute('http.route', `/api${prefix}`);
-            span?.updateName(`${req.method} /api${prefix}`);
-
-            return router(req, { params: { path: slug.slice(i) } });
-        }
-    }
-
-    const fallbackRoute = `/api/${slug.join('/')}`;
-    span?.setAttribute('http.route', fallbackRoute);
-    span?.updateName(`${req.method} ${fallbackRoute}`);
-
-    return NextResponse.json({ error: 'Not found' }, { status: 404 });
-}
-
-export {
-    handler as GET,
-    handler as POST,
-    handler as PUT,
-    handler as PATCH,
-    handler as DELETE,
-};
+export const { GET, POST, PUT, PATCH, DELETE } = createCatchAllRouter(
+    endpoints,
+    {
+        stripMountPrefix: true,
+        onMatch: (_req, { route, method }) => {
+            const span = getActiveSpan();
+            span?.setAttribute('http.route', route);
+            span?.updateName(`${method} ${route}`);
+        },
+        onNotFound: (_req, { path, method }) => {
+            const span = getActiveSpan();
+            span?.setAttribute('http.route', path);
+            span?.updateName(`${method} ${path}`);
+            return Response.json({ error: 'Not found' }, { status: 404 });
+        },
+    },
+);

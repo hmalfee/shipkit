@@ -3,7 +3,8 @@
     "type": "module",
     "exports": {
         "./orpc": "./src/orpc/index.ts",
-        "./constants": "./src/constants.ts"
+        "./constants": "./src/constants.ts",
+        "./next/*": "./src/next/*.ts"
     },
     "scripts": {
         "clean": "git clean -xdf .cache .turbo node_modules",
@@ -16,6 +17,7 @@
     "devDependencies": {
         "@shipkit/ts-config": "workspace:*",
         "better-auth": "catalog:",
+        "next": "catalog:",
         "typescript": "catalog:"
     }
 }

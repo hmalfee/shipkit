@@ -15,7 +15,7 @@ export const env = createEnv({
     client: {
         NEXT_PUBLIC_ENV: z.enum(['development', 'production', 'test']),
         NEXT_PUBLIC_SERVER_URL: z.url(),
-        NEXT_PUBLIC_OTEL_PROXY_PATH: z.string().startsWith('/api/').optional(),
+        NEXT_PUBLIC_OTEL_PROXY_PATH: z.string().startsWith('/').optional(),
         NEXT_PUBLIC_POSTHOG_KEY: z.string().optional(),
         NEXT_PUBLIC_POSTHOG_PROXY_PATH: z.string().startsWith('/').optional(),
     },
