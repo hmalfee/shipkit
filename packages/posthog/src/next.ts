@@ -29,9 +29,29 @@ export function withRewriteProxy(
             destination: `https://${region}.i.posthog.com/:path*`,
         },
     ];
+
+    const cleanPath = path.replace(/^\//, '');
+
     return {
         ...nextConfig,
         skipTrailingSlashRedirect: true,
+        async redirects() {
+            const existing = (await nextConfig.redirects?.()) ?? [];
+            return [
+                ...existing,
+                {
+                    // Next.js normally removes trailing slashes automatically (e.g. /about/ → /about),
+                    // but we disable that globally above because PostHog's API endpoints *require*
+                    // trailing slashes (e.g. /your-proxy-path/e/ must stay as-is).
+                    //
+                    // So instead we manually redirect trailing slashes here
+                    // for everything except the PostHog proxy path.
+                    source: `/:path((?!${cleanPath}(?:/|$)).*)/`,
+                    destination: '/:path',
+                    permanent: true,
+                },
+            ];
+        },
         async rewrites(): Promise<RewritesObject> {
             const existing = (await nextConfig.rewrites?.()) ?? [];
             // A plain array's semantics are equivalent to `afterFiles`, so

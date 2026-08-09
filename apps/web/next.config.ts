@@ -37,10 +37,6 @@ let nextConfig: NextConfig = {
 
 if (env.NEXT_PUBLIC_POSTHOG_PROXY_PATH) {
     nextConfig = withRewriteProxy(nextConfig, {
-        // Must be an /api/ path — proxy.ts strips trailing slashes everywhere else,
-        // even with `skipTrailingSlashRedirect`, and PostHog requires them. Only
-        // /api/ paths are exempt from proxy.ts's matcher, so they're safe to keep
-        // intact. `env.ts` validation enforces starting with '/api/'.
         path: env.NEXT_PUBLIC_POSTHOG_PROXY_PATH,
     });
 }
