@@ -11,7 +11,11 @@ const config: Config = {
         'prettier-plugin-sh',
         'prettier-plugin-sql',
     ],
+
+    // prettier-plugin-sql options
     language: 'postgresql',
+
+    // @ianvs/prettier-plugin-sort-imports options
     importOrder: [
         '<BUILTIN_MODULES>', // Node.js internals (fs, path, etc.)
         '',
@@ -34,6 +38,7 @@ const config: Config = {
     importOrderTypeScriptVersion: '6.0.0',
     importOrderParserPlugins: ['typescript', 'jsx', 'decorators-legacy'],
     importOrderCaseSensitive: false,
+
     overrides: [
         {
             files: ['.npmrc', '.env*'],
