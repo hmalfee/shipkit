@@ -3,7 +3,11 @@ import path from 'node:path';
 import { chalk, echo, fs, YAML } from 'zx';
 
 import { dp } from './dp.js';
-import { appendGeneratedVars, requireEnvironmentId } from './utils.js';
+import {
+    appendGeneratedVars,
+    requireEnvironmentId,
+    resolveAppConfig,
+} from './utils.js';
 
 async function resolveAppNames(appsDir) {
     const dir = path.resolve(appsDir);
@@ -47,48 +51,95 @@ async function ensureApplication({ envId, applications, app }) {
     return { applicationId: created.applicationId, appName: undefined };
 }
 
-async function ensureDomain({
+const WWW_REGEX = '^https?://www\\.(.+)';
+const WWW_REPLACEMENT = 'https://${1}';
+
+async function ensureDomainsAndRedirect({
     app,
     applicationId,
     projectName,
     baseDomain,
     staging,
+    appsDir,
 }) {
-    const domains =
-        (await dp.domainByApplicationId({ query: { applicationId } })) ?? [];
-    if (domains[0]?.host) {
-        echo(`  ${app} -> domain already exists: http://${domains[0].host}`);
-        return domains[0].host;
-    }
-
-    let resolvedBaseDomain = baseDomain;
-    if (!resolvedBaseDomain) {
-        const settings = await dp.settingsGetWebServerSettings();
-        resolvedBaseDomain = settings.host;
-    }
-    if (!resolvedBaseDomain) {
-        echo(
-            chalk.red(
-                'No base domain available. Pass --base-domain or configure host in Dokploy settings.',
-            ),
-        );
-        process.exit(1);
-    }
-
-    const host = `${app}-${projectName}${staging ? '-staging' : ''}.${resolvedBaseDomain}`;
-    await dp.domainCreate({
-        body: {
-            host,
-            port: 3000,
-            https: false,
-            certificateType: 'none',
-            path: '/',
-            applicationId,
-            domainType: 'application',
-        },
+    const env = staging ? 'staging' : 'production';
+    const cfg = await resolveAppConfig({
+        appsDir,
+        appName: app,
+        projectName,
+        baseDomain,
     });
-    echo(chalk.green(`  ${app} -> created domain http://${host}`));
-    return host;
+    const { host } = cfg.domain[env];
+
+    // Determine if it's an apex/www pair by comparing against baseDomain directly.
+    // This is exact and TLD-agnostic — no dot-counting heuristics needed.
+    // We normalize to lowercase for strict comparison.
+    let bare = host.toLowerCase();
+    let www = null;
+    const normalizedBase = baseDomain.toLowerCase();
+
+    if (bare === normalizedBase) {
+        www = `www.${bare}`;
+    } else if (bare === `www.${normalizedBase}`) {
+        bare = normalizedBase;
+        www = host.toLowerCase();
+    }
+
+    const existing = new Set(
+        (
+            (await dp.domainByApplicationId({ query: { applicationId } })) ?? []
+        ).map((d) => d.host),
+    );
+
+    const domainsToEnsure = www ? [bare, www] : [host];
+
+    for (const h of domainsToEnsure) {
+        if (!existing.has(h)) {
+            await dp.domainCreate({
+                body: {
+                    host: h,
+                    port: 3000,
+                    https: false,
+                    certificateType: 'none',
+                    path: '/',
+                    applicationId,
+                    domainType: 'application',
+                },
+            });
+            echo(chalk.green(`  ${app} -> created domain http://${h}`));
+        } else {
+            echo(`  ${app} -> domain already exists: http://${h}`);
+        }
+    }
+
+    // Configure www redirect if applicable
+    if (www) {
+        const appDetails = await dp.applicationOne({
+            query: { applicationId },
+        });
+        if (
+            !(appDetails.redirects ?? []).some(
+                (r) =>
+                    r.regex === WWW_REGEX && r.replacement === WWW_REPLACEMENT,
+            )
+        ) {
+            await dp.redirectsCreate({
+                body: {
+                    regex: WWW_REGEX,
+                    replacement: WWW_REPLACEMENT,
+                    permanent: true,
+                    applicationId,
+                },
+            });
+            echo(
+                chalk.green(
+                    `  -> www redirect configured (www.${bare} -> ${bare})`,
+                ),
+            );
+        }
+    }
+
+    return bare; // canonical domain
 }
 
 export async function ensureApps({
@@ -119,12 +170,13 @@ export async function ensureApps({
     for (const app of apps) {
         const { applicationId, appName: existingAppName } =
             await ensureApplication({ envId, applications, app });
-        const host = await ensureDomain({
+        const host = await ensureDomainsAndRedirect({
             app,
             applicationId,
             projectName,
             baseDomain: baseDomain,
             staging: Boolean(staging),
+            appsDir,
         });
 
         if (staging) {

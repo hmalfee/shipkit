@@ -1,0 +1,41 @@
+{
+    "$schema": "http://json-schema.org/draft-07/schema#",
+    "title": "Dokploy Configuration",
+    "description": "Schema for dokploy.json, the Dokploy configuration file. Currently defines the domain section (production/staging domain settings).",
+    "type": "object",
+    "properties": {
+        "$schema": {
+            "type": "string",
+            "description": "The JSON schema path for this file."
+        },
+        "domain": {
+            "type": "object",
+            "properties": {
+                "production": {
+                    "$ref": "#/definitions/DomainEntry"
+                },
+                "staging": {
+                    "$ref": "#/definitions/DomainEntry"
+                }
+            },
+            "required": ["production", "staging"],
+            "additionalProperties": false
+        }
+    },
+    "required": ["domain"],
+    "additionalProperties": false,
+    "definitions": {
+        "DomainEntry": {
+            "type": "object",
+            "properties": {
+                "host": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Domain host string. Supports ${APP_NAME}, ${PROJECT_NAME}, and ${BASE_DOMAIN} tokens."
+                }
+            },
+            "required": ["host"],
+            "additionalProperties": false
+        }
+    }
+}

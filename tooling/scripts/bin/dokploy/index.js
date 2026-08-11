@@ -47,7 +47,7 @@ const USAGE = {
     'ensure-db':
         'dokploy ensure-db --project <id> [--postgres] [--redis] [--mongodb] [--staging]',
     'ensure-apps':
-        'dokploy ensure-apps --project <id> [--apps-dir <path>] [--base-domain <domain>] [--staging]',
+        'dokploy ensure-apps --project <id> --base-domain <domain> [--apps-dir <path>] [--staging]',
     deploy: 'dokploy deploy --app-id <id> --image <full-image-ref> --env-file <path>',
     'stop-project': 'dokploy stop-project --project <id> [--staging]',
 };
@@ -90,7 +90,15 @@ async function run() {
             break;
         }
         case 'ensure-apps': {
-            if (!argv.project) usageExit(USAGE[command]);
+            if (!argv.project || !argv.baseDomain) usageExit(USAGE[command]);
+            if (/^https?:\/\//i.test(argv.baseDomain)) {
+                echo(
+                    chalk.red(
+                        `--base-domain must be a plain domain, not a URL (got: ${argv.baseDomain})`,
+                    ),
+                );
+                process.exit(1);
+            }
             await ensureApps({
                 projectId: argv.project,
                 appsDir: argv.appsDir,

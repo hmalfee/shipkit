@@ -1,0 +1,7 @@
+{
+    "$schema": "../../tooling/scripts/bin/dokploy/schema.json",
+    "domain": {
+        "production": { "host": "${BASE_DOMAIN}" },
+        "staging": { "host": "${APP_NAME}-staging.${BASE_DOMAIN}" }
+    }
+}

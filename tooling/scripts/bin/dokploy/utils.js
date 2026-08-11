@@ -1,4 +1,9 @@
+import path from 'node:path';
+
+import z from 'zod';
 import { chalk, echo, fs } from 'zx';
+
+import schema from './schema.json' with { type: 'json' };
 
 export function parseEnv(envString) {
     const env = {};
@@ -35,4 +40,27 @@ export function appendGeneratedVars(lines) {
         return;
     }
     fs.appendFileSync(process.env.DOKPLOY_GENERATED, lines.join('\n') + '\n');
+}
+
+const DokploySchema = z.fromJSONSchema(schema);
+
+export async function resolveAppConfig({
+    appsDir,
+    appName,
+    projectName,
+    baseDomain,
+}) {
+    const cfgPath = path.join(path.resolve(appsDir), appName, 'dokploy.json');
+    try {
+        let rawJson = await fs.readFile(cfgPath, 'utf8');
+        rawJson = rawJson
+            .replace(/\$\{APP_NAME\}/g, appName)
+            .replace(/\$\{PROJECT_NAME\}/g, projectName)
+            .replace(/\$\{BASE_DOMAIN\}/g, baseDomain);
+
+        return DokploySchema.parse(JSON.parse(rawJson));
+    } catch (err) {
+        echo(chalk.red(`  Invalid or missing ${cfgPath}: ${err.message}`));
+        process.exit(1);
+    }
 }
