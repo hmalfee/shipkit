@@ -65,3 +65,6 @@ next-env.d.ts
 repomix-output.md
 
 .husky/_
+
+.codegraph/
+repomix-output.xml
