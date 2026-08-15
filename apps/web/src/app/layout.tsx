@@ -6,13 +6,12 @@ import Providers from '@/components/providers';
 
 import type { Metadata } from 'next';
 
-const geistSans = Geist({
-    variable: '--font-geist-sans',
+const fontSans = Geist({
+    variable: '--font-sans',
     subsets: ['latin'],
 });
-
-const geistMono = Geist_Mono({
-    variable: '--font-geist-mono',
+const fontMono = Geist_Mono({
+    variable: '--font-mono',
     subsets: ['latin'],
 });
 
@@ -32,7 +31,7 @@ export default async function RootLayout({
     return (
         <html lang="en" suppressHydrationWarning>
             <body
-                className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+                className={`${fontSans.variable} ${fontMono.variable} antialiased`}
             >
                 <Providers>{children}</Providers>
             </body>
