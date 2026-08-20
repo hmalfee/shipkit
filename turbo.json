@@ -35,7 +35,6 @@
             "cache": false
         },
         "dev": {
-            "dependsOn": ["^dev"],
             "cache": false,
             "persistent": true
         },
@@ -46,7 +45,6 @@
             "cache": false
         },
         "preview": {
-            "dependsOn": ["^dev"],
             "cache": false,
             "persistent": true
         }
