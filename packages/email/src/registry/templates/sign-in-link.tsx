@@ -1,4 +1,3 @@
-/** @jsxImportSource react */
 import { Button, Heading, Link, Section, Text } from 'react-email';
 
 import { buttonVariants } from '@shipkit/ui/components/button';
