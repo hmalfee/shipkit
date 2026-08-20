@@ -26,6 +26,15 @@ export default defineConfig({
                 'eslint-js/no-restricted-syntax': [
                     'error',
                     ...defaultNoRestrictedSyntaxRules,
+                ],
+            },
+        },
+        {
+            files: ['src/api/router/**/*.ts'],
+            rules: {
+                'eslint-js/no-restricted-syntax': [
+                    'error',
+                    ...defaultNoRestrictedSyntaxRules,
                     {
                         selector:
                             "ThrowStatement:not([argument.callee.object.name='errors'])",

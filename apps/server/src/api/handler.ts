@@ -53,7 +53,6 @@ const createHandler = async () => {
                     const zodError = new z.ZodError(
                         error.cause.issues as z.core.$ZodIssue[],
                     );
-                    // oxlint-disable-next-line eslint-js/no-restricted-syntax
                     throw new ORPCError('BAD_REQUEST', {
                         message: z.prettifyError(zodError),
                         data: z.flattenError(zodError),

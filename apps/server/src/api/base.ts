@@ -56,7 +56,6 @@ const base = os.middleware(async ({ context, next, path }) => {
             },
         );
         // rethrow error to be handled by global error handler
-        // oxlint-disable-next-line eslint-js/no-restricted-syntax
         throw error;
     }
 });
