@@ -64,6 +64,7 @@ export const auth = oc.prefix('/auth').router({
             query: CallbackQuerySchema,
         })
         .errors({
+            FORBIDDEN: {},
             TOO_MANY_REQUESTS: {},
         })
         .responses({

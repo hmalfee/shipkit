@@ -130,6 +130,10 @@ export const auth = os.auth.router({
                 });
             }
 
+            if (context.session) {
+                throw errors.FORBIDDEN({ message: 'Already signed in' });
+            }
+
             // Reconstruct the full callback URL that better-auth expects
             const url = new URL(
                 `/auth/callback/${input.params.provider}`,
