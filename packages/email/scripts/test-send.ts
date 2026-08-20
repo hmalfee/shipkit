@@ -132,12 +132,28 @@ if (p.isCancel(smtpPass)) {
     process.exit(0);
 }
 
+let fromEnv = env.EMAIL_FROM;
+
+if (fromEnv && !/^.+ <[^\s@]+@[^\s@]+\.[^\s@]+>$/.test(fromEnv)) {
+    p.log.warn('EMAIL_FROM in env is invalid (must be Name <email>).');
+    fromEnv = undefined;
+}
+
 const from =
-    env.EMAIL_FROM ??
+    fromEnv ??
     (await p.text({
         message: 'From address',
-        placeholder: 'noreply@example.com',
+        placeholder: 'Name <noreply@example.com>',
+        validate(value) {
+            if (
+                typeof value !== 'string' ||
+                !/^.+ <[^\s@]+@[^\s@]+\.[^\s@]+>$/.test(value)
+            ) {
+                return 'Must be in the format: Name <email@example.com>';
+            }
+        },
     }));
+
 if (p.isCancel(from)) {
     p.cancel('Cancelled.');
     process.exit(0);
