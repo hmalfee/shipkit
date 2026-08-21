@@ -10,6 +10,9 @@ const config: KnipConfig = {
         'tooling/scripts': {
             entry: ['bin/*.js', 'bin/**/index.js'],
         },
+        'packages/auth': {
+            entry: ['src/auth.ts'],
+        },
     },
     exclude: ['optionalPeerDependencies'], // Allows setting peer dependencies as optional
     treatConfigHintsAsErrors: true,

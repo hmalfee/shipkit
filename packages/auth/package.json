@@ -6,8 +6,9 @@
         "./orpc": "./src/orpc.ts"
     },
     "scripts": {
-        "auth:generate": "SKIP_ENV_VALIDATION=1 pnpx @better-auth/cli@latest generate --config ./src/cli.ts --output ./src/auth.temp.ts --yes",
-        "clean": "git clean -xdf .cache .turbo node_modules src/auth.temp.ts -e .env -e .env.*",
+        "clean": "git clean -xdf .cache .turbo node_modules auth-schema.ts -e .env -e .env.*",
+        "schema:gen": "pnpm dlx auth@latest generate --yes",
+        "postschema:gen": "prettier auth-schema.ts --write --ignore-path .prettierignore",
         "typecheck": "tsc"
     },
     "dependencies": {

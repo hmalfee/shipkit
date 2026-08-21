@@ -23,15 +23,6 @@ export type AuthConfig = {
     oauth: OAuthProvidersConfig;
 };
 
-// ── Better Auth instance config (not exported directly as API) ─────────────
-/**
- * When you modify this config (add plugins, additional fields, etc.), regenerate
- * the schema by running:
- *   pnpm --filter @shipkit/auth auth:generate
- *
- * Then apply changes from src/auth.temp.ts to packages/db/src/pg/schema/auth.ts,
- * making sure to use authSchema.table instead of pgTable from drizzle-orm/pg-core.
- */
 export function createBetterAuthConfig(
     db: AuthDatabase,
     sessionCache: Redis,

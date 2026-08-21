@@ -1,4 +1,3 @@
 {
-    "extends": "@shipkit/ts-config/base",
-    "exclude": ["node_modules", "src/auth.temp.ts"]
+    "extends": "@shipkit/ts-config/base"
 }

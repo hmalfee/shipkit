@@ -1,6 +1,6 @@
 {
     "extends": ["//"],
     "tasks": {
-        "auth:generate": { "cache": false }
+        "schema:gen": { "cache": false }
     }
 }
