@@ -32,6 +32,16 @@ let nextConfig: NextConfig = {
     env: {
         NEXT_TELEMETRY_DISABLED: '1',
     },
+    images: {
+        remotePatterns: [
+            // useful cdn for brand icons of google, github, etc.
+            {
+                protocol: 'https',
+                hostname: 'thesvg.org',
+            },
+        ],
+        minimumCacheTTL: 86400, // 1 day
+    },
     allowedDevOrigins: [lanIp, lanIp + '.sslip.io'],
 };
 

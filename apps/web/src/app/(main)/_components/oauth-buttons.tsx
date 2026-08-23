@@ -1,6 +1,7 @@
 'use client';
 
-import { AlertCircleIcon } from 'lucide-react';
+import { AlertCircleIcon, Loader2 } from 'lucide-react';
+import Image from 'next/image';
 import { useState } from 'react';
 
 import { OAUTH_PROVIDERS } from '@shipkit/shared/constants';
@@ -83,10 +84,24 @@ export function OAuthButtons() {
                     }}
                     disabled={oneAuthInProgress}
                     variant="outline"
+                    className="w-full"
                 >
+                    {pendingProvider === value ? (
+                        <Loader2 className="animate-spin" />
+                    ) : (
+                        <Image
+                            src={`https://thesvg.org/icons/${value}/default.svg`}
+                            alt=""
+                            width={16}
+                            height={16}
+                            priority
+                            className="size-4"
+                            aria-hidden="true"
+                        />
+                    )}
                     <span>
                         {pendingProvider === value
-                            ? 'Connecting...'
+                            ? `Connecting to ${key}...`
                             : `Continue with ${key}`}
                     </span>
                 </Button>
