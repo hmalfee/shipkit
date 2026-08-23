@@ -11,7 +11,8 @@
     "scripts": {
         "clean": "git clean -xdf .cache .turbo node_modules -e .env -e .env.*",
         "typecheck": "tsc",
-        "ui:add": "pnpx shadcn@latest add && prettier src --write --list-different"
+        "ui:add": "pnpm dlx shadcn@latest add",
+        "postui:add": "prettier --write src/components"
     },
     "dependencies": {
         "@base-ui/react": "^1.0.0",
