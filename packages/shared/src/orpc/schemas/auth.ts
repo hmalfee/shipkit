@@ -2,15 +2,19 @@ import z from 'zod';
 
 import { OAUTH_PROVIDER_IDS } from '@shipkit/shared/constants';
 
-export const SignUpBodySchema = z.object({
-    name: z.string().min(1).max(255),
+export const EmailSignInBodySchema = z.object({
     email: z.email(),
-    password: z.string().min(8),
+    callbackURL: z.string().optional(),
 });
 
-export const SignInBodySchema = z.object({
+export const VerifyOtpBodySchema = z.object({
     email: z.email(),
-    password: z.string().min(8),
+    otp: z.string().regex(/^\d{6}$/),
+});
+
+export const VerifyMagicLinkQuerySchema = z.object({
+    token: z.string().min(32),
+    callbackURL: z.string().optional(),
 });
 
 export const UserSchema = z.object({

@@ -18,6 +18,7 @@
         "@orpc/zod": "catalog:",
         "@shipkit/auth": "workspace:*",
         "@shipkit/db": "workspace:*",
+        "@shipkit/email": "workspace:*",
         "@shipkit/env": "workspace:*",
         "@shipkit/telemetry": "workspace:*",
         "hono": "^4.8.2",

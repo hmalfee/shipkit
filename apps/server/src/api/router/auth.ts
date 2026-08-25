@@ -6,79 +6,93 @@ import { cr, os } from '../base';
 
 export const auth = os.auth.router({
     me: cr.auth.me.handler(async ({ context }) => {
-        if (!context.session) {
-            return { status: 200, body: null };
-        }
-
+        if (!context.session) return { status: 200, body: null };
         const { id, name, email } = context.session.user;
         return { status: 200, body: { id, name, email } };
     }),
 
-    signUp: cr.auth.signUp.handler(async ({ context, input, errors }) => {
-        const { exceeded } = await context.rateLimit({ blockDuration: 60 });
+    email: os.auth.email.router({
+        signIn: cr.auth.email.signIn.handler(
+            async ({ context, input, errors }) => {
+                const { exceeded } = await context.rateLimit({
+                    limit: 3,
+                    blockDuration: 60,
+                });
+                if (exceeded)
+                    throw errors.TOO_MANY_REQUESTS({
+                        message: 'Too many attempts',
+                    });
+                try {
+                    await context.auth.signInWithEmail(input.body);
+                    return { status: 200, body: undefined };
+                } catch (err) {
+                    handleAuthError(err, errors);
+                }
+            },
+        ),
 
-        if (exceeded) {
-            throw errors.TOO_MANY_REQUESTS({
-                message: 'Too many sign up attempts. Please try again later.',
-            });
-        }
-        if (context.session) {
-            throw errors.FORBIDDEN({ message: 'Already signed in' });
-        }
+        verifyOtp: cr.auth.email.verifyOtp.handler(
+            async ({ context, input, errors }) => {
+                const { exceeded } = await context.rateLimit({
+                    limit: 5,
+                    blockDuration: 300,
+                });
+                if (exceeded)
+                    throw errors.TOO_MANY_REQUESTS({
+                        message: 'Too many attempts',
+                    });
+                try {
+                    const res = await context.auth.verifyOtp(input.body);
+                    return {
+                        status: 200,
+                        body: {
+                            id: res.user.id,
+                            name: res.user.name,
+                            email: res.user.email,
+                        },
+                    };
+                } catch (err) {
+                    handleAuthError(err, errors);
+                }
+            },
+        ),
 
-        try {
-            const res = await context.auth.signUpEmail(input.body);
+        verifyMagicLink: cr.auth.email.verifyMagicLink.handler(
+            async ({ context, input, errors }) => {
+                const { exceeded } = await context.rateLimit({
+                    limit: 10,
+                    blockDuration: 60,
+                });
+                if (exceeded)
+                    throw errors.TOO_MANY_REQUESTS({
+                        message: 'Too many attempts',
+                    });
 
-            return {
-                status: 201,
-                body: {
-                    id: res.user.id,
-                    name: res.user.name,
-                    email: res.user.email,
-                },
-            };
-        } catch (err) {
-            handleAuthError(err, errors);
-        }
-    }),
+                const url = new URL(
+                    '/auth/email/verify-magic-link',
+                    env.SERVER_URL,
+                );
+                url.searchParams.set('token', input.query.token);
+                if (input.query.callbackURL)
+                    url.searchParams.set(
+                        'callbackURL',
+                        input.query.callbackURL,
+                    );
 
-    signIn: cr.auth.signIn.handler(async ({ context, input, errors }) => {
-        const { exceeded } = await context.rateLimit({
-            limit: 5,
-            blockDuration: 300,
-        });
-
-        if (exceeded) {
-            throw errors.TOO_MANY_REQUESTS({
-                message: 'Too many sign in attempts. Please try again later.',
-            });
-        }
-
-        if (context.session) {
-            throw errors.FORBIDDEN({ message: 'Already signed in' });
-        }
-
-        try {
-            const res = await context.auth.signInEmail(input.body);
-
-            return {
-                status: 200,
-                body: {
-                    id: res.user.id,
-                    name: res.user.name,
-                    email: res.user.email,
-                },
-            };
-        } catch (err) {
-            handleAuthError(err, errors);
-        }
+                const request = new Request(url, {
+                    method: 'GET',
+                    headers: context.reqHeaders,
+                });
+                const response = await context.auth.$passthrough(request);
+                const location = response.headers.get('location') ?? '/';
+                return { status: 302, headers: { location } };
+            },
+        ),
     }),
 
     signOut: cr.auth.signOut.handler(async ({ context, errors }) => {
-        if (!context.session) {
-            throw errors.UNAUTHORIZED({ message: 'You must be logged in' });
-        }
-
+        if (!context.session)
+            throw errors.UNAUTHORIZED({ message: 'User not signed in' });
         try {
             await context.auth.signOut();
             return { status: 204 };
@@ -90,17 +104,12 @@ export const auth = os.auth.router({
     oauthSignIn: cr.auth.oauthSignIn.handler(
         async ({ context, input, errors }) => {
             const { exceeded } = await context.rateLimit({ blockDuration: 60 });
-
-            if (exceeded) {
+            if (exceeded)
                 throw errors.TOO_MANY_REQUESTS({
-                    message:
-                        'Too many sign in attempts. Please try again later.',
+                    message: 'Too many attempts',
                 });
-            }
-            if (context.session) {
-                throw errors.FORBIDDEN({ message: 'Already signed in' });
-            }
-
+            if (context.session)
+                throw errors.FORBIDDEN({ message: 'User already signed in' });
             try {
                 const result = await context.auth.signInSocial({
                     provider: input.params.provider,
@@ -122,46 +131,27 @@ export const auth = os.auth.router({
     oauthCallback: cr.auth.oauthCallback.handler(
         async ({ context, input, errors }) => {
             const { exceeded } = await context.rateLimit({ limit: 15 });
-
-            if (exceeded) {
+            if (exceeded)
                 throw errors.TOO_MANY_REQUESTS({
-                    message:
-                        'Too many sign in attempts. Please try again later.',
+                    message: 'Too many attempts',
                 });
-            }
+            if (context.session)
+                throw errors.FORBIDDEN({ message: 'User already signed in' });
 
-            if (context.session) {
-                throw errors.FORBIDDEN({ message: 'Already signed in' });
-            }
-
-            // Reconstruct the full callback URL that better-auth expects
             const url = new URL(
                 `/auth/callback/${input.params.provider}`,
                 env.SERVER_URL,
             );
-
-            // Forward all query params (code, state, error, etc.)
             for (const [key, value] of Object.entries(input.query)) {
-                if (value !== undefined) {
-                    url.searchParams.set(
-                        key,
-                        typeof value === 'object'
-                            ? JSON.stringify(value)
-                            : String(value as string),
-                    );
-                }
+                if (value !== undefined)
+                    url.searchParams.set(key, String(value as string));
             }
-
-            // Build a synthetic Request for better-auth handler
             const request = new Request(url, {
                 method: 'GET',
                 headers: context.reqHeaders,
             });
-
-            // Passthrough — cookies forwarded via responseCookies plugin
             const response = await context.auth.$passthrough(request);
             const location = response.headers.get('location') ?? '/';
-
             return { status: 302, headers: { location } };
         },
     ),

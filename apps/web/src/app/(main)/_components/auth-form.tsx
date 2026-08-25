@@ -5,31 +5,62 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 
 import { Button } from '@shipkit/ui/components/button';
-import { Field, FieldError, FieldLabel } from '@shipkit/ui/components/field';
+import {
+    Field,
+    FieldError,
+    FieldLabel,
+    FieldSeparator,
+} from '@shipkit/ui/components/field';
 import { Input } from '@shipkit/ui/components/input';
+import {
+    InputOTP,
+    InputOTPGroup,
+    InputOTPSlot,
+} from '@shipkit/ui/components/input-otp';
 
 import { api, useUtils } from '@/lib/api/client';
 
 import { OAuthButtons } from './oauth-buttons';
 
-function SignInForm() {
-    const { useMutation, inputSchema } = api.auth.signIn;
-    const utils = useUtils();
+type FieldErrors = Array<{ message?: string } | undefined>;
 
-    const signIn = useMutation({
-        onSuccess: (data) => {
-            void utils.auth.me.invalidateQuery();
+function isFieldInvalid(meta: {
+    isTouched: boolean;
+    isValid: boolean;
+}): boolean {
+    return meta.isTouched && !meta.isValid;
+}
+
+function AuthHeader({
+    title,
+    subtitle,
+}: {
+    title: string;
+    subtitle: React.ReactNode;
+}) {
+    return (
+        <div className="text-center">
+            <h1 className="text-2xl font-bold">{title}</h1>
+            <p className="text-muted-foreground text-sm">{subtitle}</p>
+        </div>
+    );
+}
+
+function EmailStage({ onSent }: { onSent: (email: string) => void }) {
+    const signIn = api.auth.email.signIn.useMutation({
+        onSuccess: (_, vars) => {
             toast.success(
-                'Welcome back, ' + data.body.name.split(' ')[0] + '!',
+                'Check your inbox — we sent you a magic link and a 6-digit code.',
             );
+            onSent(vars.body.email);
         },
     });
 
     const form = useForm({
-        defaultValues: { body: { email: '', password: '' } },
-        validators: { onChange: inputSchema },
+        defaultValues: { body: { email: '' } },
+        validators: { onSubmit: api.auth.email.signIn.inputSchema },
         onSubmit: async ({ value }) => {
-            signIn.mutate(value);
+            signIn.mutate({ body: { ...value.body, callbackURL: '/' } });
         },
     });
 
@@ -44,87 +75,60 @@ function SignInForm() {
         >
             <form.Field name="body.email">
                 {(field) => (
-                    <Field
-                        data-invalid={
-                            field.state.meta.isTouched &&
-                            !field.state.meta.isValid
-                        }
-                    >
-                        <FieldLabel htmlFor={field.name}>Email</FieldLabel>
+                    <Field data-invalid={isFieldInvalid(field.state.meta)}>
+                        <FieldLabel htmlFor={field.name}>
+                            Email address
+                        </FieldLabel>
                         <Input
                             id={field.name}
                             type="email"
+                            placeholder="you@example.com"
+                            autoComplete="email"
                             value={field.state.value}
                             onChange={(e) => field.handleChange(e.target.value)}
                             onBlur={field.handleBlur}
                         />
                         <FieldError
-                            errors={
-                                field.state.meta.errors as Array<
-                                    { message?: string } | undefined
-                                >
-                            }
+                            errors={field.state.meta.errors as FieldErrors}
                         />
                     </Field>
                 )}
             </form.Field>
-
-            <form.Field name="body.password">
-                {(field) => (
-                    <Field
-                        data-invalid={
-                            field.state.meta.isTouched &&
-                            !field.state.meta.isValid
-                        }
-                    >
-                        <FieldLabel htmlFor={field.name}>Password</FieldLabel>
-                        <Input
-                            id={field.name}
-                            type="password"
-                            value={field.state.value}
-                            onChange={(e) => field.handleChange(e.target.value)}
-                            onBlur={field.handleBlur}
-                        />
-                        <FieldError
-                            errors={
-                                field.state.meta.errors as Array<
-                                    { message?: string } | undefined
-                                >
-                            }
-                        />
-                    </Field>
-                )}
-            </form.Field>
-
             <Button
                 type="submit"
                 className="w-full"
                 disabled={signIn.isPending}
             >
-                {signIn.isPending ? 'Loading...' : 'Sign In'}
+                {signIn.isPending ? 'Sending...' : 'Continue with email'}
             </Button>
         </form>
     );
 }
 
-function SignUpForm({ onSuccess }: { onSuccess: () => void }) {
-    const { useMutation, inputSchema } = api.auth.signUp;
+function OtpStage({ email, onBack }: { email: string; onBack: () => void }) {
+    const utils = useUtils();
 
-    const signUp = useMutation({
-        onSuccess: () => {
-            form.reset();
-            onSuccess();
-            toast.success('Account created! Please sign in.');
+    const verifyOtp = api.auth.email.verifyOtp.useMutation({
+        onSuccess: (data) => {
+            void utils.auth.me.invalidateQuery();
+            const firstName = data.body.name.split(' ')[0] ?? 'back';
+            toast.success(`Welcome back, ${firstName}!`);
         },
     });
 
     const form = useForm({
-        defaultValues: { body: { name: '', email: '', password: '' } },
-        validators: { onChange: inputSchema },
+        defaultValues: { body: { email, otp: '' } },
+        validators: { onSubmit: api.auth.email.verifyOtp.inputSchema },
         onSubmit: async ({ value }) => {
-            signUp.mutate(value);
+            verifyOtp.mutate(value);
         },
     });
+
+    const handleOtpComplete = () => {
+        void form.handleSubmit();
+    };
+
+    const isBusy = verifyOtp.isPending;
 
     return (
         <form
@@ -135,157 +139,105 @@ function SignUpForm({ onSuccess }: { onSuccess: () => void }) {
             }}
             className="space-y-4"
         >
-            <form.Field name="body.name">
+            <div className="space-y-1">
+                <p className="text-sm">
+                    We sent a magic link to <strong>{email}</strong>.
+                </p>
+                <p className="text-muted-foreground text-xs">
+                    Or enter the 6-digit code from the email below.
+                </p>
+            </div>
+            <form.Field name="body.otp">
                 {(field) => (
-                    <Field
-                        data-invalid={
-                            field.state.meta.isTouched &&
-                            !field.state.meta.isValid
-                        }
-                    >
-                        <FieldLabel htmlFor={field.name}>Name</FieldLabel>
-                        <Input
-                            id={field.name}
+                    <Field data-invalid={isFieldInvalid(field.state.meta)}>
+                        <FieldLabel htmlFor={field.name}>
+                            Sign-in code
+                        </FieldLabel>
+                        <InputOTP
+                            maxLength={6}
+                            pattern={'^\\d+$'}
+                            inputMode="numeric"
                             value={field.state.value}
-                            onChange={(e) => field.handleChange(e.target.value)}
-                            onBlur={field.handleBlur}
-                        />
-                        <FieldError
-                            errors={
-                                field.state.meta.errors as Array<
-                                    { message?: string } | undefined
-                                >
-                            }
-                        />
+                            onChange={(v) => {
+                                field.handleChange(v);
+                                if (v.length === 6) handleOtpComplete();
+                            }}
+                            disabled={isBusy}
+                            autoComplete="one-time-code"
+                            id={field.name}
+                        >
+                            <InputOTPGroup>
+                                <InputOTPSlot index={0} />
+                                <InputOTPSlot index={1} />
+                                <InputOTPSlot index={2} />
+                                <InputOTPSlot index={3} />
+                                <InputOTPSlot index={4} />
+                                <InputOTPSlot index={5} />
+                            </InputOTPGroup>
+                        </InputOTP>
                     </Field>
                 )}
             </form.Field>
-
-            <form.Field name="body.email">
-                {(field) => (
-                    <Field
-                        data-invalid={
-                            field.state.meta.isTouched &&
-                            !field.state.meta.isValid
-                        }
+            <form.Subscribe selector={(state) => !state.canSubmit || isBusy}>
+                {(disabled) => (
+                    <Button
+                        type="submit"
+                        className="w-full"
+                        disabled={disabled}
                     >
-                        <FieldLabel htmlFor={field.name}>Email</FieldLabel>
-                        <Input
-                            id={field.name}
-                            type="email"
-                            value={field.state.value}
-                            onChange={(e) => field.handleChange(e.target.value)}
-                            onBlur={field.handleBlur}
-                        />
-                        <FieldError
-                            errors={
-                                field.state.meta.errors as Array<
-                                    { message?: string } | undefined
-                                >
-                            }
-                        />
-                    </Field>
+                        {isBusy ? 'Verifying...' : 'Verify code'}
+                    </Button>
                 )}
-            </form.Field>
-
-            <form.Field name="body.password">
-                {(field) => (
-                    <Field
-                        data-invalid={
-                            field.state.meta.isTouched &&
-                            !field.state.meta.isValid
-                        }
-                    >
-                        <FieldLabel htmlFor={field.name}>Password</FieldLabel>
-                        <Input
-                            id={field.name}
-                            type="password"
-                            value={field.state.value}
-                            onChange={(e) => field.handleChange(e.target.value)}
-                            onBlur={field.handleBlur}
-                        />
-                        <FieldError
-                            errors={
-                                field.state.meta.errors as Array<
-                                    { message?: string } | undefined
-                                >
-                            }
-                        />
-                    </Field>
-                )}
-            </form.Field>
-
+            </form.Subscribe>
             <Button
-                type="submit"
+                type="button"
+                variant="link"
+                size="sm"
                 className="w-full"
-                disabled={signUp.isPending}
+                onClick={onBack}
             >
-                {signUp.isPending ? 'Loading...' : 'Sign Up'}
+                Use a different email
             </Button>
         </form>
     );
 }
 
 export default function AuthForm() {
-    const [mode, setMode] = useState<'signin' | 'signup'>('signin');
+    const [email, setEmail] = useState<string | null>(null);
 
     return (
-        <div className="mx-auto w-full max-w-sm space-y-6">
-            <div className="text-center">
-                <h1 className="text-2xl font-bold">
-                    {mode === 'signin' ? 'Sign In' : 'Sign Up'}
-                </h1>
-                <p className="text-muted-foreground text-sm">
-                    {mode === 'signin'
-                        ? 'Enter your credentials to continue'
-                        : 'Create a new account'}
-                </p>
-            </div>
-
-            {mode === 'signin' ? (
-                <SignInForm />
+        <div className="mx-auto flex w-full max-w-sm flex-col gap-4">
+            {email ? (
+                <AuthHeader
+                    title="Check your inbox"
+                    subtitle={
+                        <>
+                            Click the magic link we sent to{' '}
+                            <strong>{email}</strong>
+                        </>
+                    }
+                />
             ) : (
-                <SignUpForm onSuccess={() => setMode('signin')} />
+                <AuthHeader
+                    title="Sign in to Shipkit"
+                    subtitle="Enter your email or continue with a provider"
+                />
             )}
 
-            <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                    <span className="w-full border-t" />
-                </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                    <span className="bg-background text-muted-foreground px-2">
-                        Or continue with
-                    </span>
-                </div>
-            </div>
+            {!email && (
+                <>
+                    <OAuthButtons />
+                    <FieldSeparator className="my-0">
+                        Or continue with email
+                    </FieldSeparator>
+                </>
+            )}
 
-            <OAuthButtons />
-
-            <p className="text-center text-sm">
-                {mode === 'signin' ? (
-                    <>
-                        No account?{' '}
-                        <button
-                            type="button"
-                            className="underline"
-                            onClick={() => setMode('signup')}
-                        >
-                            Sign up
-                        </button>
-                    </>
-                ) : (
-                    <>
-                        Have an account?{' '}
-                        <button
-                            type="button"
-                            className="underline"
-                            onClick={() => setMode('signin')}
-                        >
-                            Sign in
-                        </button>
-                    </>
-                )}
-            </p>
+            {email ? (
+                <OtpStage email={email} onBack={() => setEmail(null)} />
+            ) : (
+                <EmailStage onSent={setEmail} />
+            )}
         </div>
     );
 }

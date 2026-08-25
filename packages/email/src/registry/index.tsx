@@ -1,14 +1,9 @@
-import SignInLink from './templates/sign-in-link';
-import VerifyEmail from './templates/verify-email';
+import EmailSignIn from './templates/email-sign-in';
 
 export const TEMPLATE_REGISTRY = {
-    'sign-in-link': {
-        component: SignInLink,
+    'email-sign-in': {
+        component: EmailSignIn,
         subject: 'Sign in to your account',
-    },
-    'verify-email': {
-        component: VerifyEmail,
-        subject: 'Verify your email address',
     },
 } as const;
 

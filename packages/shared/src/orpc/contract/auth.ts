@@ -5,40 +5,55 @@ import { rb } from '@shipkit/orpc-utils/contract';
 import {
     CallbackParamsSchema,
     CallbackQuerySchema,
+    EmailSignInBodySchema,
     OauthSignInBodySchema,
     OauthSignInParamsSchema,
     OauthSignInResponseSchema,
-    SignInBodySchema,
-    SignUpBodySchema,
     UserSchema,
+    VerifyMagicLinkQuerySchema,
+    VerifyOtpBodySchema,
 } from '../schemas/auth';
 
 export const auth = oc.prefix('/auth').router({
-    me: rb.query('/me').responses({
-        OK: UserSchema.nullable(),
+    me: rb.query('/me').responses({ OK: UserSchema.nullable() }),
+    email: oc.router({
+        signIn: rb
+            .mutation('/email/sign-in')
+            .input({
+                body: EmailSignInBodySchema,
+            })
+            .errors({
+                TOO_MANY_REQUESTS: {},
+            })
+            .responses({
+                OK: undefined,
+            }),
+        verifyOtp: rb
+            .mutation('/email/verify-otp')
+            .input({
+                body: VerifyOtpBodySchema,
+            })
+            .errors({
+                UNAUTHORIZED: {},
+                TOO_MANY_REQUESTS: {},
+                FORBIDDEN: {},
+            })
+            .responses({
+                OK: UserSchema,
+            }),
+        verifyMagicLink: rb
+            .query('/email/verify-magic-link')
+            .input({
+                query: VerifyMagicLinkQuerySchema,
+            })
+            .errors({
+                FORBIDDEN: {},
+                TOO_MANY_REQUESTS: {},
+            })
+            .responses({
+                FOUND: undefined,
+            }),
     }),
-    signUp: rb
-        .mutation('/sign-up')
-        .input({ body: SignUpBodySchema })
-        .errors({
-            FORBIDDEN: {},
-            CONFLICT: {},
-            TOO_MANY_REQUESTS: {},
-        })
-        .responses({
-            CREATED: UserSchema,
-        }),
-    signIn: rb
-        .mutation('/sign-in')
-        .input({ body: SignInBodySchema })
-        .errors({
-            FORBIDDEN: {},
-            UNAUTHORIZED: {},
-            TOO_MANY_REQUESTS: {},
-        })
-        .responses({
-            OK: UserSchema,
-        }),
     signOut: rb
         .mutation('/sign-out')
         .errors({
@@ -49,7 +64,10 @@ export const auth = oc.prefix('/auth').router({
         }),
     oauthSignIn: rb
         .mutation('/sign-in/{provider}')
-        .input({ params: OauthSignInParamsSchema, body: OauthSignInBodySchema })
+        .input({
+            params: OauthSignInParamsSchema,
+            body: OauthSignInBodySchema,
+        })
         .errors({
             FORBIDDEN: {},
             TOO_MANY_REQUESTS: {},

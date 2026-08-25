@@ -9,6 +9,7 @@ import type { PgDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core';
 import type { OAuthProvidersConfig } from './social-providers';
 
 import { cookieForwarderPlugin } from './plugins/cookie-forwarder';
+import { emailSignInPlugin } from './plugins/email-sign-in';
 import { buildOAuthProviders } from './social-providers';
 
 export type AuthDatabase = PgDatabase<
@@ -21,6 +22,15 @@ export type AuthConfig = {
     secret: string;
     useSecureCookies: boolean;
     oauth: OAuthProvidersConfig;
+    onSendSignInEmail?: (payload: {
+        email: string;
+        otp: string;
+        magicLink: {
+            url: string;
+            token: string;
+        };
+        expiresInMinutes: number;
+    }) => Promise<void>;
 };
 
 export function createBetterAuthConfig(
@@ -46,10 +56,6 @@ export function createBetterAuthConfig(
             provider: 'pg',
             usePlural: true,
         }),
-        emailAndPassword: {
-            enabled: true,
-            autoSignIn: false,
-        },
         user: {
             additionalFields: {
                 roles: {
@@ -89,6 +95,9 @@ export function createBetterAuthConfig(
         }),
 
         plugins: [
+            emailSignInPlugin({
+                onSendSignInEmail: config.onSendSignInEmail,
+            }),
             cookieForwarderPlugin(), // must be last
         ],
         rateLimit: {

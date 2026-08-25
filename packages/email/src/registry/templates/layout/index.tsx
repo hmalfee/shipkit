@@ -35,6 +35,12 @@ const emailTailwindConfig: TailwindConfig = {
                     'Arial',
                     'sans-serif',
                 ],
+                mono: [
+                    '"Courier New"',
+                    'Courier',
+                    '"Lucida Console"',
+                    'monospace',
+                ],
             },
         },
     },
