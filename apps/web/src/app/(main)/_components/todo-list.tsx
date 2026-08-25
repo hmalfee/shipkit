@@ -12,13 +12,17 @@ import { api, useUtils } from '@/lib/api/client';
 function AddTodoForm() {
     const utils = useUtils();
 
-    const create = api.todo.create.useMutation({
+    const { useMutation, inputSchema } = api.todo.create;
+
+    const create = useMutation({
         onSuccess: () => void utils.todo.list.invalidateQuery(),
     });
 
     const form = useForm({
         defaultValues: { body: { title: '' } },
-        validators: { onChange: api.todo.create.inputSchema },
+        validators: {
+            onChange: inputSchema,
+        },
         onSubmit: async ({ value }) => {
             create.mutate(value, {
                 onSuccess: () => form.reset(),
@@ -35,28 +39,49 @@ function AddTodoForm() {
             }}
             className="flex gap-2"
         >
-            <form.Field name="body.title">
-                {(field) => (
-                    <Field className="flex-1">
-                        <Input
-                            value={field.state.value}
-                            onChange={(e) => field.handleChange(e.target.value)}
-                            onBlur={field.handleBlur}
-                            placeholder="Add a todo..."
-                        />
-                        <FieldError
-                            errors={
-                                field.state.meta.errors as Array<
-                                    { message?: string } | undefined
-                                >
-                            }
-                        />
-                    </Field>
+            <form.Subscribe
+                selector={(state) => ({
+                    canSubmit: state.canSubmit,
+                    isPending: create.isPending,
+                })}
+            >
+                {({ canSubmit, isPending }) => (
+                    <>
+                        <form.Field name="body.title">
+                            {(field) => (
+                                <Field className="flex-1">
+                                    <Input
+                                        value={field.state.value}
+                                        onChange={(e) =>
+                                            field.handleChange(e.target.value)
+                                        }
+                                        onBlur={field.handleBlur}
+                                        placeholder="Add a todo..."
+                                    />
+                                    {field.state.meta.isTouched &&
+                                        field.state.meta.errors.length > 0 && (
+                                            <FieldError
+                                                errors={
+                                                    field.state.meta
+                                                        .errors as Array<
+                                                        | { message?: string }
+                                                        | undefined
+                                                    >
+                                                }
+                                            />
+                                        )}
+                                </Field>
+                            )}
+                        </form.Field>
+                        <Button
+                            type="submit"
+                            disabled={!canSubmit || isPending}
+                        >
+                            Add
+                        </Button>
+                    </>
                 )}
-            </form.Field>
-            <Button type="submit" disabled={create.isPending}>
-                Add
-            </Button>
+            </form.Subscribe>
         </form>
     );
 }
@@ -66,16 +91,20 @@ export default function TodoList() {
     const [editTitle, setEditTitle] = useState('');
     const utils = useUtils();
 
-    const { data, isLoading } = api.todo.list.useQuery();
+    const { useQuery } = api.todo.list;
+    const { useMutation: useUpdate } = api.todo.update;
+    const { useMutation: useDelete } = api.todo.delete;
 
-    const update = api.todo.update.useMutation({
+    const { data, isLoading } = useQuery();
+
+    const update = useUpdate({
         onSuccess: () => {
             void utils.todo.list.invalidateQuery();
             setEditingId(null);
         },
     });
 
-    const remove = api.todo.delete.useMutation({
+    const remove = useDelete({
         onSuccess: () => void utils.todo.list.invalidateQuery(),
     });
 
