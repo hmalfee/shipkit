@@ -70,7 +70,7 @@ export function useOAuthPopup<T = unknown>() {
 
     const openOAuthPopup = useCallback(
         (
-            url: string,
+            getUrl: () => Promise<string>,
             options?: PopupWindowOptions,
         ): Promise<OAuthResponse<T>> => {
             return new Promise((resolve) => {
@@ -94,9 +94,12 @@ export function useOAuthPopup<T = unknown>() {
                     'resizable=yes',
                 ].join(',');
 
-                promiseRef.current = { resolve };
-
-                const popup = window.open(url, 'oauth_popup', features);
+                // Open blank popup synchronously — must happen in the gesture call stack
+                const popup = window.open(
+                    'about:blank',
+                    'oauth_popup',
+                    features,
+                );
 
                 if (!popup) {
                     resolve({
@@ -111,7 +114,28 @@ export function useOAuthPopup<T = unknown>() {
                 }
 
                 popupRef.current = popup;
+                promiseRef.current = { resolve };
                 setIsPopupOpen(true);
+
+                // Fetch URL and navigate the already-open popup
+                getUrl()
+                    .then((url) => {
+                        popup.location.href = url;
+                    })
+                    .catch((err) => {
+                        popup.close();
+                        resolve({
+                            success: false,
+                            error: {
+                                message: 'Failed to get authentication URL',
+                                description:
+                                    err instanceof Error
+                                        ? err.message
+                                        : String(err),
+                            },
+                        });
+                        setIsPopupOpen(false);
+                    });
             });
         },
         [],

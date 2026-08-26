@@ -26,19 +26,6 @@ export function OAuthButtons() {
     >(null);
 
     const oauthSignInMutation = api.auth.oauthSignIn.useMutation({
-        onSuccess: async (data) => {
-            const result = await openOAuthPopup(data.body.url, {
-                width: 600,
-                height: 700,
-            });
-            if (result.success) {
-                // Assuming successful login redirects to '/' or reloading the page
-                window.location.reload();
-            } else {
-                setOAuthError(result);
-                setPendingProvider(null);
-            }
-        },
         onError: (error) => {
             setOAuthError({
                 success: false,
@@ -51,7 +38,35 @@ export function OAuthButtons() {
         },
     });
 
-    const oneAuthInProgress = oauthSignInMutation.isPending;
+    const handleOAuthClick = async (
+        provider: (typeof OAUTH_PROVIDER_IDS)[number],
+    ) => {
+        setOAuthError(null);
+        setPendingProvider(provider);
+
+        const result = await openOAuthPopup(
+            () =>
+                oauthSignInMutation
+                    .mutateAsync({
+                        params: { provider },
+                        body: {
+                            callbackURL: `${window.location.origin}/auth/callback/success`,
+                        },
+                    })
+                    .then((data) => data.body.url),
+            { width: 600, height: 700 },
+        );
+
+        if (result.success) {
+            window.location.reload();
+        } else {
+            setOAuthError(result);
+            setPendingProvider(null);
+        }
+    };
+
+    const oneAuthInProgress =
+        oauthSignInMutation.isPending || !!pendingProvider;
 
     return (
         <div className="flex w-full flex-col space-y-3">
@@ -70,18 +85,7 @@ export function OAuthButtons() {
             {Object.entries(OAUTH_PROVIDERS).map(([key, value]) => (
                 <Button
                     key={key}
-                    onClick={() => {
-                        setOAuthError(null);
-                        setPendingProvider(value);
-                        oauthSignInMutation.mutate({
-                            params: {
-                                provider: value,
-                            },
-                            body: {
-                                callbackURL: `${window.location.origin}/auth/callback/success`,
-                            },
-                        });
-                    }}
+                    onClick={() => handleOAuthClick(value)}
                     disabled={oneAuthInProgress}
                     variant="outline"
                     className="w-full"
