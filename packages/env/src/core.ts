@@ -1,4 +1,3 @@
-// oxlint-disable eslint-js/no-restricted-syntax
 import path from 'node:path';
 
 import { config } from 'dotenv';

@@ -1,4 +1,3 @@
-// oxlint-disable eslint-js/no-restricted-syntax
 import { createEnv as _createEnv } from '@t3-oss/env-core';
 
 import type z from 'zod';
@@ -56,7 +55,6 @@ export function createEnv<
             ...opts.server,
         },
         onValidationError: (issues: z.core.$ZodIssue[]) => {
-            // oxlint-disable-next-line no-console
             console.error('❌ Invalid environment variables:', issues);
             if (typeof process !== 'undefined') {
                 process.exit?.(1);
