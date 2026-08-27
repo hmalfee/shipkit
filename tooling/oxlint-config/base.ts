@@ -154,6 +154,13 @@ const config: OxlintConfig = {
                 'eslint-js/no-restricted-syntax': 'off',
             },
         },
+        {
+            files: ['scripts/**', '**/scripts/**'],
+            rules: {
+                'eslint-js/no-restricted-syntax': 'off',
+                'no-console': 'off',
+            },
+        },
     ],
 };
 

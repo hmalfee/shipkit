@@ -1,5 +1,3 @@
-// oxlint-disable no-console
-// oxlint-disable eslint-js/no-restricted-syntax
 import { spawn } from 'child_process';
 import { createServer } from 'net';
 

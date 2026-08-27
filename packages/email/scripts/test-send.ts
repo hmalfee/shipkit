@@ -93,7 +93,6 @@ if (typeof envFile === 'string' && fs.existsSync(envFile)) {
     process.loadEnvFile(envFile);
 }
 
-// oxlint-disable-next-line
 const env = process.env;
 
 const smtpHost =

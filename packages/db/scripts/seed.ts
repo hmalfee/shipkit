@@ -1,4 +1,3 @@
-// oxlint-disable no-console
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -12,7 +11,7 @@ import { z } from 'zod';
 
 import { createEnv } from '@shipkit/env';
 
-import * as schema from './schema';
+import * as schema from '../src/pg/schema';
 
 const YELLOW = '\x1b[33m';
 const GREEN = '\x1b[32m';
@@ -22,7 +21,7 @@ const RESET = '\x1b[0m';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const env = createEnv({
-    envDir: path.join(__dirname, '../../../../apps/server'),
+    envDir: path.join(__dirname, '../../../apps/server'),
     server: {
         POSTGRES_URL: z.url(),
         REDIS_URL: z.url(),
