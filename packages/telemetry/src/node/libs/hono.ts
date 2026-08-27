@@ -14,19 +14,19 @@ import { PROPAGATION_HEADERS } from '../../shared';
 import { getActiveSpan, getRouteTemplate, startSpan } from '../spans';
 
 const TELEMETRY_MOUNTED = Symbol('telemetry_mounted');
-// oxlint-disable-next-line eslint-js/no-restricted-syntax
-const isProduction = process.env.NODE_ENV === 'production';
 
 type RequestLogger = ReturnType<typeof logger.with>;
 
 /**
  * Hono middleware that adds OpenTelemetry tracing and logging to requests.
  * Extracts propagation context from headers, manages the active span for the request lifecycle,
- * and logs request details (method, route, status, duration) in non-production environments only.
+ * and logs request details (method, route, status, duration) when logRequests is true.
  * It does not log raw error objects.
  * It also attaches the `x-trace-id` header to responses and handles CORS allowed headers for propagation.
  */
-export function traceHonoRequest(): MiddlewareHandler {
+export function traceHonoRequest({
+    logRequests = false,
+}: { logRequests?: boolean } = {}): MiddlewareHandler {
     return async (c, next) => {
         // Ignore OPTIONS requests for telemetry but allow CORS headers on them
         if (c.req.method === 'OPTIONS') {
@@ -56,11 +56,12 @@ export function traceHonoRequest(): MiddlewareHandler {
                 return startSpan(
                     `${c.req.method} ${c.req.path}`,
                     {},
-                    (newSpan) => handleRequest(c, next, newSpan, startTime),
+                    (newSpan) =>
+                        handleRequest(c, next, newSpan, startTime, logRequests),
                 );
             }
 
-            return handleRequest(c, next, span, startTime);
+            return handleRequest(c, next, span, startTime, logRequests);
         });
     };
 }
@@ -74,6 +75,7 @@ async function handleRequest(
     next: () => Promise<void>,
     span: Span,
     startTime: number,
+    logRequests: boolean,
 ): Promise<void> {
     const method = c.req.method;
     const route = c.req.path;
@@ -95,7 +97,7 @@ async function handleRequest(
             thrownError,
         );
 
-        if (!isProduction) {
+        if (logRequests) {
             const durationMs = Math.round(performance.now() - startTime);
             logRequestOutcome(
                 requestLogger,

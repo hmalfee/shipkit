@@ -16,8 +16,13 @@ import type { MiddlewareHandler } from 'hono';
 
 import { router } from './router';
 
-const db = createDb(env.POSTGRES_URL);
-const redis = createRedisClient(env.REDIS_URL);
+const db = createDb(env.POSTGRES_URL, {
+    debug: env.NODE_ENV === 'development',
+});
+
+const redis = createRedisClient(env.REDIS_URL, {
+    debug: env.NODE_ENV === 'development',
+});
 
 const createHandler = async () => {
     const plugins = [

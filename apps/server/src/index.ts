@@ -24,7 +24,7 @@ app.onError((err, c) => {
     );
 });
 
-app.use(traceHonoRequest());
+app.use(traceHonoRequest({ logRequests: env.NODE_ENV !== 'production' }));
 app.use(
     '/*',
     cors({

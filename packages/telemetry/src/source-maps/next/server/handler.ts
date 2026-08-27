@@ -14,9 +14,6 @@ import { resolveExceptionLogs, resolveExceptionStackTraces } from './resolve';
 import { createSourceMapResolver } from './resolver';
 import { createSqliteStore, DEFAULT_DB_PATH } from './store';
 
-// oxlint-disable-next-line eslint-js/no-restricted-syntax
-const isProd = process.env.NODE_ENV === 'production';
-
 let cachedRoot: protobuf.Root | null = null;
 
 function getProtoRoot(): protobuf.Root {
@@ -151,8 +148,7 @@ export function createOtelIngestHandler(otelEndpoint: string | undefined) {
 
         if (!exists) {
             const msg = `[OTel Proxy Handler]: Telemetry SourceMaps Database not found at ${DEFAULT_DB_PATH}. Client-side exception stacktraces will not be resolved.`;
-            if (isProd) logger.error(msg);
-            else logger.warn(msg);
+            logger.error(msg);
             return null;
         }
 

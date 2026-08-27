@@ -7,13 +7,12 @@ import * as schema from './schema';
 
 let instance: ReturnType<typeof drizzle<typeof schema>> | undefined;
 
-export function createDb(connectionString: string) {
+export function createDb(connectionString: string, { debug = false } = {}) {
     if (instance) return instance;
 
     const pool = new Pool({ connectionString });
 
-    // oxlint-disable-next-line eslint-js/no-restricted-syntax
-    if (process.env.NODE_ENV === 'development') {
+    if (debug) {
         pool.on('connect', () => {
             logger.info('[POSTGRES] New connection established');
         });

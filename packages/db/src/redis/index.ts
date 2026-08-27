@@ -4,7 +4,10 @@ import { logger } from '@shipkit/telemetry/logger';
 
 let redisInstance: IORedis | undefined;
 
-export function createRedisClient(redisUrl: string): IORedis {
+export function createRedisClient(
+    redisUrl: string,
+    { debug = false } = {},
+): IORedis {
     if (redisInstance) return redisInstance;
 
     const { hostname, port, username, password, pathname, protocol } = new URL(
@@ -31,8 +34,7 @@ export function createRedisClient(redisUrl: string): IORedis {
         },
     });
 
-    // oxlint-disable-next-line eslint-js/no-restricted-syntax
-    if (process.env.NODE_ENV === 'development') {
+    if (debug) {
         client.on('connect', () => {
             logger.info('[REDIS] New connection established');
         });

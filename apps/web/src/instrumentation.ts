@@ -23,8 +23,14 @@ export async function register() {
                 (p): p is string => Boolean(p),
             ),
             environment: env.NODE_ENV,
-            extraSpanProcessors: [new SourceMapResolvingSpanProcessor()],
-            extraLogProcessors: [new SourceMapResolvingLogProcessor()],
+            extraSpanProcessors:
+                env.NODE_ENV === 'production'
+                    ? [new SourceMapResolvingSpanProcessor()]
+                    : [],
+            extraLogProcessors:
+                env.NODE_ENV === 'production'
+                    ? [new SourceMapResolvingLogProcessor()]
+                    : [],
             nextjs: true,
         });
     }

@@ -15,8 +15,6 @@ import { createSourceMapResolver } from './resolver';
 import { createSqliteStore, DEFAULT_DB_PATH } from './store';
 
 const logger = getLogger(['telemetry', 'sourcemaps']);
-// oxlint-disable-next-line eslint-js/no-restricted-syntax
-const isProd = process.env.NODE_ENV === 'production';
 
 /**
  * A server-side OpenTelemetry span processor that intercepts exception events and resolves
@@ -31,11 +29,7 @@ export class SourceMapResolvingSpanProcessor implements SpanProcessor {
     constructor() {
         if (!existsSync(DEFAULT_DB_PATH)) {
             const msg = `Telemetry SourceMaps Database not found at ${DEFAULT_DB_PATH}. Exception stacktraces will not be resolved.`;
-            if (isProd) {
-                logger.error(msg);
-            } else {
-                logger.warn(msg);
-            }
+            logger.error(msg);
             return;
         }
         try {
@@ -100,11 +94,7 @@ export class SourceMapResolvingLogProcessor implements LogRecordProcessor {
     constructor() {
         if (!existsSync(DEFAULT_DB_PATH)) {
             const msg = `Telemetry SourceMaps Database not found at ${DEFAULT_DB_PATH}. Exception stacktraces will not be resolved.`;
-            if (isProd) {
-                logger.error(msg);
-            } else {
-                logger.warn(msg);
-            }
+            logger.error(msg);
             return;
         }
         try {
