@@ -15,8 +15,14 @@ export default function Header() {
 
     const signOut = api.auth.signOut.useMutation({
         onSuccess: () => {
-            void utils.auth.me.invalidateQuery();
+            // Optimistically update the cache to rerender the signed out state of the user,
+            // and re-validate in the background to sync with server true state
+            utils.auth.me.setQueryData({
+                status: 200,
+                body: null,
+            });
             toast.success('Signed out');
+            void utils.auth.me.invalidateQuery();
         },
     });
 
