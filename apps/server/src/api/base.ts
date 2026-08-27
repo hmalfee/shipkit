@@ -61,30 +61,48 @@ const base = os.middleware(async ({ context, next, path }) => {
 });
 
 /**
+ * Simulates network delay in development to catch loading-state
+ * bugs that only show up under real-world latency.
+ */
+const simulateLatency = os.middleware(async ({ next }) => {
+    if (env.NODE_ENV === 'development') {
+        const MIN_LATENCY_MS = 300;
+        const MAX_LATENCY_MS = 1200;
+        const delay =
+            Math.floor(Math.random() * (MAX_LATENCY_MS - MIN_LATENCY_MS + 1)) +
+            MIN_LATENCY_MS;
+        await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+    return next();
+});
+
+/**
  * `cr` (createRoute): Route builder with `base` + session + rateLimit.
  * Auth enforcement is handled in route handlers via contract-defined errors.
  */
 export const cr = os.use(captureORPCTemplate).use(
     base.concat(
-        os.middleware(async ({ context, next, path }) => {
-            // One trade-off is that by the time the rate limit is checked
-            // in routes, the session has already been fetched. However, since
-            // we mostly rate limit users on routes where getSession won't
-            // reach the database (e.g. login/signup routes) due to invalid
-            // session cookies, this is an acceptable trade-off.
-            const session = await context.auth.getSession();
+        simulateLatency.concat(
+            os.middleware(async ({ context, next, path }) => {
+                // One trade-off is that by the time the rate limit is checked
+                // in routes, the session has already been fetched. However, since
+                // we mostly rate limit users on routes where getSession won't
+                // reach the database (e.g. login/signup routes) due to invalid
+                // session cookies, this is an acceptable trade-off.
+                const session = await context.auth.getSession();
 
-            const rateLimit = createRateLimit({
-                reqHeaders: context.reqHeaders,
-                resHeaders: context.resHeaders,
-                redis: context.redis,
-                pathKey: path.join('.'),
-                logger: context.logger,
-            });
+                const rateLimit = createRateLimit({
+                    reqHeaders: context.reqHeaders,
+                    resHeaders: context.resHeaders,
+                    redis: context.redis,
+                    pathKey: path.join('.'),
+                    logger: context.logger,
+                });
 
-            return next({
-                context: { ...context, session, rateLimit },
-            });
-        }),
+                return next({
+                    context: { ...context, session, rateLimit },
+                });
+            }),
+        ),
     ),
 );
