@@ -98,7 +98,7 @@ export const orpc = (): MiddlewareHandler => async (c) => {
             resHeaders,
             auth: createAuth({
                 headers: { request: c.req.raw.headers, response: resHeaders },
-                storage: { database: db, sessionCache: redis },
+                storage: { database: db, redisClient: redis },
                 baseURL: env.SERVER_URL,
                 config: {
                     secret: env.AUTH_SECRET,

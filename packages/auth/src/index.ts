@@ -8,11 +8,11 @@ let _authInstance: ReturnType<typeof createBetterAuthConfig> | undefined;
 
 function getOrCreateAuthInstance(
     db: AuthDatabase,
-    sessionCache: Redis,
+    redisClient: Redis,
     baseURL: string,
     config: AuthConfig,
 ) {
-    _authInstance ??= createBetterAuthConfig(db, sessionCache, baseURL, config);
+    _authInstance ??= createBetterAuthConfig(db, redisClient, baseURL, config);
     return _authInstance;
 }
 
@@ -45,7 +45,7 @@ export type Auth = {
 
 export interface CreateAuthContext {
     headers: { request: Headers; response: Headers };
-    storage: { database: AuthDatabase; sessionCache: Redis };
+    storage: { database: AuthDatabase; redisClient: Redis };
     baseURL: string;
     config: AuthConfig;
 }
@@ -59,7 +59,7 @@ export interface CreateAuthContext {
 export function createAuth(ctx: CreateAuthContext): Auth {
     const authInstance = getOrCreateAuthInstance(
         ctx.storage.database,
-        ctx.storage.sessionCache,
+        ctx.storage.redisClient,
         ctx.baseURL,
         ctx.config,
     );

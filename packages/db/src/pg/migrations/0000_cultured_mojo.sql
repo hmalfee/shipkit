@@ -44,16 +44,6 @@ CREATE TABLE "auth"."users" (
 );
 
 --> statement-breakpoint
-CREATE TABLE "auth"."verifications" (
-    "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-    "identifier" text NOT NULL,
-    "value" text NOT NULL,
-    "expires_at" timestamp NOT NULL,
-    "created_at" timestamp DEFAULT now() NOT NULL,
-    "updated_at" timestamp DEFAULT now() NOT NULL
-);
-
---> statement-breakpoint
 ALTER TABLE "todos"
 ADD CONSTRAINT "todos_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "auth"."users" ("id") ON DELETE cascade ON UPDATE no action;
 
@@ -63,6 +53,3 @@ ADD CONSTRAINT "accounts_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES
 
 --> statement-breakpoint
 CREATE INDEX "accounts_userId_idx" ON "auth"."accounts" USING btree ("user_id");
-
---> statement-breakpoint
-CREATE INDEX "verifications_identifier_idx" ON "auth"."verifications" USING btree ("identifier");

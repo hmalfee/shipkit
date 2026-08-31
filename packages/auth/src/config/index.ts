@@ -35,7 +35,7 @@ export type AuthConfig = {
 
 export function createBetterAuthConfig(
     db: AuthDatabase,
-    sessionCache: Redis,
+    redisClient: Redis,
     baseURL: string,
     config: AuthConfig,
 ) {
@@ -90,7 +90,7 @@ export function createBetterAuthConfig(
                 : {}),
         },
         secondaryStorage: redisStorage({
-            client: sessionCache,
+            client: redisClient,
             keyPrefix: 'auth:',
         }),
 
