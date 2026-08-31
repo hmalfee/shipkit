@@ -9,6 +9,7 @@ await initTelemetry({
     otelEndpoint: env.OTEL_URL,
     ignoredUrls: [env.OTEL_URL].filter((p): p is string => Boolean(p)),
     environment: env.NODE_ENV,
+    ignoredScopes: ['better-auth'],
 });
 
 process.on('uncaughtException', (err) => {

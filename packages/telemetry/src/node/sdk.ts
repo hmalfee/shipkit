@@ -39,6 +39,8 @@ export interface TelemetryConfig extends BaseTelemetryConfig {
     ignoredRoutes?: string[];
     /** URLs or domains to ignore from outbound telemetry tracing. */
     ignoredUrls?: string[];
+    /** Tracer scope names to suppress entirely (e.g. 'better-auth'). */
+    ignoredScopes?: string[];
     extraSpanProcessors?: SpanProcessor[];
     /** Enable Next.js specific telemetry filtering. */
     nextjs?: boolean;
@@ -49,12 +51,14 @@ export interface TelemetryConfig extends BaseTelemetryConfig {
 interface FilteringSpanProcessorOptions {
     ignoredRoutes?: string[];
     ignoredUrls?: string[];
+    ignoredScopes?: string[];
     nextjs?: boolean;
 }
 
 class FilteringSpanProcessor extends DelegatingSpanProcessor {
     private readonly ignoredRoutes: string[];
     private readonly ignoredUrls: string[];
+    private readonly ignoredScopes: string[];
     private readonly nextjs: boolean;
 
     constructor(
@@ -64,10 +68,12 @@ class FilteringSpanProcessor extends DelegatingSpanProcessor {
         super(delegate);
         this.ignoredRoutes = options.ignoredRoutes ?? [];
         this.ignoredUrls = options.ignoredUrls ?? [];
+        this.ignoredScopes = options.ignoredScopes ?? [];
         this.nextjs = options.nextjs ?? false;
     }
 
     override onEnd(span: ReadableSpan): void {
+        if (this.ignoredScopes.includes(span.instrumentationScope.name)) return;
         if (this.nextjs && isNoisyNextSpan(span)) return;
         if (matchesIgnoredUrl(span, this.ignoredUrls)) return;
         if (this.nextjs) enrichNextSpan(span); // enrich only survivors, before the route check below
@@ -104,6 +110,7 @@ export function initializeSdk(config: TelemetryConfig) {
               {
                   ignoredRoutes: config.ignoredRoutes,
                   ignoredUrls: config.ignoredUrls,
+                  ignoredScopes: config.ignoredScopes,
                   nextjs: config.nextjs,
               },
           )
