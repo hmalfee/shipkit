@@ -141,6 +141,11 @@ export function initializeSdk(config: TelemetryConfig) {
         spanProcessors,
         instrumentations: [
             new HttpInstrumentation({
+                requestHook: (span, req) => {
+                    if ('method' in req && 'url' in req) {
+                        span.updateName(`${req.method} ${req.url}`);
+                    }
+                },
                 ignoreIncomingRequestHook: (req) => {
                     if (req.method === 'OPTIONS') {
                         return true;
@@ -166,6 +171,17 @@ export function initializeSdk(config: TelemetryConfig) {
     });
 
     sdk.start();
+
+    if (config.nextjs) {
+        // In Next.js standalone mode, the `http` module is imported BEFORE the
+        // OpenTelemetry SDK (and its require-in-the-middle hooks) is initialized.
+        // This results in missing HTTP spans because the hook never fires.
+        // Calling process.getBuiltinModule forces the hook to retroactively patch it.
+        // (We use process.getBuiltinModule rather than require() because Turbopack
+        // statically rewrites require() calls).
+        process.getBuiltinModule?.('node:http');
+        process.getBuiltinModule?.('node:https');
+    }
 
     return sdk;
 }
