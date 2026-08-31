@@ -8,6 +8,34 @@ export interface SourceMapResolver {
     close(): void;
 }
 
+export interface StacktraceAttrAdapter {
+    getStacktrace(): string | null;
+    getDebugIds(): string[];
+    setResolved(resolved: string, original: string): void;
+}
+
+/**
+ * The single implementation of "read stack trace + debug-id map off an item,
+ * resolve via source maps, write back only if something changed."
+ *
+ * `deriveIds` is only needed when nothing has already annotated the item with
+ * `exception.stacktrace.debug_id_maps` (i.e. no client-side enrichment ran first).
+ * The proxy path omits it; the SDK processor path passes `extractDebugIds`.
+ */
+export function resolveStacktraceAttr(
+    adapter: StacktraceAttrAdapter,
+    resolver: SourceMapResolver,
+    deriveIds?: (stacktrace: string) => string[],
+): void {
+    const stacktrace = adapter.getStacktrace();
+    if (!stacktrace) return;
+    let ids = adapter.getDebugIds();
+    if (!ids.length && deriveIds) ids = deriveIds(stacktrace);
+    if (!ids.length) return;
+    const resolved = resolver.resolveStackTrace(stacktrace, ids);
+    if (resolved !== stacktrace) adapter.setResolved(resolved, stacktrace);
+}
+
 function stripQuery(url: string): string {
     return url.split('?')[0]!;
 }

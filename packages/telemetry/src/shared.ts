@@ -1,4 +1,13 @@
+import {
+    CompositePropagator,
+    W3CBaggagePropagator,
+    W3CTraceContextPropagator,
+} from '@opentelemetry/core';
 import { resourceFromAttributes } from '@opentelemetry/resources';
+import {
+    ParentBasedSampler,
+    TraceIdRatioBasedSampler,
+} from '@opentelemetry/sdk-trace-base';
 import {
     ATTR_SERVICE_NAME,
     ATTR_SERVICE_VERSION,
@@ -10,6 +19,25 @@ import {
 } from '@opentelemetry/semantic-conventions/incubating';
 
 import type { Resource } from '@opentelemetry/resources';
+
+export interface BaseTelemetryConfig {
+    serviceName: string;
+    serviceVersion?: string;
+    otelEndpoint?: string;
+    environment: string;
+    resourceAttributes?: Record<string, string>;
+}
+
+export function isProdEnv(environment: string): boolean {
+    return environment === 'production';
+}
+
+/** Strips a trailing slash. Used everywhere an OTLP endpoint is turned into a URL. */
+export function normalizeEndpoint(
+    endpoint: string | undefined,
+): string | undefined {
+    return endpoint?.replace(/\/$/, '');
+}
 
 export const PROPAGATION_HEADERS = ['traceparent', 'tracestate', 'baggage'];
 
@@ -31,5 +59,20 @@ export function buildResource(options: BuildResourceOptions): Resource {
             ? { [ATTR_SERVICE_INSTANCE_ID]: options.instanceId }
             : {}),
         ...options.resourceAttributes,
+    });
+}
+
+export function createDefaultPropagator() {
+    return new CompositePropagator({
+        propagators: [
+            new W3CTraceContextPropagator(),
+            new W3CBaggagePropagator(),
+        ],
+    });
+}
+
+export function createDefaultSampler(ratio = 1.0) {
+    return new ParentBasedSampler({
+        root: new TraceIdRatioBasedSampler(ratio),
     });
 }

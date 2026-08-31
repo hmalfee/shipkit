@@ -1,18 +1,14 @@
-import { existsSync } from 'node:fs';
-
 import { NextResponse } from 'next/server';
 import protobuf from 'protobufjs';
 
 import type { NextRequest } from 'next/server';
-import type { OtlpLogsRequest, OtlpTraceRequest } from './attr-utils';
+import type { OtlpLogsRequest, OtlpTraceRequest } from './resolve';
 import type { SourceMapResolver } from './resolver';
-import type { SourceMapStore } from './store';
 
 import { logger } from '../../../logger';
 import descriptor from './otlp-descriptor.json';
 import { resolveExceptionLogs, resolveExceptionStackTraces } from './resolve';
-import { createSourceMapResolver } from './resolver';
-import { createSqliteStore, DEFAULT_DB_PATH } from './store';
+import { defaultSourceMapDbPath, getSharedSourceMapResolver } from './store';
 
 let cachedRoot: protobuf.Root | null = null;
 
@@ -112,13 +108,18 @@ function enrichPayload(
             } else {
                 resolveExceptionLogs(obj as OtlpLogsRequest, resolver);
             }
-        } catch {
-            // resolution error — return re-encoded original object
+        } catch (err) {
+            logger.local.debug('[telemetry] Stack trace resolution failed', {
+                err,
+            });
         }
 
         return T.encode(T.fromObject(obj)).finish();
-    } catch {
-        // decode error — return original bytes
+    } catch (err) {
+        logger.local.debug(
+            '[telemetry] Protobuf decode failed, forwarding original',
+            { err },
+        );
         return body;
     }
 }
@@ -132,50 +133,17 @@ function enrichPayload(
  * and forwards the enriched payload to your actual OTLP backend.
  *
  * In addition to source map resolution, this acts as a reliable first-party proxy to
- * bypass ad blockers that might otherwise block direct requests to external telemetry endpoints.
+ * bypassing ad blockers that might otherwise block direct requests to external telemetry endpoints.
  *
  * @param otelEndpoint - The actual OpenTelemetry collector endpoint to forward traffic to.
  */
 export function createOtelIngestHandler(otelEndpoint: string | undefined) {
-    let store: SourceMapStore | null = null;
-    let resolver: SourceMapResolver | null = null;
-    let resolverChecked = false;
+    let resolver: SourceMapResolver | null | undefined; // undefined = not yet resolved
 
     function getResolver(): SourceMapResolver | null {
-        if (resolverChecked) return resolver;
-
-        const exists = existsSync(DEFAULT_DB_PATH);
-
-        if (!exists) {
-            const msg = `[OTel Proxy Handler]: Telemetry SourceMaps Database not found at ${DEFAULT_DB_PATH}. Client-side exception stacktraces will not be resolved.`;
-            logger.error(msg);
-            return null;
-        }
-
-        try {
-            store = createSqliteStore(DEFAULT_DB_PATH);
-            resolver = createSourceMapResolver((id) => store!.get(id));
-            resolverChecked = true;
-            return resolver;
-        } catch (error) {
-            logger.error(
-                `[OTel Proxy Handler]: Failed to initialize SourceMaps database: ${error instanceof Error ? error.message : String(error)}`,
-            );
-            return null;
-        }
-    }
-
-    let cleanupRegistered = false;
-    if (typeof process !== 'undefined' && !cleanupRegistered) {
-        cleanupRegistered = true;
-        const cleanup = () => {
-            resolver?.close();
-            store?.close?.();
-            resolver = null;
-            store = null;
-        };
-        process.once('SIGTERM', cleanup);
-        process.once('SIGINT', cleanup);
+        if (resolver === undefined)
+            resolver = getSharedSourceMapResolver(defaultSourceMapDbPath());
+        return resolver;
     }
 
     return async function handler(

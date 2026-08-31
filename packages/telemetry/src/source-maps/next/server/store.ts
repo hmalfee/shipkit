@@ -1,18 +1,27 @@
-import { join } from 'node:path';
+import { existsSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 
 import Database from 'better-sqlite3';
 
-function getDefaultDbPath(): string {
-    let nextDir = '.next';
+import type { SourceMapResolver } from './resolver';
 
-    // In Next.js standalone mode, the configuration is passed via environment variable
+import { logger } from '../../../logger';
+import { createSourceMapResolver } from './resolver';
+
+export interface SourceMapStore {
+    get(debugId: string): string | null;
+    put(debugId: string, sourceMap: string): void;
+    close(): void;
+}
+
+export function defaultSourceMapDbPath(): string {
+    let nextDir = '.next';
     // oxlint-disable-next-line eslint-js/no-restricted-syntax
-    if (process.env.__NEXT_PRIVATE_STANDALONE_CONFIG) {
+    const standaloneConfig = process.env.__NEXT_PRIVATE_STANDALONE_CONFIG;
+
+    if (standaloneConfig) {
         try {
-            const config = JSON.parse(
-                // oxlint-disable-next-line eslint-js/no-restricted-syntax
-                process.env.__NEXT_PRIVATE_STANDALONE_CONFIG,
-            ) as { distDir?: string };
+            const config = JSON.parse(standaloneConfig) as { distDir?: string };
             if (config.distDir) {
                 nextDir = config.distDir;
             }
@@ -22,14 +31,6 @@ function getDefaultDbPath(): string {
     }
 
     return join(process.cwd(), nextDir, 'sourcemaps.db');
-}
-
-export const DEFAULT_DB_PATH = getDefaultDbPath();
-
-export interface SourceMapStore {
-    get(debugId: string): string | null;
-    put(debugId: string, sourceMap: string): void;
-    close(): void;
 }
 
 export function createSqliteStore(dbPath: string): SourceMapStore {
@@ -61,4 +62,47 @@ export function createSqliteStore(dbPath: string): SourceMapStore {
             db.close();
         },
     };
+}
+
+const resolverCache = new Map<string, SourceMapResolver | null>();
+let exitHookRegistered = false;
+
+export function getSharedSourceMapResolver(
+    dbPath: string,
+): SourceMapResolver | null {
+    const key = resolve(dbPath); // normalize so relative vs absolute paths don't double-open
+    if (resolverCache.has(key)) return resolverCache.get(key) ?? null;
+
+    if (!existsSync(key)) {
+        logger.warn(
+            '[telemetry] DB not found at {dbPath}. Stack traces will not be resolved.',
+            { dbPath: key },
+        );
+        resolverCache.set(key, null);
+        return null;
+    }
+
+    try {
+        const store = createSqliteStore(key);
+        const resolver = createSourceMapResolver((id) => store.get(id));
+        resolverCache.set(key, resolver);
+        if (!exitHookRegistered) {
+            exitHookRegistered = true;
+            process.on('exit', closeSharedSourceMapResolvers);
+        }
+        return resolver;
+    } catch (err) {
+        logger.error('[telemetry] Failed to open DB at {dbPath}: {err}', {
+            dbPath: key,
+            err,
+        });
+        resolverCache.set(key, null);
+        return null;
+    }
+}
+
+/** Closes every cached resolver/SQLite connection. Idempotent. */
+function closeSharedSourceMapResolvers(): void {
+    for (const resolver of resolverCache.values()) resolver?.close();
+    resolverCache.clear();
 }

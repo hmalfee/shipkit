@@ -4,8 +4,6 @@ import type { TelemetryConfig } from './sdk';
 import { initLogger, shutdownLogger } from '../logger';
 import { initializeSdk } from './sdk';
 
-export type { TelemetryConfig };
-
 interface InitTelemetryConfig extends Omit<TelemetryConfig, 'environment'> {
     environment?: string;
     extraLogProcessors?: LogRecordProcessor[];
@@ -14,6 +12,7 @@ interface InitTelemetryConfig extends Omit<TelemetryConfig, 'environment'> {
 let sdk: ReturnType<typeof initializeSdk> | undefined;
 let initializing: Promise<void> | undefined;
 
+/** Starts the Node.js OTel SDK and logging subsystem. Idempotent — concurrent calls share the same in-flight promise. Registers SIGTERM/SIGINT handlers that call shutdownTelemetry(). */
 export function initTelemetry(config: InitTelemetryConfig) {
     initializing ??= initTelemetryOnce(config);
     return initializing;
@@ -45,7 +44,7 @@ async function initTelemetryOnce(config: InitTelemetryConfig) {
     process.once('SIGINT', shutdown);
 }
 
-export async function shutdownTelemetry() {
+async function shutdownTelemetry() {
     await Promise.all([sdk?.shutdown(), shutdownLogger()]);
 }
 

@@ -1,13 +1,8 @@
-import {
-    context,
-    propagation,
-    SpanStatusCode,
-    trace,
-} from '@opentelemetry/api';
+import { SpanStatusCode, trace } from '@opentelemetry/api';
 
 import type { Span, SpanOptions } from '@opentelemetry/api';
 
-export const tracer = trace.getTracer('@shipkit/telemetry');
+const tracer = trace.getTracer('@shipkit/telemetry');
 
 /**
  * Starts a new active span.
@@ -41,59 +36,8 @@ export function startSpan<T>(
     });
 }
 
-/**
- * Adds an event to the currently active span.
- * Events are point-in-time markers within a span, ideal for logging discrete occurrences
- * (e.g. 'payment.attempt', 'cache.miss') without creating a full child span.
- */
-export function addSpanEvent(
-    name: string,
-    attributes?: Record<string, string | number | boolean>,
-) {
-    const span = trace.getActiveSpan();
-    if (span) {
-        span.addEvent(name, attributes);
-    }
-}
-
-/**
- * Evaluates a function within a new context containing the provided baggage entries.
- * Baggage propagates to downstream services.
- *
- * @warning Do not put sensitive data (PII, credentials) in baggage, as it travels
- * in HTTP headers. Keep baggage small to avoid header bloat.
- */
-export function withBaggage<T>(
-    entries: Record<string, string>,
-    fn: () => T,
-): T {
-    let currentBaggage =
-        propagation.getBaggage(context.active()) ?? propagation.createBaggage();
-
-    for (const [key, value] of Object.entries(entries)) {
-        currentBaggage = currentBaggage.setEntry(key, { value });
-    }
-
-    const newContext = propagation.setBaggage(context.active(), currentBaggage);
-    return context.with(newContext, fn);
-}
-
-/**
- * Retrieves a value from the current W3C Baggage.
- */
-export function getBaggageValue(key: string): string | undefined {
-    const baggage = propagation.getBaggage(context.active());
-    return baggage?.getEntry(key)?.value;
-}
-
 export function getActiveSpan() {
     return trace.getActiveSpan();
-}
-
-export function getTraceContext() {
-    const span = trace.getActiveSpan();
-    if (!span) return undefined;
-    return span.spanContext();
 }
 
 const routeTemplates = new WeakMap<Span, string>();

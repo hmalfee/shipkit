@@ -1,11 +1,13 @@
 import { parse as parseStackTrace } from 'stacktrace-parser';
 
 import type { AnyValue } from '@opentelemetry/api-logs';
-import type { LogRecordProcessor, SdkLogRecord } from '@opentelemetry/sdk-logs';
-import type {
-    ReadableSpan,
-    SpanProcessor,
-} from '@opentelemetry/sdk-trace-base';
+import type { SdkLogRecord } from '@opentelemetry/sdk-logs';
+import type { ReadableSpan } from '@opentelemetry/sdk-trace-base';
+
+import {
+    NoopLifecycleLogRecordProcessor,
+    NoopLifecycleSpanProcessor,
+} from '../../processor-base';
 
 type DebugIdsByUrl = Map<string, string>;
 
@@ -65,10 +67,7 @@ export function extractDebugIds(stackTrace: string): string[] {
  * This is meant to run in the browser where the source maps database is inaccessible.
  * The attached IDs allow the createOtelIngestHandler to resolve the stack trace later.
  */
-export class DebugIdEnrichingSpanProcessor implements SpanProcessor {
-    onStart(): void {
-        // no-op
-    }
+export class DebugIdEnrichingSpanProcessor extends NoopLifecycleSpanProcessor {
     onEnd(span: ReadableSpan): void {
         for (const event of span.events) {
             if (event.name !== 'exception') continue;
@@ -83,12 +82,6 @@ export class DebugIdEnrichingSpanProcessor implements SpanProcessor {
             }
         }
     }
-    async forceFlush(): Promise<void> {
-        // no-op
-    }
-    async shutdown(): Promise<void> {
-        // no-op
-    }
 }
 
 /**
@@ -98,7 +91,7 @@ export class DebugIdEnrichingSpanProcessor implements SpanProcessor {
  * This is meant to run in the browser where the source maps database is inaccessible.
  * The attached IDs allow the createOtelIngestHandler to resolve the stack trace later.
  */
-export class DebugIdEnrichingLogProcessor implements LogRecordProcessor {
+export class DebugIdEnrichingLogProcessor extends NoopLifecycleLogRecordProcessor {
     onEmit(logRecord: SdkLogRecord): void {
         const st = logRecord.attributes['exception.stacktrace'] as
             string | undefined;
@@ -110,11 +103,5 @@ export class DebugIdEnrichingLogProcessor implements LogRecordProcessor {
                 ids as AnyValue,
             );
         }
-    }
-    async forceFlush(): Promise<void> {
-        // no-op
-    }
-    async shutdown(): Promise<void> {
-        // no-op
     }
 }

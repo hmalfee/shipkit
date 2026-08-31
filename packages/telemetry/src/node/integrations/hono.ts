@@ -1,4 +1,9 @@
-import { context, propagation, SpanStatusCode } from '@opentelemetry/api';
+import {
+    context,
+    propagation,
+    SpanStatusCode,
+    trace,
+} from '@opentelemetry/api';
 import {
     ATTR_HTTP_RESPONSE_STATUS_CODE,
     ATTR_HTTP_ROUTE,
@@ -44,12 +49,18 @@ export function traceHonoRequest({
         }
         req[TELEMETRY_MOUNTED] = true;
 
+        const existingSpan = getActiveSpan();
+
         const extractedContext = propagation.extract(
             context.active(),
             c.req.header(),
         );
 
-        return context.with(extractedContext, async () => {
+        const activeContext = existingSpan?.isRecording()
+            ? trace.setSpan(extractedContext, existingSpan)
+            : extractedContext;
+
+        return context.with(activeContext, async () => {
             const span = getActiveSpan();
 
             if (!span || !span.isRecording()) {

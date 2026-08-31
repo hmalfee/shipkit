@@ -9,6 +9,8 @@ import {
 
 import type { LoggerConfig, LogRecord, Sink } from '@logtape/logtape';
 
+import { isProdEnv } from '../shared';
+
 const RESET = '\x1b[0m';
 const TIMESTAMP_COLOR = '\x1b[38;2;100;140;100m'; // muted green
 const CATEGORY_COLOR = '\x1b[38;2;120;120;120m'; // gray
@@ -39,6 +41,8 @@ function colorizeLevel(level: string): string {
     return `${style.ansi}${style.label}${RESET}`;
 }
 
+const isBrowser = typeof window !== 'undefined';
+
 /**
  * A console formatter with ANSI-colored output for Node.js terminals.
  *
@@ -60,6 +64,17 @@ function consoleFormatter(record: LogRecord): unknown[] {
         }
     }
 
+    if (isBrowser) {
+        const level = record.level.toUpperCase().slice(0, 3);
+        const category = record.category.join('·');
+        const formatted = `${formatAMPM(record.timestamp)} [${level}] ${category} ${msg}`;
+        const error = record.properties?.error ?? record.properties?.err;
+        if (error instanceof Error && !values.includes(error)) {
+            return [`${formatted} ${error.message}\n`, ...values, error];
+        }
+        return [formatted, ...values];
+    }
+
     const timestamp = `${TIMESTAMP_COLOR}${formatAMPM(record.timestamp)}${RESET}`;
     const level = colorizeLevel(record.level);
     const category = `${CATEGORY_COLOR}${record.category.join('·')}${RESET}`;
@@ -69,9 +84,7 @@ function consoleFormatter(record: LogRecord): unknown[] {
     // Append Error objects so the terminal always prints the stack trace
     const error = record.properties?.error ?? record.properties?.err;
     if (error instanceof Error && !values.includes(error)) {
-        const isBrowser = typeof window !== 'undefined';
-        formatted += ` ${error.message}`;
-        formatted += isBrowser ? '\n' : '\n%o';
+        formatted += ` ${error.message}\n%o`;
         return [formatted, ...values, error];
     }
 
@@ -84,63 +97,84 @@ const PROD_MIN_LEVELS: ReadonlySet<string> = new Set([
     'fatal',
 ]);
 
-function isAlwaysLog(record: LogRecord): boolean {
-    return Boolean(record.properties?.alwaysLog);
-}
-
-/**
- * Console policy: in production, console output requires `alwaysLog: true`,
- * regardless of level. In development everything passes through.
- */
-export function withProdConsoleGate(isProd: boolean, inner: Sink): Sink {
+function gateSink(
+    predicate: (record: LogRecord) => boolean,
+    inner: Sink,
+): Sink {
     return (record) => {
-        if (isProd && !isAlwaysLog(record)) return;
+        if (!predicate(record)) return;
         inner(record);
     };
 }
 
-/**
- * OTEL policy: in production, warn+ (or alwaysLog) records are exported.
- * In development everything passes through.
- */
-export function withProdOtelGate(isProd: boolean, inner: Sink): Sink {
-    return (record) => {
-        if (
-            isProd &&
-            !isAlwaysLog(record) &&
-            !PROD_MIN_LEVELS.has(record.level)
-        ) {
-            return;
-        }
-        inner(record);
+function redactDefaultFields(sink: Sink): Sink {
+    return redactByField(sink, {
+        fieldPatterns: DEFAULT_REDACT_FIELDS,
+        action: () => '[REDACTED]',
+    });
+}
+
+export function buildSinksAndLoggers(
+    environment: string,
+    otelSinkFactory?: () => Sink,
+    consoleRef?: Console,
+): { sinks: Record<string, Sink>; loggers: LoggerConfig<string, string>[] } {
+    const isProd = isProdEnv(environment);
+
+    const rawConsole = getConsoleSink({
+        ...(consoleRef ? { console: consoleRef } : {}),
+        formatter: redactByPattern(consoleFormatter, [
+            EMAIL_ADDRESS_PATTERN,
+            JWT_PATTERN,
+        ]),
+    });
+    const consoleSink = redactDefaultFields(rawConsole);
+
+    const sinks: Record<string, Sink> = {
+        console: consoleSink,
+        'console.gated': gateSink(() => !isProd, consoleSink),
     };
+
+    const rootSinks = ['console.gated'];
+    const opsSinks = ['console'];
+
+    if (otelSinkFactory) {
+        const otelSink = redactDefaultFields(otelSinkFactory());
+        sinks.otel = otelSink;
+        sinks['otel.gated'] = gateSink(
+            (record) => !isProd || PROD_MIN_LEVELS.has(record.level),
+            otelSink,
+        );
+        rootSinks.push('otel.gated');
+        opsSinks.push('otel');
+    }
+
+    const loggers = buildLoggerCategories(rootSinks, opsSinks);
+
+    return { sinks, loggers };
 }
 
-export function buildRedactedConsoleSink(consoleRef?: Console): Sink {
-    return redactByField(
-        getConsoleSink({
-            ...(consoleRef ? { console: consoleRef } : {}),
-            formatter: redactByPattern(consoleFormatter, [
-                EMAIL_ADDRESS_PATTERN,
-                JWT_PATTERN,
-            ]),
-        }),
-        {
-            fieldPatterns: DEFAULT_REDACT_FIELDS,
-            action: () => '[REDACTED]',
-        },
-    );
-}
-
-export function buildLoggerCategories(
+function buildLoggerCategories(
     rootSinks: string[],
+    opsSinks: string[],
 ): LoggerConfig<string, string>[] {
     return [
         { category: [], sinks: rootSinks, lowestLevel: 'debug' },
-        { category: ['local'], sinks: ['console'], lowestLevel: 'debug' },
+        {
+            category: ['local'],
+            sinks: ['console'],
+            lowestLevel: 'debug',
+            parentSinks: 'override',
+        },
+        {
+            category: ['ops'],
+            sinks: opsSinks,
+            lowestLevel: 'debug',
+            parentSinks: 'override',
+        },
         {
             category: ['logtape', 'meta'],
-            sinks: ['console'],
+            sinks: ['console.gated'],
             lowestLevel: 'warning',
         },
     ];

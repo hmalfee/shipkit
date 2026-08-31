@@ -1,83 +1,54 @@
-import { existsSync } from 'node:fs';
-
-import { getLogger } from '@logtape/logtape';
-
 import type { AnyValue } from '@opentelemetry/api-logs';
-import type { LogRecordProcessor, SdkLogRecord } from '@opentelemetry/sdk-logs';
-import type {
-    ReadableSpan,
-    SpanProcessor,
-} from '@opentelemetry/sdk-trace-base';
+import type { SdkLogRecord } from '@opentelemetry/sdk-logs';
+import type { ReadableSpan } from '@opentelemetry/sdk-trace-base';
 import type { SourceMapResolver } from './resolver';
 
-import { extractDebugIds } from '../client/debug-id';
-import { createSourceMapResolver } from './resolver';
-import { createSqliteStore, DEFAULT_DB_PATH } from './store';
-
-const logger = getLogger(['telemetry', 'sourcemaps']);
+import {
+    NoopLifecycleLogRecordProcessor,
+    NoopLifecycleSpanProcessor,
+} from '../../../processor-base';
+import { extractDebugIds } from '../client';
+import { resolveStacktraceAttr } from './resolver';
+import { defaultSourceMapDbPath, getSharedSourceMapResolver } from './store';
 
 /**
  * A server-side OpenTelemetry span processor that intercepts exception events and resolves
  * their stack traces synchronously.
  *
- * It extracts `debug_id`s dynamically and queries a local SQLite database (`.next/sourcemaps.db`)
+ * It extracts `debug_id`s dynamically and queries a local SQLite database
  * to resolve the stack trace before exporting the telemetry payload.
  */
-export class SourceMapResolvingSpanProcessor implements SpanProcessor {
-    private resolver: SourceMapResolver | null = null;
+export class SourceMapResolvingSpanProcessor extends NoopLifecycleSpanProcessor {
+    private readonly resolver: SourceMapResolver | null;
 
     constructor() {
-        if (!existsSync(DEFAULT_DB_PATH)) {
-            const msg = `Telemetry SourceMaps Database not found at ${DEFAULT_DB_PATH}. Exception stacktraces will not be resolved.`;
-            logger.error(msg);
-            return;
-        }
-        try {
-            const store = createSqliteStore(DEFAULT_DB_PATH);
-            this.resolver = createSourceMapResolver((id) => store.get(id));
-        } catch (error) {
-            logger.error(
-                `Failed to initialize SourceMaps database: ${error instanceof Error ? error.message : String(error)}`,
-            );
-        }
-    }
-
-    onStart(): void {
-        // no-op
+        super();
+        this.resolver = getSharedSourceMapResolver(defaultSourceMapDbPath());
     }
 
     onEnd(span: ReadableSpan): void {
         if (!this.resolver) return;
         for (const event of span.events) {
             if (event.name !== 'exception') continue;
-            const st = event.attributes?.['exception.stacktrace'];
-            if (typeof st !== 'string') continue;
-
-            const clientIds = event.attributes?.[
-                'exception.stacktrace.debug_id_maps'
-            ] as string[] | undefined;
-            const ids = clientIds?.length ? clientIds : extractDebugIds(st);
-
-            if (ids.length) {
-                const resolved = this.resolver.resolveStackTrace(st, ids);
-                if (resolved !== st) {
-                    (event.attributes as Record<string, unknown>)[
-                        'exception.stacktrace'
-                    ] = resolved;
-                    (event.attributes as Record<string, unknown>)[
-                        'exception.stacktrace.original'
-                    ] = st;
-                }
-            }
+            const attrs = event.attributes as Record<string, unknown>;
+            resolveStacktraceAttr(
+                {
+                    getStacktrace: () =>
+                        typeof attrs['exception.stacktrace'] === 'string'
+                            ? attrs['exception.stacktrace']
+                            : null,
+                    getDebugIds: () =>
+                        (attrs['exception.stacktrace.debug_id_maps'] as
+                            string[] | undefined) ?? [],
+                    setResolved: (resolved, original) => {
+                        attrs['exception.stacktrace'] = resolved;
+                        attrs['exception.stacktrace.original'] = original;
+                    },
+                },
+                this.resolver,
+                extractDebugIds,
+            );
         }
-    }
-
-    async forceFlush(): Promise<void> {
-        // no-op
-    }
-
-    async shutdown(): Promise<void> {
-        this.resolver?.close();
     }
 }
 
@@ -85,58 +56,42 @@ export class SourceMapResolvingSpanProcessor implements SpanProcessor {
  * A server-side OpenTelemetry log record processor that intercepts exceptions and resolves
  * their stack traces synchronously.
  *
- * It extracts `debug_id`s dynamically and queries a local SQLite database (`.next/sourcemaps.db`)
+ * It extracts `debug_id`s dynamically and queries a local SQLite database
  * to resolve the stack trace before exporting the telemetry payload.
  */
-export class SourceMapResolvingLogProcessor implements LogRecordProcessor {
-    private resolver: SourceMapResolver | null = null;
+export class SourceMapResolvingLogProcessor extends NoopLifecycleLogRecordProcessor {
+    private readonly resolver: SourceMapResolver | null;
 
     constructor() {
-        if (!existsSync(DEFAULT_DB_PATH)) {
-            const msg = `Telemetry SourceMaps Database not found at ${DEFAULT_DB_PATH}. Exception stacktraces will not be resolved.`;
-            logger.error(msg);
-            return;
-        }
-        try {
-            const store = createSqliteStore(DEFAULT_DB_PATH);
-            this.resolver = createSourceMapResolver((id) => store.get(id));
-        } catch (error) {
-            logger.error(
-                `Failed to initialize SourceMaps database: ${error instanceof Error ? error.message : String(error)}`,
-            );
-        }
+        super();
+        this.resolver = getSharedSourceMapResolver(defaultSourceMapDbPath());
     }
 
     onEmit(logRecord: SdkLogRecord): void {
         if (!this.resolver) return;
-        const st = logRecord.attributes['exception.stacktrace'];
-        if (typeof st !== 'string') return;
-
-        const clientIds = logRecord.attributes[
-            'exception.stacktrace.debug_id_maps'
-        ] as string[] | undefined;
-        const ids = clientIds?.length ? clientIds : extractDebugIds(st);
-
-        if (ids.length) {
-            const resolved = this.resolver.resolveStackTrace(st, ids);
-            if (resolved !== st) {
-                logRecord.setAttribute(
-                    'exception.stacktrace' as string,
-                    resolved as AnyValue,
-                );
-                logRecord.setAttribute(
-                    'exception.stacktrace.original' as string,
-                    st as AnyValue,
-                );
-            }
-        }
-    }
-
-    async forceFlush(): Promise<void> {
-        // no-op
-    }
-
-    async shutdown(): Promise<void> {
-        this.resolver?.close();
+        resolveStacktraceAttr(
+            {
+                getStacktrace: () => {
+                    const st = logRecord.attributes['exception.stacktrace'];
+                    return typeof st === 'string' ? st : null;
+                },
+                getDebugIds: () =>
+                    (logRecord.attributes[
+                        'exception.stacktrace.debug_id_maps'
+                    ] as string[] | undefined) ?? [],
+                setResolved: (resolved, original) => {
+                    logRecord.setAttribute(
+                        'exception.stacktrace' as string,
+                        resolved as AnyValue,
+                    );
+                    logRecord.setAttribute(
+                        'exception.stacktrace.original' as string,
+                        original as AnyValue,
+                    );
+                },
+            },
+            this.resolver,
+            extractDebugIds,
+        );
     }
 }

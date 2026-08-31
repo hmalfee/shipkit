@@ -3,11 +3,11 @@
     "type": "module",
     "exports": {
         "./node": "./src/node/index.ts",
-        "./node/*": "./src/node/libs/*.ts",
+        "./node/*": "./src/node/integrations/*.ts",
         "./browser": "./src/browser/index.ts",
         "./logger": "./src/logger/index.ts",
         "./source-maps/next/server": "./src/source-maps/next/server/index.ts",
-        "./source-maps/next/client": "./src/source-maps/next/client/index.ts"
+        "./source-maps/next/client": "./src/source-maps/next/client.ts"
     },
     "scripts": {
         "clean": "git clean -xdf .cache .turbo node_modules -e .env -e .env.*",

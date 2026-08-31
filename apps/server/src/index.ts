@@ -44,8 +44,6 @@ serve(
         port: env.PORT,
     },
     (info) => {
-        logger.info(`Server is running on http://localhost:${info.port}`, {
-            alwaysLog: true,
-        });
+        logger.ops.info(`Server is running on http://localhost:${info.port}`);
     },
 );
