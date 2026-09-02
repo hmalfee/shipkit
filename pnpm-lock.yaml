@@ -653,6 +653,9 @@ importers:
       '@dokploy/sdk':
         specifier: ^0.29.4
         version: 0.29.4(patch_hash=fee713ecf1d17118e1e3e7d0f252d5bef1e9b6908c8ede061f2f317e8a6dbcd1)
+      micromatch:
+        specifier: ^4.0.8
+        version: 4.0.8
       zx:
         specifier: ^8.8.5
         version: 8.8.5

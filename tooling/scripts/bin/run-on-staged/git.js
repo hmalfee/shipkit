@@ -28,18 +28,26 @@ export async function verifyGitState(repoRoot) {
         process.exit(1);
     }
 
-    if ((await $`git rev-parse HEAD`.nothrow().quiet()).exitCode !== 0) {
+    if (
+        (await $({ cwd: repoRoot })`git rev-parse HEAD`.nothrow().quiet())
+            .exitCode !== 0
+    ) {
         echo(chalk.yellow('Initial commit — skipping tasks.'));
         process.exit(0);
     }
 
     const staged = (
-        await $`git diff --cached --name-only`.quiet()
+        await $({ cwd: repoRoot })`git diff --cached --name-only`.quiet()
     ).stdout.trim();
     if (!staged) {
         echo(chalk.yellow('No staged changes — skipping.'));
         process.exit(0);
     }
+
+    // Root-relative paths of every staged file (added/modified/deleted/
+    // renamed). Files that were untracked before being `git add`ed show up
+    // here too, since "staged" is what matters for this check.
+    return staged.split('\n').filter(Boolean);
 }
 
 export async function hideUnstagedChanges(repoRoot) {

@@ -49,11 +49,22 @@
     },
     "run-on-staged": [
         "pnpm install",
-        "turbo run db:generate",
         "turbo run format:check",
         "turbo run lint",
         "turbo run typecheck",
         "turbo run knip",
-        "pnpm --filter @shipkit/db db:auth-schema --all"
+        {
+            "command": "pnpm --filter @shipkit/db db:auth-schema --all",
+            "match": [
+                "@shipkit/db",
+                "@shipkit/auth"
+            ]
+        },
+        {
+            "command": "turbo run db:generate",
+            "match": [
+                "@shipkit/db"
+            ]
+        }
     ]
 }

@@ -15,6 +15,7 @@
     },
     "dependencies": {
         "@dokploy/sdk": "^0.29.4",
+        "micromatch": "^4.0.8",
         "zx": "^8.8.5"
     },
     "devDependencies": {
