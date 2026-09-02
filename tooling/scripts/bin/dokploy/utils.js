@@ -45,12 +45,13 @@ export function appendGeneratedVars(lines) {
 const DokploySchema = z.fromJSONSchema(schema);
 
 export async function resolveAppConfig({
-    appsDir,
+    repoRoot,
+    appDir,
     appName,
     projectName,
     baseDomain,
 }) {
-    const cfgPath = path.join(path.resolve(appsDir), appName, 'dokploy.json');
+    const cfgPath = path.join(repoRoot, appDir, 'dokploy.json');
     try {
         let rawJson = await fs.readFile(cfgPath, 'utf8');
         rawJson = rawJson

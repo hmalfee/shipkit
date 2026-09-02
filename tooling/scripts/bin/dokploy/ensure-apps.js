@@ -1,30 +1,12 @@
-import path from 'node:path';
+import { chalk, echo, YAML } from 'zx';
 
-import { chalk, echo, fs, YAML } from 'zx';
-
+import { getWorkspaceRoot, resolvePackagesUnder } from '../../lib/workspace.js';
 import { dp } from './dp.js';
 import {
     appendGeneratedVars,
     requireEnvironmentId,
     resolveAppConfig,
 } from './utils.js';
-
-async function resolveAppNames(appsDir) {
-    const dir = path.resolve(appsDir);
-    const entries = await fs.readdir(dir, { withFileTypes: true });
-    const names = [];
-    for (const entry of entries) {
-        if (!entry.isDirectory()) continue;
-        const pkgPath = path.join(dir, entry.name, 'package.json');
-        try {
-            const pkg = JSON.parse(await fs.readFile(pkgPath, 'utf8'));
-            if (pkg.name) names.push(pkg.name);
-        } catch {
-            // no package.json or no .name — skip silently
-        }
-    }
-    return names;
-}
 
 async function ensureApplication({ envId, applications, app }) {
     const existing = applications.find((a) => a.name === app);
@@ -60,11 +42,13 @@ async function ensureDomainsAndRedirect({
     projectName,
     baseDomain,
     staging,
-    appsDir,
+    repoRoot,
+    appDir,
 }) {
     const env = staging ? 'staging' : 'production';
     const cfg = await resolveAppConfig({
-        appsDir,
+        repoRoot,
+        appDir,
         appName: app,
         projectName,
         baseDomain,
@@ -148,11 +132,13 @@ export async function ensureApps({
     baseDomain,
     staging = false,
 }) {
-    const apps = await resolveAppNames(appsDir);
-    if (apps.length === 0) {
+    const repoRoot = await getWorkspaceRoot();
+    const appPackages = await resolvePackagesUnder(repoRoot, appsDir);
+    if (appPackages.size === 0) {
         echo(chalk.yellow('No apps found in', appsDir, '. Skipping.'));
         return;
     }
+    const apps = [...appPackages.keys()].sort();
     echo('Apps to ensure:', apps);
 
     const project = await dp.projectOne({ query: { projectId } });
@@ -174,9 +160,10 @@ export async function ensureApps({
             app,
             applicationId,
             projectName,
-            baseDomain: baseDomain,
+            baseDomain,
             staging: Boolean(staging),
-            appsDir,
+            repoRoot,
+            appDir: appPackages.get(app),
         });
 
         if (staging) {

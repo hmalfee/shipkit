@@ -1,35 +1,8 @@
-import path from 'node:path';
-
 import micromatch from 'micromatch';
-import { $ } from 'zx';
+
+import { resolveWorkspacePackages } from '../../lib/workspace.js';
 
 const GLOB_CHAR_RE = /[*?{}[\]!()]/;
-
-/**
- * Discovers workspace packages (name -> path relative to repoRoot, posix-style)
- * via `pnpm list -r --depth -1 --json`, which enumerates every package pnpm
- * considers part of the workspace.
- *
- * @param {string} repoRoot
- * @returns {Promise<Map<string, string>>}
- */
-async function resolveWorkspacePackages(repoRoot) {
-    const { stdout } = await $({
-        cwd: repoRoot,
-    })`pnpm list -r --depth -1 --json`.quiet();
-
-    const entries = JSON.parse(stdout);
-    const packages = new Map();
-    for (const entry of entries) {
-        if (!entry.name || !entry.path) continue;
-        const relDir = path
-            .relative(repoRoot, entry.path)
-            .split(path.sep)
-            .join('/');
-        packages.set(entry.name, relDir || '.');
-    }
-    return packages;
-}
 
 /**
  * Turns a single `match` entry into one or more micromatch globs, relative

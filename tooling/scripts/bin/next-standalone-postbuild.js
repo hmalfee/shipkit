@@ -1,22 +1,20 @@
 #!/usr/bin/env node
 import { $, chalk, echo, fs, path, spinner } from 'zx';
 
+import { getWorkspaceRoot } from '../lib/workspace.js';
+
 $.verbose = false;
 
 // process.cwd() avoids a shell roundtrip — no need to fork a subshell just for pwd.
 const CURRENT_DIR = process.cwd();
 
-// Find workspace root by traversing upwards looking for pnpm-workspace.yaml
-let WORKSPACE_ROOT = CURRENT_DIR;
-while (WORKSPACE_ROOT !== '/') {
-    if (await fs.pathExists(`${WORKSPACE_ROOT}/pnpm-workspace.yaml`)) break;
-    WORKSPACE_ROOT = path.dirname(WORKSPACE_ROOT);
-}
-
-if (WORKSPACE_ROOT === '/' && !(await fs.pathExists('/pnpm-workspace.yaml'))) {
+let WORKSPACE_ROOT;
+try {
+    WORKSPACE_ROOT = await getWorkspaceRoot(CURRENT_DIR);
+} catch {
     echo(
         chalk.red(
-            'Error: Could not find workspace root (no pnpm-workspace.yaml found)',
+            'Error: Could not find workspace root (is this being run inside a pnpm workspace?)',
         ),
     );
     process.exit(1);

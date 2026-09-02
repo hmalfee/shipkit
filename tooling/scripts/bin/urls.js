@@ -3,6 +3,8 @@ import net from 'net';
 
 import { $, chalk, echo, fs, os, path } from 'zx';
 
+import { getWorkspaceRoot } from '../lib/workspace.js';
+
 const DEFAULT_BASE = 'http://localhost';
 
 const getLocalIp = () =>
@@ -70,7 +72,7 @@ async function resolveCurrentAppPort(ports) {
 
 async function main() {
     const args = process.argv.slice(2);
-    const rootDir = (await $`git rev-parse --show-toplevel`).stdout.trim();
+    const rootDir = await getWorkspaceRoot();
 
     const env = await loadEnvUrls(rootDir);
 

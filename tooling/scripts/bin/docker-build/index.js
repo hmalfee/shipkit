@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import { $, chalk, echo, fs, os, path } from 'zx';
 
+import { resolvePackagesUnder } from '../../lib/workspace.js';
+
 $.verbose = false;
 
 const args = process.argv.slice(2);
@@ -44,39 +46,39 @@ if (!nodeVersion || !pnpmVersion || !turboVersion) {
     process.exit(1);
 }
 
-const appDirs = await fs.readdir(path.join(root, 'apps'));
-let appFolder = null;
-let appPkg = null;
-for (const dir of appDirs) {
-    const pkgPath = path.join(root, 'apps', dir, 'package.json');
-    if (!(await fs.pathExists(pkgPath))) continue;
-    const pkg = await fs.readJson(pkgPath);
-    if (pkg.name === appName) {
-        appFolder = `apps/${dir}`;
-        appPkg = pkg;
-        break;
-    }
-}
+const appsPackages = await resolvePackagesUnder(root, 'apps');
+const appFolder = appsPackages.get(appName);
+
+// Build the Dockerfile-filtered list once — used in both error paths below.
+const appsWithDockerfile = (
+    await Promise.all(
+        [...appsPackages.entries()].map(async ([name, dir]) => {
+            const hasDockerfile = await fs.pathExists(
+                path.join(root, dir, 'Dockerfile'),
+            );
+            return hasDockerfile ? name : null;
+        }),
+    )
+)
+    .filter(Boolean)
+    .sort();
+
 if (!appFolder) {
-    const names = (
-        await Promise.all(
-            appDirs.map(async (d) => {
-                const p = path.join(root, 'apps', d, 'package.json');
-                return (await fs.pathExists(p))
-                    ? (await fs.readJson(p)).name
-                    : null;
-            }),
-        )
-    ).filter(Boolean);
     echo(
-        chalk.red(`App "${appName}" not found. Available: ${names.join(', ')}`),
+        chalk.red(
+            `App "${appName}" not found. Available: ${appsWithDockerfile.join(', ')}`,
+        ),
     );
     process.exit(1);
 }
 
 const dockerfilePath = path.join(root, appFolder, 'Dockerfile');
 if (!(await fs.pathExists(dockerfilePath))) {
-    echo(chalk.red(`No Dockerfile found in ${appFolder}/`));
+    echo(
+        chalk.red(
+            `No Dockerfile found in ${appFolder}/. Apps with Dockerfiles: ${appsWithDockerfile.join(', ')}`,
+        ),
+    );
     process.exit(1);
 }
 
