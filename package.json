@@ -61,7 +61,7 @@
             ]
         },
         {
-            "command": "turbo run db:generate",
+            "command": "pnpm --filter @shipkit/db db:generate",
             "match": [
                 "@shipkit/db"
             ]

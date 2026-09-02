@@ -1,9 +1,0 @@
-{
-    "extends": ["//"],
-    "tasks": {
-        "ui:add": {
-            "cache": false,
-            "interactive": true
-        }
-    }
-}

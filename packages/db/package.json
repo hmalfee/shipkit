@@ -12,9 +12,8 @@
         "db:generate": "SKIP_ENV_VALIDATION=1 drizzle-kit generate",
         "db:migrate": "drizzle-kit migrate",
         "db:seed": "tsx scripts/seed.ts",
-        "dev": "docker compose up -d --wait && pnpm db:migrate && pnpm db:seed",
-        "studio:postgres": "drizzle-kit studio",
-        "studio:redis": "redis-commander",
+        "predev": "docker compose up -d --wait && pnpm db:migrate && pnpm db:seed",
+        "dev": "pnpm dlx concurrently -n \"pg,redis\" \"drizzle-kit studio\" \"pnpm dlx redis-commander\"",
         "typecheck": "tsc"
     },
     "dependencies": {
@@ -30,7 +29,6 @@
         "@types/pg": "^8.16.0",
         "diff": "9.0.0",
         "drizzle-kit": "^0.31.8",
-        "redis-commander": "^0.9.0",
         "tsx": "catalog:"
     }
 }
