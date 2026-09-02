@@ -1,0 +1,52 @@
+===================================================================
+--- baseline
++++ auth.ts
+@@ -1,28 +1,43 @@
+ import { relations } from 'drizzle-orm';
+-import { boolean, index, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
++import {
++    boolean,
++    index,
++    pgEnum,
++    pgSchema,
++    text,
++    timestamp,
++    uuid,
++} from 'drizzle-orm/pg-core';
+ 
++import { USER_ROLE_VALUES } from '@shipkit/shared/constants';
++
++export const authSchema = pgSchema('auth');
++const pgTable = authSchema.table;
++
++export const userRoleEnum = pgEnum('user_role_enum', USER_ROLE_VALUES);
++
+ export const users = pgTable('users', {
+-    id: text('id').primaryKey(),
++    id: uuid('id').defaultRandom().primaryKey(),
+     name: text('name').notNull(),
+     email: text('email').notNull().unique(),
+     emailVerified: boolean('email_verified').default(false).notNull(),
+     image: text('image'),
++    roles: userRoleEnum('roles').array().default(['user']).notNull(),
+     createdAt: timestamp('created_at').defaultNow().notNull(),
+     updatedAt: timestamp('updated_at')
+         .defaultNow()
+         .$onUpdate(() => /* @__PURE__ */ new Date())
+         .notNull(),
+-    roles: text('roles').array(),
+ });
+ 
+ export const accounts = pgTable(
+     'accounts',
+     {
+-        id: text('id').primaryKey(),
++        id: uuid('id').defaultRandom().primaryKey(),
+         accountId: text('account_id').notNull(),
+         providerId: text('provider_id').notNull(),
+-        userId: text('user_id')
++        userId: uuid('user_id')
+             .notNull()
+             .references(() => users.id, { onDelete: 'cascade' }),
+         accessToken: text('access_token'),
+         refreshToken: text('refresh_token'),

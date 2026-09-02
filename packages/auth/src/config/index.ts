@@ -2,7 +2,6 @@ import { redisStorage } from '@better-auth/redis-storage';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 
-import type { Redis } from '@shipkit/db/redis';
 import type { USER_ROLE_VALUES } from '@shipkit/shared/constants';
 import type { TablesRelationalConfig } from 'drizzle-orm';
 import type { PgDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core';
@@ -11,6 +10,8 @@ import type { OAuthProvidersConfig } from './social-providers';
 import { cookieForwarderPlugin } from './plugins/cookie-forwarder';
 import { emailSignInPlugin } from './plugins/email-sign-in';
 import { buildOAuthProviders } from './social-providers';
+
+type Redis = Parameters<typeof redisStorage>[0]['client'];
 
 export type AuthDatabase = PgDatabase<
     PgQueryResultHKT,

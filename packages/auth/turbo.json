@@ -1,6 +1,0 @@
-{
-    "extends": ["//"],
-    "tasks": {
-        "schema:gen": { "cache": false }
-    }
-}

@@ -1,10 +1,13 @@
-import type { Redis } from '@shipkit/db/redis';
+import { type redisStorage } from '@better-auth/redis-storage';
+
 import type { AuthConfig, AuthDatabase, Roles } from './config';
 
 import { createBetterAuthConfig } from './config';
 import { authRequestContext } from './context-store';
 
 let _authInstance: ReturnType<typeof createBetterAuthConfig> | undefined;
+
+type Redis = Parameters<typeof redisStorage>[0]['client'];
 
 function getOrCreateAuthInstance(
     db: AuthDatabase,
