@@ -15,7 +15,7 @@ function AddTodoForm() {
     const { useMutation, inputSchema } = api.todo.create;
 
     const create = useMutation({
-        onSuccess: () => void utils.todo.list.invalidateQuery(),
+        onSuccess: () => utils.todo.list.invalidateQuery(),
     });
 
     const form = useForm({
@@ -86,43 +86,119 @@ function AddTodoForm() {
     );
 }
 
-export default function TodoList() {
-    const [editingId, setEditingId] = useState<string | null>(null);
-    const [editTitle, setEditTitle] = useState('');
-    const utils = useUtils();
+type Todo = { id: string; title: string; completed: boolean };
 
-    const { useQuery } = api.todo.list;
+function TodoItem({
+    todo,
+    onMutate,
+}: {
+    todo: Todo;
+    onMutate: () => Promise<void>;
+}) {
+    const [isEditing, setIsEditing] = useState(false);
+    const [editTitle, setEditTitle] = useState('');
+
     const { useMutation: useUpdate } = api.todo.update;
     const { useMutation: useDelete } = api.todo.delete;
 
-    const { data, isLoading } = useQuery();
-
     const update = useUpdate({
-        onSuccess: () => {
-            void utils.todo.list.invalidateQuery();
-            setEditingId(null);
+        onSuccess: async () => {
+            await onMutate();
+            setIsEditing(false);
         },
     });
+    const remove = useDelete({ onSuccess: async () => await onMutate() });
 
-    const remove = useDelete({
-        onSuccess: () => void utils.todo.list.invalidateQuery(),
-    });
+    const isBusy = update.isPending || remove.isPending;
 
-    function handleToggle(id: string, completed: boolean) {
-        update.mutate({ params: { id }, body: { completed: !completed } });
+    function handleToggle() {
+        update.mutate({
+            params: { id: todo.id },
+            body: { completed: !todo.completed },
+        });
     }
 
-    function startEdit(id: string, title: string) {
-        setEditingId(id);
-        setEditTitle(title);
+    function startEdit() {
+        setIsEditing(true);
+        setEditTitle(todo.title);
     }
 
-    function handleEdit(id: string) {
+    function handleEdit(e: React.FormEvent) {
+        e.preventDefault();
         if (!editTitle.trim()) return;
-        update.mutate({ params: { id }, body: { title: editTitle.trim() } });
+        update.mutate({
+            params: { id: todo.id },
+            body: { title: editTitle.trim() },
+        });
     }
 
+    return (
+        <li className="flex items-center gap-3 py-3">
+            <input
+                type="checkbox"
+                checked={todo.completed}
+                onChange={handleToggle}
+                disabled={isBusy}
+                className="size-4 shrink-0"
+            />
+
+            {isEditing ? (
+                <form onSubmit={handleEdit} className="flex flex-1 gap-2">
+                    <Input
+                        value={editTitle}
+                        onChange={(e) => setEditTitle(e.target.value)}
+                        className="flex-1"
+                    />
+                    <Button type="submit" size="sm" disabled={update.isPending}>
+                        Save
+                    </Button>
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setIsEditing(false)}
+                        disabled={update.isPending}
+                    >
+                        Cancel
+                    </Button>
+                </form>
+            ) : (
+                <>
+                    <span
+                        className={`flex-1 ${todo.completed ? 'text-muted-foreground line-through' : ''}`}
+                    >
+                        {todo.title}
+                    </span>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={startEdit}
+                        disabled={isBusy}
+                    >
+                        Edit
+                    </Button>
+                    <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() =>
+                            remove.mutate({ params: { id: todo.id } })
+                        }
+                        disabled={remove.isPending}
+                    >
+                        Delete
+                    </Button>
+                </>
+            )}
+        </li>
+    );
+}
+
+export default function TodoList() {
+    const utils = useUtils();
+    const { useQuery } = api.todo.list;
+    const { data, isLoading } = useQuery();
     const todos = data?.body ?? [];
+    const invalidate = () => utils.todo.list.invalidateQuery();
 
     return (
         <div className="space-y-6">
@@ -139,81 +215,11 @@ export default function TodoList() {
             ) : (
                 <ul className="divide-y">
                     {todos.map((todo) => (
-                        <li
+                        <TodoItem
                             key={todo.id}
-                            className="flex items-center gap-3 py-3"
-                        >
-                            <input
-                                type="checkbox"
-                                checked={todo.completed}
-                                onChange={() =>
-                                    handleToggle(todo.id, todo.completed)
-                                }
-                                className="size-4 shrink-0"
-                            />
-
-                            {editingId === todo.id ? (
-                                <form
-                                    onSubmit={(e) => {
-                                        e.preventDefault();
-                                        handleEdit(todo.id);
-                                    }}
-                                    className="flex flex-1 gap-2"
-                                >
-                                    <Input
-                                        value={editTitle}
-                                        onChange={(e) =>
-                                            setEditTitle(e.target.value)
-                                        }
-                                        className="flex-1"
-                                    />
-                                    <Button
-                                        type="submit"
-                                        size="sm"
-                                        disabled={update.isPending}
-                                    >
-                                        Save
-                                    </Button>
-                                    <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => setEditingId(null)}
-                                    >
-                                        Cancel
-                                    </Button>
-                                </form>
-                            ) : (
-                                <>
-                                    <span
-                                        className={`flex-1 ${todo.completed ? 'text-muted-foreground line-through' : ''}`}
-                                    >
-                                        {todo.title}
-                                    </span>
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() =>
-                                            startEdit(todo.id, todo.title)
-                                        }
-                                    >
-                                        Edit
-                                    </Button>
-                                    <Button
-                                        variant="destructive"
-                                        size="sm"
-                                        onClick={() =>
-                                            remove.mutate({
-                                                params: { id: todo.id },
-                                            })
-                                        }
-                                        disabled={remove.isPending}
-                                    >
-                                        Delete
-                                    </Button>
-                                </>
-                            )}
-                        </li>
+                            todo={todo}
+                            onMutate={invalidate}
+                        />
                     ))}
                 </ul>
             )}
