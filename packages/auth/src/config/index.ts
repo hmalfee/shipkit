@@ -8,6 +8,7 @@ import type { PgDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core';
 import type { OAuthProvidersConfig } from './social-providers';
 
 import { cookieForwarderPlugin } from './plugins/cookie-forwarder';
+import { emailGuardPlugin } from './plugins/email-guard';
 import { emailSignInPlugin } from './plugins/email-sign-in';
 import { buildOAuthProviders } from './social-providers';
 
@@ -94,11 +95,11 @@ export function createBetterAuthConfig(
             client: redisClient,
             keyPrefix: 'auth:',
         }),
-
         plugins: [
             emailSignInPlugin({
                 onSendSignInEmail: config.onSendSignInEmail,
             }),
+            emailGuardPlugin({ paths: ['/change-email'] }),
             cookieForwarderPlugin(), // must be last
         ],
         rateLimit: {

@@ -12,6 +12,12 @@ import { z } from 'zod';
 
 import type { BetterAuthPlugin, GenericEndpointContext } from 'better-auth';
 
+import {
+    assertNotDisposable,
+    normalizeEmail,
+    sanitizeEmail,
+} from '../utils/email-validation';
+
 function otpKey(email: string) {
     return `email-auth-otp:${email}`;
 }
@@ -99,6 +105,18 @@ async function findOrCreateUser(
     return user;
 }
 
+// sanitize → normalize → assert not disposable.
+// Endpoints' Zod schemas already validate format, so no format check here.
+async function validateEmail(
+    email: string,
+    internalAdapter: GenericEndpointContext['context']['internalAdapter'],
+): Promise<string> {
+    const sanitized = sanitizeEmail(email);
+    const normalized = normalizeEmail(sanitized);
+    await assertNotDisposable(sanitized, normalized, internalAdapter);
+    return normalized;
+}
+
 export function emailSignInPlugin(opts: EmailSignInOptions) {
     const expiresInMinutes = opts.expiresInMinutes ?? 15;
     const allowedAttempts = opts.allowedAttempts ?? 3;
@@ -120,7 +138,10 @@ export function emailSignInPlugin(opts: EmailSignInOptions) {
                     }),
                 },
                 async (ctx) => {
-                    const email = ctx.body.email.toLowerCase().trim();
+                    const email = await validateEmail(
+                        ctx.body.email,
+                        ctx.context.internalAdapter,
+                    );
                     const { callbackURL, name } = ctx.body;
                     const expiresAt = new Date(
                         Date.now() + expiresInMinutes * 60_000,
@@ -184,7 +205,10 @@ export function emailSignInPlugin(opts: EmailSignInOptions) {
                     }),
                 },
                 async (ctx) => {
-                    const email = ctx.body.email.toLowerCase().trim();
+                    const email = await validateEmail(
+                        ctx.body.email,
+                        ctx.context.internalAdapter,
+                    );
                     const { name } = ctx.body;
                     const key = otpKey(email);
 
@@ -299,6 +323,20 @@ export function emailSignInPlugin(opts: EmailSignInOptions) {
                         );
 
                     const payload = JSON.parse(consumed.value) as TokenValue;
+
+                    // Guard: validate the email stored in the token is not disposable.
+                    // Re-checked here so the magic link path has the same security posture
+                    // as the OTP path.
+                    try {
+                        payload.email = await validateEmail(
+                            payload.email,
+                            ctx.context.internalAdapter,
+                        );
+                    } catch {
+                        throw ctx.redirect(
+                            `/?error=${BASE_ERROR_CODES.INVALID_EMAIL.code.toLocaleLowerCase()}`,
+                        );
+                    }
 
                     const user = await findOrCreateUser(
                         ctx,

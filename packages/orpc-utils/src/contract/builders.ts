@@ -25,12 +25,14 @@ const base = oc
 /** Automatically added to any route that defines `.input(...)`. */
 const badRequestError = {
     BAD_REQUEST: {
-        data: z.object({
-            formErrors: z.array(z.string()).optional(),
-            fieldErrors: z
-                .record(z.string(), z.array(z.string()).optional())
-                .optional(),
-        }),
+        data: z
+            .object({
+                formErrors: z.array(z.string()).optional(),
+                fieldErrors: z
+                    .record(z.string(), z.array(z.string()).optional())
+                    .optional(),
+            })
+            .optional(),
     },
 } as const;
 
