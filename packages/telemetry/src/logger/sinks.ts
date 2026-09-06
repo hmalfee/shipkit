@@ -1,11 +1,5 @@
 import { getConsoleSink } from '@logtape/logtape';
-import {
-    DEFAULT_REDACT_FIELDS,
-    EMAIL_ADDRESS_PATTERN,
-    JWT_PATTERN,
-    redactByField,
-    redactByPattern,
-} from '@logtape/redaction';
+import { DEFAULT_REDACT_FIELDS, redactByField } from '@logtape/redaction';
 
 import type { LoggerConfig, LogRecord, Sink } from '@logtape/logtape';
 
@@ -22,6 +16,28 @@ const LEVEL_STYLES: Record<string, { ansi: string; label: string }> = {
     error: { ansi: '\x1b[48;2;200;50;50m\x1b[30m', label: ' ERR ' },
     fatal: { ansi: '\x1b[48;2;160;40;160m\x1b[30m', label: ' FTL ' },
 };
+
+// Overrides on top of DEFAULT_REDACT_FIELDS (@logtape/redaction).
+// Current default patterns: https://app.unpkg.com/@logtape/redaction/files/dist/field.cjs
+// exclude: keywords to allow through (matched against pattern .toString())
+// include: extra patterns to redact beyond the defaults
+const REDACT_FIELD_OVERRIDES: {
+    exclude: string[];
+    include: (string | RegExp)[];
+} = {
+    exclude: ['email'],
+    include: [],
+};
+
+const REDACT_FIELDS = [
+    ...DEFAULT_REDACT_FIELDS.filter(
+        (pattern) =>
+            !REDACT_FIELD_OVERRIDES.exclude.some((keyword) =>
+                pattern.toString().includes(keyword),
+            ),
+    ),
+    ...REDACT_FIELD_OVERRIDES.include,
+];
 
 function formatAMPM(timestamp: number) {
     const date = new Date(timestamp);
@@ -109,7 +125,7 @@ function gateSink(
 
 function redactDefaultFields(sink: Sink): Sink {
     return redactByField(sink, {
-        fieldPatterns: DEFAULT_REDACT_FIELDS,
+        fieldPatterns: REDACT_FIELDS,
         action: () => '[REDACTED]',
     });
 }
@@ -123,10 +139,7 @@ export function buildSinksAndLoggers(
 
     const rawConsole = getConsoleSink({
         ...(consoleRef ? { console: consoleRef } : {}),
-        formatter: redactByPattern(consoleFormatter, [
-            EMAIL_ADDRESS_PATTERN,
-            JWT_PATTERN,
-        ]),
+        formatter: consoleFormatter,
     });
     const consoleSink = redactDefaultFields(rawConsole);
 

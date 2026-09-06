@@ -147,7 +147,25 @@ export const orpc = (): MiddlewareHandler => async (c) => {
                                   );
                               });
                           }
-                        : undefined,
+                        : async ({
+                              email,
+                              magicLink,
+                              otp,
+                              expiresInMinutes,
+                          }) => {
+                              logger.warn(
+                                  '[auth] SMTP not configured — simulating sign-in email instead of sending it to {email}',
+                                  { email },
+                              );
+                              logger.info(
+                                  '[auth] Simulated sign-in email\n  OTP:     {otp}\n  Link:    {link}\n  Expires: {expiresInMinutes}m',
+                                  {
+                                      otp,
+                                      link: magicLink.url,
+                                      expiresInMinutes,
+                                  },
+                              );
+                          },
                 },
             }),
             db,
