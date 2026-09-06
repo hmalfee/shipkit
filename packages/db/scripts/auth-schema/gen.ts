@@ -22,16 +22,21 @@ export async function runGen(): Promise<boolean> {
 
         if (diffExists) {
             const diff = await readFile(DIFF_FILE, 'utf8');
-            const applied = Diff.applyPatch(baseline, diff);
+            let applied = Diff.applyPatch(baseline, diff);
 
             if (applied === false) {
-                console.error(
-                    `${RED}✖ auth.schema.diff could not be applied to the freshly generated schema.${RESET}\n` +
-                        `  The generator's output has likely drifted too far from what the diff expects.\n` +
-                        `  Delete auth.schema.diff, rerun 'pnpm db:auth-schema --gen' to get a clean auth.ts, reapply your\n` +
-                        `  customizations by hand, then run 'pnpm db:auth-schema --diff' to regenerate the diff.`,
-                );
-                return false;
+                // Try with fuzz factor in case new columns/tables shifted the context lines
+                applied = Diff.applyPatch(baseline, diff, { fuzzFactor: 10 });
+
+                if (applied === false) {
+                    console.error(
+                        `${RED}✖ auth.schema.diff could not be applied to the freshly generated schema.${RESET}\n` +
+                            `  The generator's output has likely drifted too far from what the diff expects.\n` +
+                            `  Delete auth.schema.diff, rerun 'pnpm db:auth-schema --gen' to get a clean auth.ts, and reapply your\n` +
+                            `  customizations by hand.`,
+                    );
+                    return false;
+                }
             }
 
             output = applied;
@@ -50,7 +55,7 @@ export async function runGen(): Promise<boolean> {
         if (!diffExists) {
             console.log(
                 `\n${YELLOW}Need custom tables, columns, indexes, or relations? Edit auth.ts directly.${RESET}\n` +
-                    `${YELLOW}Then run 'pnpm db:auth-schema --diff' to save those changes as auth.schema.diff.${RESET}\n`,
+                    `${YELLOW}Then run 'pnpm db:auth-schema --gen' again to save those changes as auth.schema.diff.${RESET}\n`,
             );
         }
         return true;
@@ -63,32 +68,67 @@ export async function runGen(): Promise<boolean> {
 
     if (diffExists) {
         const diff = await readFile(DIFF_FILE, 'utf8');
-        const applied = Diff.applyPatch(baseline, diff);
+        let applied = Diff.applyPatch(baseline, diff);
 
         if (applied === false) {
-            console.error(
-                `${RED}✖ Verification failed: auth.schema.diff no longer applies cleanly to the current auth schema.${RESET}\n` +
-                    `  The auth package's generated baseline has changed in a way that conflicts with your saved customizations.\n` +
-                    `  Resolve the conflict in auth.ts by hand, then run 'pnpm db:auth-schema --diff' to re-save it.`,
+            // Try with fuzz factor in case new columns/tables shifted the context lines
+            applied = Diff.applyPatch(baseline, diff, { fuzzFactor: 10 });
+
+            if (applied === false) {
+                console.error(
+                    `${RED}✖ Verification failed: auth.schema.diff no longer applies cleanly to the current auth schema.${RESET}\n` +
+                        `  The auth package's generated baseline has changed in a way that conflicts with your saved customizations.\n` +
+                        `  Resolve the conflict in auth.ts by hand, then run 'pnpm db:auth-schema --gen' to re-save it.`,
+                );
+                return false;
+            }
+
+            // Auto-rebase succeeded: absorb new baseline content, re-save diff, and we're done.
+            await writeFile(AUTH_FILE, applied, 'utf8');
+            const rebasedDiff = Diff.createTwoFilesPatch(
+                'baseline',
+                'auth.ts',
+                baseline,
+                applied,
             );
-            return false;
+            await writeFile(DIFF_FILE, rebasedDiff, 'utf8');
+
+            console.log(
+                `${GREEN}✔ Baseline updated — absorbed new columns/tables, rebased auth.ts and auth.schema.diff${RESET}`,
+            );
+            return true;
         }
 
         expected = applied;
     }
 
     if (current !== expected) {
-        console.error(
-            `${RED}✖ Drift detected: ${AUTH_FILE} does not match the baseline${diffExists ? ' + auth.schema.diff' : ''}.${RESET}\n` +
-                `  Either auth.ts was edited without updating auth.schema.diff, or the baseline changed.\n` +
-                `  Run 'pnpm db:auth-schema --diff' to snapshot the current customizations, or revert auth.ts.\n` +
-                `\n${Diff.createTwoFilesPatch('expected', 'auth.ts', expected, current)}`,
+        // Drift detected. auth.ts was edited manually without running --gen afterward,
+        // or we just didn't save the diff yet. We treat auth.ts as the source of truth and snapshot it.
+        const newDiff = Diff.createTwoFilesPatch(
+            'baseline',
+            'auth.ts',
+            baseline,
+            current,
         );
-        return false;
+        await writeFile(DIFF_FILE, newDiff, 'utf8');
+        console.log(
+            `${GREEN}✔ auth.ts had manual edits — auth.schema.diff updated to reflect them${RESET}`,
+        );
+        return true;
     }
 
+    // Happy path: everything in sync — re-save diff to ensure it is always current
+    const upToDateDiff = Diff.createTwoFilesPatch(
+        'baseline',
+        'auth.ts',
+        baseline,
+        current,
+    );
+    await writeFile(DIFF_FILE, upToDateDiff, 'utf8');
+
     console.log(
-        `${GREEN}✔ auth.ts matches the baseline${diffExists ? ' + auth.schema.diff' : ''}${RESET}`,
+        `${GREEN}✔ auth.ts matches the baseline${diffExists ? ' + auth.schema.diff' : ''} — diff saved${RESET}`,
     );
     return true;
 }

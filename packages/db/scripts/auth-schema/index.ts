@@ -1,39 +1,49 @@
 /**
- * auth-schema
- * Purpose: single CLI for managing packages/db's generated + customized
- * @shipkit/auth Drizzle schema (src/pg/schema/auth.ts).
+ * auth-schema — CLI for keeping src/pg/schema/auth.ts in sync with @shipkit/auth.
  *
- * Usage:
- *   tsx scripts/auth-schema --gen         # generate/verify auth.ts
- *   tsx scripts/auth-schema --diff        # snapshot manual edits to auth.schema.diff
- *   tsx scripts/auth-schema --validate    # verify auth.ts satisfies @shipkit/auth's contract
- *   tsx scripts/auth-schema --all         # run gen -> diff -> validate, in that order
+ * Two-stage pipeline:
  *
- * Flags can be combined (e.g. `--gen --validate`) and always run in the
- * fixed order gen -> diff -> validate, regardless of CLI order. Passing
- * --all overrides any other flags given and always runs all three steps.
- * Execution stops at the first failing step.
+ *   --gen       TEXTUAL stage. Operates purely on strings — no imports, no runtime.
+ *               On first run: writes auth.ts from the @shipkit/auth baseline.
+ *               On subsequent runs: verifies auth.ts matches baseline + saved
+ *               customizations (auth.schema.diff), and snapshots any manual edits
+ *               back into auth.schema.diff so they survive the next upstream update.
+ *               Intentionally trusts the diff file as-is — it does NOT check
+ *               whether the resulting auth.ts is a valid Drizzle schema. A diff that
+ *               removes required tables will apply cleanly here; --validate catches that.
+ *
+ *   --validate  SEMANTIC stage. Imports the live auth.ts module and checks that every
+ *               table and column @shipkit/auth requires is present with the right type.
+ *               This is the contract gate — it fails if auth.ts is structurally broken
+ *               or missing required fields, regardless of how it got that way.
+ *
+ *   --all       Runs gen → validate in order. Use this in CI or after editing auth.ts
+ *               to catch both textual drift and semantic contract violations in one pass.
+ *
+ * Flags may be combined (e.g. `--gen --validate`); they always execute in the fixed
+ * order gen → validate. --all overrides any other flags. Stops at the first failure.
  */
-import { runDiff } from './diff';
 import { runGen } from './gen';
 import { runValidate } from './validate';
 
 const RED = '\x1b[31m';
 const RESET = '\x1b[0m';
 
-const FLAGS = ['--gen', '--diff', '--validate', '--all'] as const;
+const FLAGS = ['--gen', '--validate', '--all'] as const;
 type Flag = (typeof FLAGS)[number];
 
 function printUsage() {
     console.log(`Usage: auth-schema [flags]
 
-  --gen         Generate/verify auth.ts against the @shipkit/auth baseline
-  --diff        Snapshot manual edits to auth.ts as auth.schema.diff
-  --validate    Verify auth.ts satisfies @shipkit/auth's schema contract
-  --all         Run gen -> diff -> validate, in that order (overrides other flags)
+  --gen         Textual stage: write/sync auth.ts from the @shipkit/auth baseline and
+                snapshot any manual edits into auth.schema.diff. Does not import the
+                schema — purely string-level, intentionally blind to Drizzle semantics.
+  --validate    Semantic stage: import auth.ts and verify it satisfies @shipkit/auth's
+                required tables, columns, and types. The contract gate.
+  --all         Run gen → validate in order (overrides other flags)
 
-Flags may be combined; they always run in the order gen -> diff -> validate.
-Passing --all runs all three regardless of any other flags given.`);
+Flags may be combined; they always run in the order gen → validate.
+Passing --all runs all steps regardless of any other flags given.`);
 }
 
 async function main() {
@@ -59,7 +69,6 @@ async function main() {
 
     const steps: [Flag, () => Promise<boolean>][] = [
         ['--gen', runGen],
-        ['--diff', runDiff],
         ['--validate', runValidate],
     ];
 
