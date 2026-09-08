@@ -1,50 +1,21 @@
+import type { IKeyValue } from '@opentelemetry/otlp-transformer/build/esm/common/internal-types';
+import type {
+    IExportLogsServiceRequest,
+    ILogRecord,
+} from '@opentelemetry/otlp-transformer/build/esm/logs/internal-types';
+import type {
+    IEvent,
+    IExportTraceServiceRequest,
+} from '@opentelemetry/otlp-transformer/build/esm/trace/internal-types';
 import type { SourceMapResolver } from './resolver';
 
 import { resolveStacktraceAttr } from './resolver';
 
-interface SpanEvent {
-    name: string;
-    attributes: KeyValue[];
-}
-
-interface LogRecord {
-    attributes: KeyValue[];
-    body?: { stringValue?: string | null };
-}
-
-export interface OtlpTraceRequest {
-    resourceSpans?: {
-        scopeSpans?: {
-            spans?: {
-                events?: SpanEvent[];
-            }[];
-        }[];
-    }[];
-}
-
-export interface OtlpLogsRequest {
-    resourceLogs?: {
-        scopeLogs?: {
-            logRecords?: LogRecord[];
-        }[];
-    }[];
-}
-
-interface KeyValue {
-    key: string;
-    value: {
-        stringValue?: string | null;
-        arrayValue?: {
-            values: { stringValue?: string | null }[];
-        };
-    };
-}
-
-function getStringAttr(attrs: KeyValue[], key: string): string | null {
+function getStringAttr(attrs: IKeyValue[], key: string): string | null {
     return attrs.find((a) => a.key === key)?.value?.stringValue ?? null;
 }
 
-function getArrayAttr(attrs: KeyValue[], key: string): string[] {
+function getArrayAttr(attrs: IKeyValue[], key: string): string[] {
     const val = attrs.find((a) => a.key === key)?.value?.arrayValue;
     return (
         val?.values
@@ -53,7 +24,7 @@ function getArrayAttr(attrs: KeyValue[], key: string): string[] {
     );
 }
 
-function setStringAttr(attrs: KeyValue[], key: string, value: string) {
+function setStringAttr(attrs: IKeyValue[], key: string, value: string) {
     const existing = attrs.find((a) => a.key === key);
     if (existing) {
         existing.value = { stringValue: value };
@@ -63,7 +34,7 @@ function setStringAttr(attrs: KeyValue[], key: string, value: string) {
 }
 
 interface HasAttributes {
-    attributes: KeyValue[];
+    attributes: IKeyValue[];
     body?: { stringValue?: string | null };
 }
 
@@ -100,10 +71,10 @@ function resolveItems(items: HasAttributes[], resolver: SourceMapResolver) {
 }
 
 export function resolveExceptionStackTraces(
-    request: OtlpTraceRequest,
+    request: IExportTraceServiceRequest,
     resolver: SourceMapResolver,
 ): void {
-    const events: SpanEvent[] = (request.resourceSpans ?? [])
+    const events: IEvent[] = (request.resourceSpans ?? [])
         .flatMap((rs) => rs.scopeSpans ?? [])
         .flatMap((ss) => ss.spans ?? [])
         .flatMap((s) => s.events ?? [])
@@ -112,10 +83,10 @@ export function resolveExceptionStackTraces(
 }
 
 export function resolveExceptionLogs(
-    request: OtlpLogsRequest,
+    request: IExportLogsServiceRequest,
     resolver: SourceMapResolver,
 ): void {
-    const records: LogRecord[] = (request.resourceLogs ?? [])
+    const records: ILogRecord[] = (request.resourceLogs ?? [])
         .flatMap((rl) => rl.scopeLogs ?? [])
         .flatMap((sl) => sl.logRecords ?? []);
     resolveItems(records, resolver);

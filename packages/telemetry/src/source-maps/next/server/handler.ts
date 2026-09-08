@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import protobuf from 'protobufjs';
 
+import type { IExportLogsServiceRequest } from '@opentelemetry/otlp-transformer/build/esm/logs/internal-types';
+import type { IExportTraceServiceRequest } from '@opentelemetry/otlp-transformer/build/esm/trace/internal-types';
 import type { NextRequest } from 'next/server';
-import type { OtlpLogsRequest, OtlpTraceRequest } from './resolve';
 import type { SourceMapResolver } from './resolver';
 
 import { logger } from '../../../logger';
@@ -21,27 +22,12 @@ function getProtoRoot(): protobuf.Root {
 const MAX_BODY_BYTES = 4 * 1024 * 1024; // 4 MB
 const COLLECTOR_TIMEOUT_MS = 10_000;
 
-const DEBUG_ID_MAPS_NEEDLE = new TextEncoder().encode(
-    'exception.stacktrace.debug_id_maps',
-);
+const DEBUG_ID_MAPS_NEEDLE = 'exception.stacktrace.debug_id_maps';
 
 function containsDebugIdMaps(body: Uint8Array): boolean {
-    const needle = DEBUG_ID_MAPS_NEEDLE;
-    const haystack = body;
-    if (haystack.length < needle.length) return false;
-
-    outer: for (
-        let i = 0, end = haystack.length - needle.length;
-        i <= end;
-        i++
-    ) {
-        if (haystack[i] !== needle[0]) continue;
-        for (let j = 1; j < needle.length; j++) {
-            if (haystack[i + j] !== needle[j]) continue outer;
-        }
-        return true;
-    }
-    return false;
+    return Buffer.from(body.buffer, body.byteOffset, body.length).includes(
+        DEBUG_ID_MAPS_NEEDLE,
+    );
 }
 
 async function forwardToCollector(
@@ -100,13 +86,19 @@ function enrichPayload(
         const message = T.decode(body);
         const obj = T.toObject(message, {
             defaults: true,
-        }) as OtlpTraceRequest | OtlpLogsRequest;
+        }) as IExportTraceServiceRequest | IExportLogsServiceRequest;
 
         try {
             if (isTraces) {
-                resolveExceptionStackTraces(obj as OtlpTraceRequest, resolver);
+                resolveExceptionStackTraces(
+                    obj as IExportTraceServiceRequest,
+                    resolver,
+                );
             } else {
-                resolveExceptionLogs(obj as OtlpLogsRequest, resolver);
+                resolveExceptionLogs(
+                    obj as IExportLogsServiceRequest,
+                    resolver,
+                );
             }
         } catch (err) {
             logger.local.debug('[telemetry] Stack trace resolution failed', {
