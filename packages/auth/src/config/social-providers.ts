@@ -1,5 +1,10 @@
+import { APIError, BASE_ERROR_CODES } from 'better-auth';
+import { z } from 'zod/mini';
+
 import type { OAUTH_PROVIDER_IDS } from '@shipkit/shared/constants';
 import type { betterAuth } from 'better-auth';
+
+import { normalizeEmail, sanitizeEmail } from './utils/email-validation';
 
 type BetterAuthOAuthProviders = NonNullable<
     ReturnType<typeof betterAuth>['options']['socialProviders']
@@ -20,6 +25,27 @@ export type OAuthProvidersConfig = Record<
         clientSecret: string;
     }
 >;
+
+/**
+ * Normalizes an OAuth provider's email so better-auth's existing-user lookup
+ * matches correctly instead of misdiagnosing returning users as new signups.
+ */
+function mapOAuthProfileEmail(profile: unknown) {
+    const parsed = z.object({ email: z.email() }).safeParse(profile);
+    if (!parsed.success) {
+        throw new APIError('BAD_REQUEST', {
+            code: BASE_ERROR_CODES.INVALID_EMAIL.code,
+            message: 'OAuth provider did not return a valid email',
+        });
+    }
+
+    const sanitized = sanitizeEmail(parsed.data.email);
+    const normalized = normalizeEmail(sanitized);
+    return {
+        email: normalized,
+        displayEmail: sanitized,
+    };
+}
 
 /**
  * OAuth Provider Configuration
@@ -50,6 +76,9 @@ export function buildOAuthProviders(
                 // We write the same thing in two places because the below will be validated by the
                 // provider based on what we have in the provider's dashboard.
                 redirectURI: `${baseURL}/auth/callback/${key}`,
+                // Applies to every provider by default; a provider can override this
+                // by setting its own `mapProfileToUser` in `oauthProvidersConfig` above.
+                mapProfileToUser: mapOAuthProfileEmail,
                 ...config,
             },
         ]),
@@ -58,6 +87,7 @@ export function buildOAuthProviders(
             K in keyof typeof oauthProvidersConfig
         ]: (typeof oauthProvidersConfig)[K] & {
             redirectURI?: string;
+            mapProfileToUser?: typeof mapOAuthProfileEmail;
         };
     } satisfies OAuthProviders;
 }

@@ -12,46 +12,27 @@ import { z } from 'zod';
 
 import type { BetterAuthPlugin, GenericEndpointContext } from 'better-auth';
 
-import {
-    assertNotDisposable,
-    normalizeEmail,
-    sanitizeEmail,
-} from '../utils/email-validation';
+import { runEmailValidationPipeline } from '../utils/email-validation';
 
-function otpKey(email: string) {
-    return `email-auth-otp:${email}`;
+function otpKey(normalizedEmail: string) {
+    return `email-auth-otp:${normalizedEmail}`;
 }
 
 function tokenKey(token: string) {
     return `email-auth-token:${token}`;
 }
 
-// "<otp>:<token>:<attempts>" — attempts stays the LAST colon-segment (so it
-// parses the same way better-auth's own splitAtLastColon does), with the
-// token folded in as a middle field so verifyOtp can also invalidate the
-// sibling magic-link token on success. Neither otp (digits only) nor token
-// (alphanumeric) can contain a colon, so this round-trips unambiguously.
-function encodeValue(otp: string, token: string, attempts: number): string {
-    return `${otp}:${token}:${attempts}`;
-}
-
-function decodeValue(raw: string): {
+type OTPValue = {
     otp: string;
     token: string;
     attempts: number;
-} {
-    const lastColon = raw.lastIndexOf(':');
-    const attempts = parseInt(raw.slice(lastColon + 1), 10) || 0;
-    const rest = raw.slice(0, lastColon);
-    const firstColon = rest.indexOf(':');
-    return {
-        otp: rest.slice(0, firstColon),
-        token: rest.slice(firstColon + 1),
-        attempts,
-    };
-}
+};
 
-type TokenValue = { email: string; callbackURL?: string; name?: string };
+type TokenValue = {
+    email: string;
+    callbackURL?: string;
+    name?: string;
+};
 
 export type EmailSignInOptions = {
     onSendSignInEmail:
@@ -72,49 +53,39 @@ export type EmailSignInOptions = {
 
 async function findOrCreateUser(
     ctx: GenericEndpointContext,
-    email: string,
+    // Canonical form used for lookups and as the stored `email` column.
+    normalizedEmail: string,
+    // User-facing form (preserves +tags, casing intent, etc.) stored in `displayEmail`.
+    sanitizedEmail: string,
     disableSignUp: boolean | undefined,
     name?: string,
 ) {
-    const existing = await ctx.context.internalAdapter.findUserByEmail(email);
+    const existing =
+        await ctx.context.internalAdapter.findUserByEmail(normalizedEmail);
     if (existing) {
         let user = existing.user;
         // BA pattern: if existing user never verified email, revoke old
         // sessions/password and mark verified now (proving email ownership).
         if (!user.emailVerified) {
-            await revokeUnprovenAccountAccess(ctx, user.id);
-            user = await ctx.context.internalAdapter.updateUser(user.id, {
-                emailVerified: true,
-            });
+            user = (await revokeUnprovenAccountAccess(ctx, user.id)) ?? user;
         }
         return user;
     }
     if (disableSignUp) return null;
     const user = await ctx.context.internalAdapter.createUser({
-        email,
-        name: name ?? email.split('@')[0] ?? email,
+        email: normalizedEmail,
+        displayEmail: sanitizedEmail,
+        name: name ?? sanitizedEmail.split('@')[0] ?? sanitizedEmail,
         emailVerified: true,
     });
 
     await ctx.context.internalAdapter.createAccount({
         userId: user.id,
         providerId: 'email-auth',
-        accountId: email,
+        accountId: normalizedEmail,
     });
 
     return user;
-}
-
-// sanitize → normalize → assert not disposable.
-// Endpoints' Zod schemas already validate format, so no format check here.
-async function validateEmail(
-    email: string,
-    internalAdapter: GenericEndpointContext['context']['internalAdapter'],
-): Promise<string> {
-    const sanitized = sanitizeEmail(email);
-    const normalized = normalizeEmail(sanitized);
-    await assertNotDisposable(sanitized, normalized, internalAdapter);
-    return normalized;
 }
 
 export function emailSignInPlugin(opts: EmailSignInOptions) {
@@ -138,10 +109,11 @@ export function emailSignInPlugin(opts: EmailSignInOptions) {
                     }),
                 },
                 async (ctx) => {
-                    const email = await validateEmail(
-                        ctx.body.email,
-                        ctx.context.internalAdapter,
-                    );
+                    const { sanitized, normalized } =
+                        await runEmailValidationPipeline(
+                            ctx.body.email,
+                            ctx.context.internalAdapter,
+                        );
                     const { callbackURL, name } = ctx.body;
                     const expiresAt = new Date(
                         Date.now() + expiresInMinutes * 60_000,
@@ -150,22 +122,35 @@ export function emailSignInPlugin(opts: EmailSignInOptions) {
                     const otp = generateRandomString(6, '0-9');
                     const token = generateRandomString(32, 'a-z', 'A-Z');
 
-                    // OTP row carries the token so verifyOtp can invalidate it too.
-                    await ctx.context.internalAdapter.createVerificationValue({
-                        identifier: otpKey(email),
-                        value: encodeValue(otp, token, 0),
-                        expiresAt,
-                    });
-
-                    await ctx.context.internalAdapter.createVerificationValue({
-                        identifier: tokenKey(token),
-                        value: JSON.stringify({
-                            email,
-                            callbackURL,
-                            name,
-                        } satisfies TokenValue),
-                        expiresAt,
-                    });
+                    await Promise.all([
+                        ctx.context.internalAdapter.createVerificationValue({
+                            // Keyed by normalized (not sanitized) so verifyOtp can find this
+                            // row even if the user types the email slightly differently
+                            // (e.g. "u.ser@gmail.com" vs "user@gmail.com" are the same mailbox).
+                            identifier: otpKey(normalized),
+                            value: JSON.stringify({
+                                otp,
+                                // OTP row carries the token so verifyOtp can invalidate it too.
+                                token,
+                                attempts: 0,
+                            } satisfies OTPValue),
+                            expiresAt,
+                        }),
+                        ctx.context.internalAdapter.createVerificationValue({
+                            identifier: tokenKey(token),
+                            value: JSON.stringify({
+                                // Store sanitized (not normalized) to preserve the address the
+                                // user originally typed, for use as displayEmail later.
+                                // We only need to store it here for the magic-link flow — the
+                                // click only carries back `token`, no email. The OTP flow doesn't
+                                // need this, since the user resupplies their email when verifying.
+                                email: sanitized,
+                                callbackURL,
+                                name,
+                            } satisfies TokenValue),
+                            expiresAt,
+                        }),
+                    ]);
 
                     const linkUrl = new URL(
                         '/auth/email/verify-magic-link',
@@ -180,7 +165,10 @@ export function emailSignInPlugin(opts: EmailSignInOptions) {
                     if (opts.onSendSignInEmail) {
                         await ctx.context.runInBackgroundOrAwait(
                             opts.onSendSignInEmail({
-                                email,
+                                // Sanitized, not normalized — this goes straight to the user
+                                // (as the "to" address and/or shown in the email body), so it
+                                // should match what they typed, not the collapsed lookup form.
+                                email: sanitized,
                                 otp,
                                 magicLink: { url: linkUrl.toString(), token },
                                 expiresInMinutes,
@@ -205,12 +193,13 @@ export function emailSignInPlugin(opts: EmailSignInOptions) {
                     }),
                 },
                 async (ctx) => {
-                    const email = await validateEmail(
-                        ctx.body.email,
-                        ctx.context.internalAdapter,
-                    );
+                    const { sanitized, normalized } =
+                        await runEmailValidationPipeline(
+                            ctx.body.email,
+                            ctx.context.internalAdapter,
+                        );
                     const { name } = ctx.body;
-                    const key = otpKey(email);
+                    const key = otpKey(normalized);
 
                     const consumed =
                         await ctx.context.internalAdapter.consumeVerificationValue(
@@ -227,10 +216,14 @@ export function emailSignInPlugin(opts: EmailSignInOptions) {
                         otp: storedOtp,
                         token,
                         attempts,
-                    } = decodeValue(consumed.value);
+                    } = JSON.parse(consumed.value) as OTPValue;
 
                     if (attempts >= allowedAttempts) {
-                        throw new APIError('TOO_MANY_REQUESTS');
+                        throw new APIError('TOO_MANY_REQUESTS', {
+                            code: BASE_ERROR_CODES.INVALID_TOKEN.code,
+                            message:
+                                'Too many attempts. Please request a new OTP and try again.',
+                        });
                     }
 
                     if (!constantTimeEqual(storedOtp, ctx.body.otp.trim())) {
@@ -240,11 +233,11 @@ export function emailSignInPlugin(opts: EmailSignInOptions) {
                         await ctx.context.internalAdapter.createVerificationValue(
                             {
                                 identifier: key,
-                                value: encodeValue(
-                                    storedOtp,
+                                value: JSON.stringify({
+                                    otp: storedOtp,
                                     token,
-                                    attempts + 1,
-                                ),
+                                    attempts: attempts + 1,
+                                } satisfies OTPValue),
                                 expiresAt: consumed.expiresAt,
                             },
                         );
@@ -256,7 +249,8 @@ export function emailSignInPlugin(opts: EmailSignInOptions) {
 
                     const user = await findOrCreateUser(
                         ctx,
-                        email,
+                        normalized,
+                        sanitized,
                         opts.disableSignUp,
                         name,
                     );
@@ -285,8 +279,17 @@ export function emailSignInPlugin(opts: EmailSignInOptions) {
                         .consumeVerificationValue(tokenKey(token))
                         .catch(() => null);
 
-                    const { id, name: userName } = user;
-                    return ctx.json({ user: { id, name: userName, email } });
+                    const displayEmail =
+                        (user as { displayEmail?: string }).displayEmail ??
+                        sanitized;
+
+                    return ctx.json({
+                        user: {
+                            id: user.id,
+                            name: user.name,
+                            email: displayEmail,
+                        },
+                    });
                 },
             ),
 
@@ -324,23 +327,16 @@ export function emailSignInPlugin(opts: EmailSignInOptions) {
 
                     const payload = JSON.parse(consumed.value) as TokenValue;
 
-                    // Guard: validate the email stored in the token is not disposable.
-                    // Re-checked here so the magic link path has the same security posture
-                    // as the OTP path.
-                    try {
-                        payload.email = await validateEmail(
+                    const { sanitized, normalized } =
+                        await runEmailValidationPipeline(
                             payload.email,
                             ctx.context.internalAdapter,
                         );
-                    } catch {
-                        throw ctx.redirect(
-                            `/?error=${BASE_ERROR_CODES.INVALID_EMAIL.code.toLocaleLowerCase()}`,
-                        );
-                    }
 
                     const user = await findOrCreateUser(
                         ctx,
-                        payload.email,
+                        normalized,
+                        sanitized,
                         opts.disableSignUp,
                         payload.name,
                     );
@@ -360,7 +356,7 @@ export function emailSignInPlugin(opts: EmailSignInOptions) {
 
                     // Kill the sibling OTP — best-effort.
                     await ctx.context.internalAdapter
-                        .consumeVerificationValue(otpKey(payload.email))
+                        .consumeVerificationValue(otpKey(normalized))
                         .catch(() => null);
 
                     throw ctx.redirect(

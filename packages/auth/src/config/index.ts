@@ -7,8 +7,8 @@ import type { TablesRelationalConfig } from 'drizzle-orm';
 import type { PgDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core';
 import type { OAuthProvidersConfig } from './social-providers';
 
+import { databaseHooks, hooks } from './hooks';
 import { cookieForwarderPlugin } from './plugins/cookie-forwarder';
-import { emailGuardPlugin } from './plugins/email-guard';
 import { emailSignInPlugin } from './plugins/email-sign-in';
 import { buildOAuthProviders } from './social-providers';
 
@@ -65,11 +65,14 @@ export function createBetterAuthConfig(
                     required: false,
                     input: false,
                 },
+                displayEmail: { type: 'string', required: true },
             },
         },
         baseURL,
         basePath: '/auth',
         socialProviders: buildOAuthProviders(baseURL, config.oauth),
+        hooks,
+        databaseHooks,
         onAPIError: {
             throw: true,
         },
@@ -99,7 +102,6 @@ export function createBetterAuthConfig(
             emailSignInPlugin({
                 onSendSignInEmail: config.onSendSignInEmail,
             }),
-            emailGuardPlugin({ paths: ['/change-email'] }),
             cookieForwarderPlugin(), // must be last
         ],
         rateLimit: {

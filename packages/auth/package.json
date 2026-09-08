@@ -4,7 +4,8 @@
     "exports": {
         ".": "./src/index.ts",
         "./orpc": "./src/orpc.ts",
-        "./db": "./src/db.ts"
+        "./db": "./src/db.ts",
+        "./email-validation": "./src/config/utils/email-validation.ts"
     },
     "scripts": {
         "clean": "git clean -xdf .cache .turbo node_modules auth-schema.ts -e .env -e .env.*",

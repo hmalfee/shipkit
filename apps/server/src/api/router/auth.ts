@@ -7,8 +7,8 @@ import { cr, os } from '../base';
 export const auth = os.auth.router({
     me: cr.auth.me.handler(async ({ context }) => {
         if (!context.session) return { status: 200, body: null };
-        const { id, name, email } = context.session.user;
-        return { status: 200, body: { id, name, email } };
+        const { id, name, displayEmail } = context.session.user;
+        return { status: 200, body: { id, name, email: displayEmail } };
     }),
 
     email: os.auth.email.router({

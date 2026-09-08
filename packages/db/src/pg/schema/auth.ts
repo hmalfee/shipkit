@@ -28,6 +28,7 @@ export const users = pgTable('users', {
         .defaultNow()
         .$onUpdate(() => /* @__PURE__ */ new Date())
         .notNull(),
+    displayEmail: text('display_email').notNull(),
 });
 
 export const accounts = pgTable(

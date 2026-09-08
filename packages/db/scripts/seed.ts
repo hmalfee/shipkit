@@ -9,6 +9,7 @@ import { Redis } from 'ioredis';
 import { Pool } from 'pg';
 import { z } from 'zod';
 
+import { normalizeEmail, sanitizeEmail } from '@shipkit/auth/email-validation';
 import { createEnv } from '@shipkit/env';
 
 import * as schema from '../src/pg/schema';
@@ -26,6 +27,7 @@ const env = createEnv({
         POSTGRES_URL: z.url(),
         REDIS_URL: z.url(),
         NODE_ENV: z.string().optional(),
+        SEED_EMAIL: z.email().optional(),
     },
 });
 
@@ -44,10 +46,6 @@ const redis = new Redis(env.REDIS_URL);
 const seedTables = Object.values(schema).filter((value) =>
     is(value, PgTable),
 ) as PgTable[];
-
-// scrypt hash for 'password123'
-const PASSWORD_HASH =
-    '1393ab90d7c2bca6bfeb5e108b6b13bf:a49c1b29306071b57c46238573a42d2d10fe887ed7687e88d62ee774afe02faa0249249e375c362186ab0922683e3488e12647a81e135a5bf88bb9b0a41af777';
 
 const TODO_TITLES = [
     'Buy groceries',
@@ -114,16 +112,19 @@ function generateTodos(userId: string, count: number) {
     }));
 }
 
+// Seed fake public data to populate the app with realistic content.
 async function seedBulkData() {
     for (let i = 0; i < 10; i++) {
         const userId = faker.string.uuid();
         const userTs = fakeTimestamps();
+        const email = faker.internet.email();
         const [user] = await db
             .insert(schema.users)
             .values({
                 id: userId,
                 name: faker.person.fullName(),
-                email: faker.internet.email(),
+                email,
+                displayEmail: email,
                 emailVerified: faker.datatype.boolean({ probability: 0.8 }),
                 image: null,
                 roles: ['user'],
@@ -133,33 +134,26 @@ async function seedBulkData() {
 
         if (!user) throw new Error('Failed to create seeded user');
 
-        const accountTs = fakeTimestamps();
-        await db.insert(schema.accounts).values({
-            id: faker.string.uuid(),
-            accountId: faker.string.uuid(),
-            providerId: 'credential',
-            userId: user.id,
-            password: PASSWORD_HASH,
-            accessToken: null,
-            refreshToken: null,
-            ...accountTs,
-        });
-
         const todos = generateTodos(user.id, randomTodoCount());
         await db.insert(schema.todos).values(todos);
     }
 }
 
+// Seed your own dev account — update SEED_EMAIL or fallback to a demo email.
 async function seedDemoUser() {
     await db.transaction(async (tx) => {
         const demoId = faker.string.uuid();
         const userTs = fakeTimestamps();
+        const email = env.SEED_EMAIL ?? 'demo@example.com';
+        const sanitizedEmail = sanitizeEmail(email);
+        const normalizedEmail = normalizeEmail(sanitizedEmail);
         const [demoUser] = await tx
             .insert(schema.users)
             .values({
                 id: demoId,
                 name: 'Demo User',
-                email: 'demo@example.com',
+                email: normalizedEmail,
+                displayEmail: sanitizedEmail,
                 emailVerified: true,
                 roles: ['admin'],
                 ...userTs,
@@ -167,16 +161,6 @@ async function seedDemoUser() {
             .returning();
 
         if (!demoUser) throw new Error('Failed to create demo user');
-
-        const accountTs = fakeTimestamps();
-        await tx.insert(schema.accounts).values({
-            id: faker.string.uuid(),
-            accountId: demoUser.id,
-            providerId: 'credential',
-            userId: demoUser.id,
-            password: PASSWORD_HASH,
-            ...accountTs,
-        });
 
         const todos = generateTodos(demoUser.id, randomTodoCount());
         await tx.insert(schema.todos).values(todos);
@@ -197,9 +181,8 @@ async function main() {
     await redis.flushall();
 
     console.log(`${GREEN}✔ Database seeded successfully${RESET}`);
-    console.log(`\n${YELLOW}Demo User Credentials:${RESET}`);
-    console.log(`Email:    demo@example.com`);
-    console.log(`Password: password123\n`);
+    console.log(`\n${YELLOW}Demo User:${RESET}`);
+    console.log(`Email: ${env.SEED_EMAIL ?? 'demo@example.com'}\n`);
 }
 
 async function run() {

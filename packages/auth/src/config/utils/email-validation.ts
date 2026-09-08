@@ -139,7 +139,7 @@ async function ensureCustomDisposableDomainsLoaded(): Promise<void> {
  * @param normalizedEmail The normalized email result from `normalizeEmail`.
  * @param internalAdapter The internal adapter for database operations.
  */
-export async function assertNotDisposable(
+async function assertNotDisposable(
     originalEmail: string,
     normalizedEmail: string,
     internalAdapter: GenericEndpointContext['context']['internalAdapter'],
@@ -159,4 +159,18 @@ export async function assertNotDisposable(
             code: BASE_ERROR_CODES.INVALID_EMAIL.code,
         });
     }
+}
+
+/**
+ * Runs the full email validation pipeline (all three of the functions in order):  
+ * sanitize → normalize → check if disposable
+ */
+export async function runEmailValidationPipeline(
+    email: string,
+    internalAdapter: GenericEndpointContext['context']['internalAdapter'],
+) {
+    const sanitized = sanitizeEmail(email);
+    const normalized = normalizeEmail(sanitized);
+    await assertNotDisposable(sanitized, normalized, internalAdapter);
+    return { sanitized, normalized };
 }

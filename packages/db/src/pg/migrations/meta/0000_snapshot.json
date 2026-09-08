@@ -1,5 +1,5 @@
 {
-  "id": "e20873a4-0235-4e67-a590-9bac9368652c",
+  "id": "f703313b-2535-4188-b40c-2d98271944cb",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -253,6 +253,12 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
+        },
+        "display_email": {
+          "name": "display_email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
         }
       },
       "indexes": {},

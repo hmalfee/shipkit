@@ -40,6 +40,7 @@ CREATE TABLE "auth"."users" (
     "roles" "user_role_enum" [] DEFAULT '{"user"}' NOT NULL,
     "created_at" timestamp DEFAULT now() NOT NULL,
     "updated_at" timestamp DEFAULT now() NOT NULL,
+    "display_email" text NOT NULL,
     CONSTRAINT "users_email_unique" UNIQUE ("email")
 );
 

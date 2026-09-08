@@ -1,7 +1,7 @@
 ===================================================================
 --- baseline
 +++ auth.ts
-@@ -1,28 +1,43 @@
+@@ -1,29 +1,44 @@
  import { relations } from 'drizzle-orm';
 -import { boolean, index, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
 +import {
@@ -35,6 +35,7 @@
          .$onUpdate(() => /* @__PURE__ */ new Date())
          .notNull(),
 -    roles: text('roles').array(),
+     displayEmail: text('display_email').notNull(),
  });
  
  export const accounts = pgTable(
