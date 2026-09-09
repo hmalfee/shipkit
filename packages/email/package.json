@@ -6,7 +6,7 @@
     },
     "scripts": {
         "clean": "git clean -xdf .cache .turbo node_modules -e .env -e .env.*",
-        "dev": "PORT=$(pnpm dlx get-port-cli $(seq 3000 3100)) && email dev --dir src/registry/templates --port $PORT",
+        "dev": "email dev --dir src/registry/templates",
         "test:send": "tsx scripts/test-send.ts",
         "typecheck": "tsc"
     },
