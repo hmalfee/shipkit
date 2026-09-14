@@ -6,7 +6,7 @@
         "check": "turbo run format:check lint typecheck knip",
         "clean": "git clean -xdf .cache .turbo node_modules -e .env -e .env.*",
         "clean:full": "turbo run clean",
-        "dev": "turbo run dev",
+        "dev": "turbo run dev --env-mode=loose",
         "format": "prettier --cache --write .",
         "format:check": "prettier --cache --check .",
         "generate": "turbo gen create",

@@ -34,12 +34,7 @@
             // use prettier's own cache for more granular caching
             "cache": false
         },
-        "@shipkit/telemetry#dev": {
-            "cache": false,
-            "persistent": false
-        },
         "dev": {
-            "dependsOn": ["@shipkit/telemetry#dev"],
             "cache": false,
             "persistent": true
         },

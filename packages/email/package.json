@@ -6,7 +6,8 @@
     },
     "scripts": {
         "clean": "git clean -xdf .cache .turbo node_modules -e .env -e .env.*",
-        "dev": "email dev --dir src/registry/templates",
+        "dev": "local-manager pnpm studio",
+        "studio": "email dev --dir src/registry/templates --port ${PORT}",
         "test:send": "tsx scripts/test-send.ts",
         "typecheck": "tsc"
     },

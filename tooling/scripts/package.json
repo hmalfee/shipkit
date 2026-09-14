@@ -5,9 +5,9 @@
     "bin": {
         "docker-build": "./bin/docker-build/index.js",
         "dokploy": "./bin/dokploy/index.js",
+        "local-manager": "./bin/local-manager/index.js",
         "next-standalone-postbuild": "./bin/next-standalone-postbuild.js",
-        "run-on-staged": "./bin/run-on-staged/index.js",
-        "urls": "./bin/urls.js"
+        "run-on-staged": "./bin/run-on-staged/index.js"
     },
     "scripts": {
         "postinstall": "chmod +x ./bin/*.js ./bin/*/index.js",

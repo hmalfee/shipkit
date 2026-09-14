@@ -42,7 +42,10 @@ let nextConfig: NextConfig = {
         ],
         minimumCacheTTL: 86400, // 1 day
     },
-    allowedDevOrigins: [lanIp, lanIp + '.sslip.io'],
+    allowedDevOrigins: [
+        `${pkgJson.name}.${lanIp}.sslip.io`,
+        `${pkgJson.name}.local`,
+    ],
 };
 
 if (env.NEXT_PUBLIC_POSTHOG_PROXY_PATH) {

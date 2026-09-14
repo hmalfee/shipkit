@@ -24,6 +24,32 @@ services:
         volumes:
             - redis_data:/data
 
+    # Replaces `drizzle-kit studio`, which only works via the hosted
+    # local.drizzle.studio domain. Self-hosted, works on any host/port.
+    drizzle-gateway:
+        image: ghcr.io/drizzle-team/gateway:latest
+        environment:
+            - PORT=4983 # internal container port Gateway listens on (unrelated to the host $PORT below)
+            - STORE_PATH=/app
+            - DATABASE_URL_local=postgresql://postgres:password@postgres:5432/postgres
+        volumes:
+            - drizzle_gateway_data:/app
+        ports:
+            - '${PORT}:4983'
+        depends_on:
+            postgres:
+                condition: service_healthy
+
+    redis-commander:
+        image: rediscommander/redis-commander:latest
+        environment:
+            - REDIS_HOSTS=local:redis:6379
+        ports:
+            - '${PORT}:8081'
+        depends_on:
+            - redis
+
 volumes:
     postgres_data:
     redis_data:
+    drizzle_gateway_data:

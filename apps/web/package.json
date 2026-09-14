@@ -5,8 +5,8 @@
         "build": "next build",
         "postbuild": "next-standalone-postbuild",
         "clean": "git clean -xdf .cache .turbo node_modules .next -e .env -e .env.*",
-        "dev": "NODE_OPTIONS='--no-network-family-autoselection' urls next dev",
-        "preview": "urls sh -c 'pnpm build && pnpm start'",
+        "dev": "local-manager next dev",
+        "preview": "local-manager sh -c 'pnpm build && pnpm start'",
         "start": "node .next/standalone/apps/web/server.js",
         "typecheck": "tsc"
     },
