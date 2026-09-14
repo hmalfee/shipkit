@@ -15,6 +15,7 @@ import type { Span } from '@opentelemetry/api';
 import type { Context, MiddlewareHandler } from 'hono';
 
 import { logger } from '../../logger';
+import { applyServerTimingHeader } from '../../server-timing';
 import { PROPAGATION_HEADERS } from '../../shared';
 import { getActiveSpan, getRouteTemplate, startSpan } from '../spans';
 
@@ -91,6 +92,7 @@ async function handleRequest(
     const method = c.req.method;
     const route = c.req.path;
     const requestLogger = logger.with({ route });
+    const wallClockStart = Date.now();
 
     let thrownError: Error | undefined;
 
@@ -105,6 +107,7 @@ async function handleRequest(
             span,
             method,
             route,
+            wallClockStart,
             thrownError,
         );
 
@@ -131,6 +134,7 @@ function finalizeSpan(
     span: Span,
     method: string,
     route: string,
+    wallClockStart: number,
     thrownError?: Error,
 ): { httpRoute: string; status: number } {
     const httpRoute = getRouteTemplate(span) ?? routePath(c) ?? route;
@@ -142,6 +146,14 @@ function finalizeSpan(
     span.setAttribute(ATTR_HTTP_RESPONSE_STATUS_CODE, status);
 
     c.res.headers.append('x-trace-id', span.spanContext().traceId);
+
+    // The headers added by this function are used by the browser
+    // SDK to correct clock skew between the client and server.
+    applyServerTimingHeader(c.res.headers, {
+        serverStart: wallClockStart,
+        serverEnd: Date.now(),
+    });
+
     mergePropagationHeaders(c);
 
     const error = thrownError ?? c.error;

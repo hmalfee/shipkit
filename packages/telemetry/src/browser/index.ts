@@ -23,6 +23,10 @@ import {
     isProdEnv,
     normalizeEndpoint,
 } from '../shared';
+import {
+    captureServerTimingFromResponse,
+    ClockSkewCorrectingSpanProcessor,
+} from './clock-skew';
 
 const NEXTJS_IGNORED_URLS: (string | RegExp)[] = [
     /__nextjs_/, // internal Next.js requests (e.g., original-stack-frame)
@@ -86,14 +90,16 @@ export function initBrowserTelemetry(config: BrowserTelemetryConfig) {
 
     if (hasEndpoint) {
         spanProcessors.push(
-            new BrowserFilteringSpanProcessor(
-                new BatchSpanProcessor(
-                    createOtlpExporter(OTLPTraceExporter, {
-                        endpoint,
-                        signal: 'traces',
-                        isProd: isProdEnv(environment),
-                        onExportError: defaultExportErrorHandler,
-                    }),
+            new ClockSkewCorrectingSpanProcessor(
+                new BrowserFilteringSpanProcessor(
+                    new BatchSpanProcessor(
+                        createOtlpExporter(OTLPTraceExporter, {
+                            endpoint,
+                            signal: 'traces',
+                            isProd: isProdEnv(environment),
+                            onExportError: defaultExportErrorHandler,
+                        }),
+                    ),
                 ),
             ),
         );
@@ -136,6 +142,11 @@ export function initBrowserTelemetry(config: BrowserTelemetryConfig) {
                 propagateTraceHeaderCorsUrls: propagateToUrls,
                 clearTimingResources: true,
                 ignoreUrls: allIgnoredUrls,
+                applyCustomAttributesOnSpan: (span, _request, result) => {
+                    if (result instanceof Response) {
+                        captureServerTimingFromResponse(span, result);
+                    }
+                },
             }),
             new XMLHttpRequestInstrumentation({
                 propagateTraceHeaderCorsUrls: propagateToUrls,
