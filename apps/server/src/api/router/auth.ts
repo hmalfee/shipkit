@@ -1,7 +1,5 @@
 import { handleAuthError } from '@shipkit/auth/orpc';
 
-import { env } from '@/env';
-
 import { cr, os } from '../base';
 
 export const auth = os.auth.router({
@@ -68,22 +66,13 @@ export const auth = os.auth.router({
                         message: 'Too many attempts',
                     });
 
-                const url = new URL(
-                    '/auth/email/verify-magic-link',
-                    env.SERVER_URL,
-                );
-                url.searchParams.set('token', input.query.token);
-                if (input.query.callbackURL)
-                    url.searchParams.set(
-                        'callbackURL',
-                        input.query.callbackURL,
-                    );
-
-                const request = new Request(url, {
-                    method: 'GET',
-                    headers: context.reqHeaders,
+                const response = await context.auth.$api('verifyMagicLink', {
+                    query: {
+                        token: input.query.token,
+                        callbackURL: input.query.callbackURL,
+                    },
                 });
-                const response = await context.auth.$passthrough(request);
+
                 const location = response.headers.get('location') ?? '/';
                 return { status: 302, headers: { location } };
             },
@@ -138,19 +127,11 @@ export const auth = os.auth.router({
             if (context.session)
                 throw errors.FORBIDDEN({ message: 'User already signed in' });
 
-            const url = new URL(
-                `/auth/callback/${input.params.provider}`,
-                env.SERVER_URL,
-            );
-            for (const [key, value] of Object.entries(input.query)) {
-                if (value !== undefined)
-                    url.searchParams.set(key, String(value as string));
-            }
-            const request = new Request(url, {
-                method: 'GET',
-                headers: context.reqHeaders,
+            const response = await context.auth.$api('callbackOAuth', {
+                query: input.query,
+                params: { id: input.params.provider },
             });
-            const response = await context.auth.$passthrough(request);
+
             const location = response.headers.get('location') ?? '/';
             return { status: 302, headers: { location } };
         },

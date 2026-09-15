@@ -24,6 +24,17 @@ type DefaultSession = ReturnType<
     typeof createBetterAuthConfig
 >['$Infer']['Session'];
 
+/** The full options object a given better-auth endpoint accepts. */
+type OptionsOf<K extends keyof BetterAuthAPI> = NonNullable<
+    Parameters<BetterAuthAPI[K]>[0]
+>;
+
+/** Only the input shapes we let external callers set via $api. */
+type CallOpts<K extends keyof BetterAuthAPI> = Pick<
+    OptionsOf<K>,
+    Extract<keyof OptionsOf<K>, 'body' | 'query' | 'params'>
+>;
+
 /**
  * Session with strictly typed roles enum (not just string[])
  */
@@ -33,7 +44,7 @@ export type StrictSession = Omit<DefaultSession, 'user'> & {
     };
 };
 
-export type Auth = {
+type BetterAuthAPIMethods = {
     [
         K in keyof BetterAuthAPI as K extends 'getSession' ? never : K
     ]: BetterAuthAPI[K] extends (options?: infer O) => infer R
@@ -41,9 +52,14 @@ export type Auth = {
             ? (body: B) => R
             : () => R
         : BetterAuthAPI[K];
-} & {
-    $passthrough: (request: Request) => Promise<Response>;
+};
+
+export type Auth = BetterAuthAPIMethods & {
     getSession: () => Promise<StrictSession | null>;
+    $api: <K extends keyof BetterAuthAPI>(
+        endpointName: K,
+        opts: CallOpts<K>,
+    ) => Promise<Response>;
 };
 
 export interface CreateAuthContext {
@@ -67,38 +83,41 @@ export function createAuth(ctx: CreateAuthContext): Auth {
         ctx.config,
     );
 
+    function invoke(endpointName: string, extraOpts: Record<string, unknown>) {
+        const fn =
+            authInstance.api[endpointName as keyof typeof authInstance.api];
+        if (typeof fn !== 'function') {
+            throw new Error(
+                `"${endpointName}" is not a callable auth endpoint`,
+            );
+        }
+
+        const opts: Record<string, unknown> = {
+            headers: ctx.headers.request,
+            baseURL: ctx.baseURL,
+            ...extraOpts,
+        };
+
+        return authRequestContext.run(
+            { resHeaders: ctx.headers.response },
+            () => (fn as (opts: Record<string, unknown>) => unknown)(opts),
+        );
+    }
+
     return new Proxy({} as Auth, {
         get(_, prop: string) {
-            // Raw request passthrough for OAuth callbacks
-            if (prop === '$passthrough') {
-                return (request: Request) =>
-                    authRequestContext.run(
-                        { resHeaders: ctx.headers.response },
-                        () => authInstance.handler(request),
-                    );
+            if (prop === '$api') {
+                return (
+                    endpointName: string,
+                    opts: Record<string, unknown> = {},
+                ) => invoke(endpointName, { ...opts, asResponse: true });
             }
 
             const fn = authInstance.api[prop as keyof typeof authInstance.api];
             if (typeof fn !== 'function') return fn;
 
-            return (arg?: unknown) => {
-                const opts: Record<string, unknown> = {
-                    headers: ctx.headers.request,
-                    baseURL: ctx.baseURL,
-                };
-
-                if (arg !== undefined) {
-                    opts.body = arg;
-                }
-
-                return authRequestContext.run(
-                    { resHeaders: ctx.headers.response },
-                    () =>
-                        (fn as (opts: Record<string, unknown>) => unknown)(
-                            opts,
-                        ),
-                );
-            };
+            return (arg?: unknown) =>
+                invoke(prop, arg !== undefined ? { body: arg } : {});
         },
     });
 }
