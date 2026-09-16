@@ -65,7 +65,11 @@ export function createBetterAuthConfig(
                     required: false,
                     input: false,
                 },
-                displayEmail: { type: 'string', required: true },
+                displayEmail: {
+                    type: 'string',
+                    required: true,
+                    input: false,
+                },
             },
         },
         baseURL,
