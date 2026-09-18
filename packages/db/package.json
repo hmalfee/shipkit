@@ -13,9 +13,9 @@
         "db:migrate": "drizzle-kit migrate",
         "db:seed": "tsx scripts/seed.ts",
         "dev": "pnpm dlx concurrently -n \"pg,redis\" \"pnpm dev:pg\" \"pnpm dev:redis\"",
-        "predev:pg": "docker compose up -d --wait postgres && pnpm db:migrate && pnpm db:seed",
+        "predev:pg": "docker compose up -d --quiet-pull --wait postgres && pnpm db:migrate && pnpm db:seed",
         "dev:pg": "local-manager --name pg --persist docker compose up -d --quiet-pull drizzle-gateway",
-        "predev:redis": "docker compose up -d --wait redis",
+        "predev:redis": "docker compose up -d --quiet-pull --wait redis",
         "dev:redis": "local-manager --name redis --persist docker compose up -d --quiet-pull redis-commander",
         "typecheck": "tsc"
     },
