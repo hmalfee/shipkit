@@ -28,7 +28,6 @@ export const auth = os.auth.router({
                 }
             },
         ),
-
         verifyOtp: cr.auth.email.verifyOtp.handler(
             async ({ context, input, errors }) => {
                 const { exceeded } = await context.rateLimit({
@@ -54,7 +53,6 @@ export const auth = os.auth.router({
                 }
             },
         ),
-
         verifyMagicLink: cr.auth.email.verifyMagicLink.handler(
             async ({ context, input, errors }) => {
                 const { exceeded } = await context.rateLimit({
@@ -79,6 +77,60 @@ export const auth = os.auth.router({
         ),
     }),
 
+    oauth: os.auth.oauth.router({
+        signIn: cr.auth.oauth.signIn.handler(
+            async ({ context, input, errors }) => {
+                const { exceeded } = await context.rateLimit({
+                    blockDuration: 60,
+                });
+                if (exceeded)
+                    throw errors.TOO_MANY_REQUESTS({
+                        message: 'Too many attempts',
+                    });
+                if (context.session)
+                    throw errors.FORBIDDEN({
+                        message: 'User already signed in',
+                    });
+                try {
+                    const result = await context.auth.signInSocial({
+                        provider: input.params.provider,
+                        ...input.body,
+                    });
+                    return {
+                        status: 200,
+                        body: {
+                            url: result.url ?? '',
+                            redirect: result.redirect ?? false,
+                        },
+                    };
+                } catch (err) {
+                    handleAuthError(err, errors);
+                }
+            },
+        ),
+        callback: cr.auth.oauth.callback.handler(
+            async ({ context, input, errors }) => {
+                const { exceeded } = await context.rateLimit({ limit: 15 });
+                if (exceeded)
+                    throw errors.TOO_MANY_REQUESTS({
+                        message: 'Too many attempts',
+                    });
+                if (context.session)
+                    throw errors.FORBIDDEN({
+                        message: 'User already signed in',
+                    });
+
+                const response = await context.auth.$api('callbackOAuth', {
+                    query: input.query,
+                    params: { id: input.params.provider },
+                });
+
+                const location = response.headers.get('location') ?? '/';
+                return { status: 302, headers: { location } };
+            },
+        ),
+    }),
+
     signOut: cr.auth.signOut.handler(async ({ context, errors }) => {
         if (!context.session)
             throw errors.UNAUTHORIZED({ message: 'User not signed in' });
@@ -89,51 +141,4 @@ export const auth = os.auth.router({
             handleAuthError(err, errors);
         }
     }),
-
-    oauthSignIn: cr.auth.oauthSignIn.handler(
-        async ({ context, input, errors }) => {
-            const { exceeded } = await context.rateLimit({ blockDuration: 60 });
-            if (exceeded)
-                throw errors.TOO_MANY_REQUESTS({
-                    message: 'Too many attempts',
-                });
-            if (context.session)
-                throw errors.FORBIDDEN({ message: 'User already signed in' });
-            try {
-                const result = await context.auth.signInSocial({
-                    provider: input.params.provider,
-                    ...input.body,
-                });
-                return {
-                    status: 200,
-                    body: {
-                        url: result.url ?? '',
-                        redirect: result.redirect ?? false,
-                    },
-                };
-            } catch (err) {
-                handleAuthError(err, errors);
-            }
-        },
-    ),
-
-    oauthCallback: cr.auth.oauthCallback.handler(
-        async ({ context, input, errors }) => {
-            const { exceeded } = await context.rateLimit({ limit: 15 });
-            if (exceeded)
-                throw errors.TOO_MANY_REQUESTS({
-                    message: 'Too many attempts',
-                });
-            if (context.session)
-                throw errors.FORBIDDEN({ message: 'User already signed in' });
-
-            const response = await context.auth.$api('callbackOAuth', {
-                query: input.query,
-                params: { id: input.params.provider },
-            });
-
-            const location = response.headers.get('location') ?? '/';
-            return { status: 302, headers: { location } };
-        },
-    ),
 });

@@ -16,6 +16,7 @@ import {
 
 export const auth = oc.prefix('/auth').router({
     me: rb.query('/me').responses({ OK: UserSchema.nullable() }),
+
     email: oc.prefix('/email').router({
         signIn: rb
             .mutation('/sign-in')
@@ -54,6 +55,36 @@ export const auth = oc.prefix('/auth').router({
                 FOUND: undefined,
             }),
     }),
+
+    oauth: oc.prefix('/oauth').router({
+        signIn: rb
+            .mutation('/sign-in/{provider}')
+            .input({
+                params: OauthSignInParamsSchema,
+                body: OauthSignInBodySchema,
+            })
+            .errors({
+                FORBIDDEN: {},
+                TOO_MANY_REQUESTS: {},
+            })
+            .responses({
+                OK: OauthSignInResponseSchema,
+            }),
+        callback: rb
+            .query('/callback/{provider}')
+            .input({
+                params: CallbackParamsSchema,
+                query: CallbackQuerySchema,
+            })
+            .errors({
+                FORBIDDEN: {},
+                TOO_MANY_REQUESTS: {},
+            })
+            .responses({
+                FOUND: undefined,
+            }),
+    }),
+
     signOut: rb
         .mutation('/sign-out')
         .errors({
@@ -61,31 +92,5 @@ export const auth = oc.prefix('/auth').router({
         })
         .responses({
             NO_CONTENT: undefined,
-        }),
-    oauthSignIn: rb
-        .mutation('/sign-in/{provider}')
-        .input({
-            params: OauthSignInParamsSchema,
-            body: OauthSignInBodySchema,
-        })
-        .errors({
-            FORBIDDEN: {},
-            TOO_MANY_REQUESTS: {},
-        })
-        .responses({
-            OK: OauthSignInResponseSchema,
-        }),
-    oauthCallback: rb
-        .query('/callback/{provider}')
-        .input({
-            params: CallbackParamsSchema,
-            query: CallbackQuerySchema,
-        })
-        .errors({
-            FORBIDDEN: {},
-            TOO_MANY_REQUESTS: {},
-        })
-        .responses({
-            FOUND: undefined,
         }),
 });

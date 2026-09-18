@@ -25,7 +25,7 @@ export function OAuthButtons() {
         (typeof OAUTH_PROVIDER_IDS)[number] | null
     >(null);
 
-    const oauthSignInMutation = api.auth.oauthSignIn.useMutation({
+    const oauthSignInMutation = api.auth.oauth.signIn.useMutation({
         onError: (error) => {
             setOAuthError({
                 success: false,
