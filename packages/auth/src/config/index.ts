@@ -23,13 +23,19 @@ export type AuthDatabase = PgDatabase<
 export type AuthConfig = {
     secret: string;
     useSecureCookies: boolean;
+    /**
+     * Root domain for cross-subdomain cookie sharing. Use the most specific scope
+     * needed to avoid exposing session cookies to untrusted subdomains. Omit if
+     * all services share the same origin.
+     */
+    cookieDomain?: string;
     oauth: OAuthProvidersConfig;
     onSendSignInEmail?: (payload: {
         email: string;
         otp: string;
         magicLink: {
-            url: string;
             token: string;
+            callbackURL: string;
         };
         expiresInMinutes: number;
     }) => Promise<void>;
@@ -38,19 +44,8 @@ export type AuthConfig = {
 export function createBetterAuthConfig(
     db: AuthDatabase,
     redisClient: Redis,
-    baseURL: string,
     config: AuthConfig,
 ) {
-    const host = new URL(baseURL).hostname;
-    // For sslip.io, the domain contains the IP address (e.g. 192.168.0.107.sslip.io) which is 6 parts
-    // For standard domains, we take the top level and second level domain (e.g. example.com)
-    const sharedDomain =
-        host === 'localhost'
-            ? undefined
-            : host.endsWith('.sslip.io')
-              ? host.split('.').slice(-6).join('.')
-              : host.split('.').slice(-2).join('.');
-
     return betterAuth({
         appName: 'shipkit',
         secret: config.secret,
@@ -72,9 +67,9 @@ export function createBetterAuthConfig(
                 },
             },
         },
-        baseURL,
-        basePath: '/auth',
-        socialProviders: buildOAuthProviders(baseURL, config.oauth),
+        // Dummy baseURL, so that query params on a url can be parsed correctly.
+        baseURL: 'http://auth',
+        socialProviders: buildOAuthProviders(config.oauth),
         hooks,
         databaseHooks,
         onAPIError: {
@@ -89,11 +84,11 @@ export function createBetterAuthConfig(
                 generateId: false, // let Drizzle handle UUID generation
             },
             cookiePrefix: 'auth:',
-            ...(sharedDomain
+            ...(config.cookieDomain
                 ? {
                       crossSubDomainCookies: {
                           enabled: true,
-                          domain: sharedDomain,
+                          domain: config.cookieDomain,
                       },
                   }
                 : {}),
@@ -104,7 +99,22 @@ export function createBetterAuthConfig(
         }),
         plugins: [
             emailSignInPlugin({
-                onSendSignInEmail: config.onSendSignInEmail,
+                onSendSignInEmail: async (props) =>
+                    // Better-auth builds its own magic-link URL, but that's not necessarily our
+                    // backend's actual verification route. So we pass the token and callbackURL
+                    // to let the consumer build the URL on their own.
+                    config.onSendSignInEmail?.({
+                        email: props.email,
+                        otp: props.otp,
+                        magicLink: {
+                            token: props.magicLink.token,
+                            callbackURL:
+                                new URL(props.magicLink.url).searchParams.get(
+                                    'callbackURL',
+                                ) ?? '',
+                        },
+                        expiresInMinutes: props.expiresInMinutes,
+                    }),
             }),
             cookieForwarderPlugin(), // must be last
         ],

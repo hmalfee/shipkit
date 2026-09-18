@@ -12,10 +12,9 @@ type Redis = Parameters<typeof redisStorage>[0]['client'];
 function getOrCreateAuthInstance(
     db: AuthDatabase,
     redisClient: Redis,
-    baseURL: string,
     config: AuthConfig,
 ) {
-    _authInstance ??= createBetterAuthConfig(db, redisClient, baseURL, config);
+    _authInstance ??= createBetterAuthConfig(db, redisClient, config);
     return _authInstance;
 }
 
@@ -65,7 +64,6 @@ export type Auth = BetterAuthAPIMethods & {
 export interface CreateAuthContext {
     headers: { request: Headers; response: Headers };
     storage: { database: AuthDatabase; redisClient: Redis };
-    baseURL: string;
     config: AuthConfig;
 }
 
@@ -79,7 +77,6 @@ export function createAuth(ctx: CreateAuthContext): Auth {
     const authInstance = getOrCreateAuthInstance(
         ctx.storage.database,
         ctx.storage.redisClient,
-        ctx.baseURL,
         ctx.config,
     );
 
@@ -94,7 +91,6 @@ export function createAuth(ctx: CreateAuthContext): Auth {
 
         const opts: Record<string, unknown> = {
             headers: ctx.headers.request,
-            baseURL: ctx.baseURL,
             ...extraOpts,
         };
 

@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
     }
 
     const apiUrl = new URL(
-        `${env.INTERNAL_SERVER_URL}/auth/email/verify-magic-link`,
+        `${env.INTERNAL_SERVER_URL}${request.nextUrl.pathname}`,
     );
     apiUrl.searchParams.set('token', token);
     if (callbackUrl) apiUrl.searchParams.set('callbackURL', callbackUrl);

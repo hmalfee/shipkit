@@ -7,13 +7,13 @@ import z from 'zod';
 import { createAuth } from '@shipkit/auth';
 import { createDb } from '@shipkit/db/pg';
 import { createRedisClient } from '@shipkit/db/redis';
-import { sendEmail } from '@shipkit/email';
 import { logger } from '@shipkit/telemetry/logger';
 
 import { env } from '@/env';
 
 import type { MiddlewareHandler } from 'hono';
 
+import { authConfig } from './auth.config';
 import { router } from './router';
 
 const db = createDb(env.POSTGRES_URL, {
@@ -99,74 +99,7 @@ export const orpc = (): MiddlewareHandler => async (c) => {
             auth: createAuth({
                 headers: { request: c.req.raw.headers, response: resHeaders },
                 storage: { database: db, redisClient: redis },
-                baseURL: env.SERVER_URL,
-                config: {
-                    secret: env.AUTH_SECRET,
-                    useSecureCookies: env.USE_SECURE_AUTH_COOKIES ?? false,
-                    oauth: {
-                        google: {
-                            clientId: env.GOOGLE_CLIENT_ID,
-                            clientSecret: env.GOOGLE_CLIENT_SECRET,
-                        },
-                    },
-                    onSendSignInEmail: env.SMTP_HOST
-                        ? async ({
-                              email,
-                              otp,
-                              magicLink,
-                              expiresInMinutes,
-                          }) => {
-                              const { pathname, search } = new URL(
-                                  magicLink.url,
-                              );
-                              const webLink = new URL(
-                                  pathname + search,
-                                  env.WEB_URL,
-                              ).toString();
-
-                              // Fire-and-forget: we deliberately do not await this promise so the API responds instantly.
-                              void sendEmail({
-                                  template: 'email-sign-in',
-                                  to: email,
-                                  props: {
-                                      magicLink: webLink,
-                                      otp,
-                                      expiresInMinutes,
-                                  },
-                                  config: {
-                                      host: env.SMTP_HOST!,
-                                      port: env.SMTP_PORT!,
-                                      user: env.SMTP_USER!,
-                                      password: env.SMTP_PASSWORD!,
-                                      from: env.TRANSACTIONAL_SENDER!,
-                                  },
-                              }).catch((error) => {
-                                  logger.error(
-                                      '[auth] Background email send failed',
-                                      { error },
-                                  );
-                              });
-                          }
-                        : async ({
-                              email,
-                              magicLink,
-                              otp,
-                              expiresInMinutes,
-                          }) => {
-                              logger.warn(
-                                  '[auth] SMTP not configured — simulating sign-in email instead of sending it to {email}',
-                                  { email },
-                              );
-                              logger.info(
-                                  '[auth] Simulated sign-in email\n  OTP:     {otp}\n  Link:    {link}\n  Expires: {expiresInMinutes}m',
-                                  {
-                                      otp,
-                                      link: magicLink.url,
-                                      expiresInMinutes,
-                                  },
-                              );
-                          },
-                },
+                config: authConfig,
             }),
             db,
             redis,

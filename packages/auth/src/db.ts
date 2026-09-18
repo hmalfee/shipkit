@@ -11,16 +11,14 @@ export type { DBFieldType } from 'better-auth/db';
 type Redis = Parameters<typeof redisStorage>[0]['client'];
 
 export async function generateAuthSchema() {
-    const auth = createBetterAuthConfig(
-        {} as AuthDatabase,
-        {} as Redis,
-        'http://localhost',
-        {
-            secret: '',
-            useSecureCookies: false,
-            oauth: { google: { clientId: '', clientSecret: '' } },
+    const auth = createBetterAuthConfig({} as AuthDatabase, {} as Redis, {
+        secret: '',
+        useSecureCookies: false,
+        oauth: {
+            redirectURITemplate: '{provider}',
+            google: { clientId: '', clientSecret: '' },
         },
-    );
+    });
 
     const { options, adapter } = await auth.$context;
     const schema = getSchema(options);

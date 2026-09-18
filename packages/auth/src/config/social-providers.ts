@@ -18,7 +18,15 @@ type OAuthProviders = {
         : never;
 };
 
-export type OAuthProvidersConfig = Record<
+type RedirectURITemplate = `${string}{${string}}${string}`;
+
+export type OAuthProvidersConfig = {
+    /**
+     * The template used to construct the OAuth redirect URI for each provider.
+     * Must contain a `{bracketed}` placeholder (e.g. `http://localhost:3000/auth/callback/{provider}`).
+     */
+    redirectURITemplate: RedirectURITemplate;
+} & Record<
     (typeof OAUTH_PROVIDER_IDS)[number],
     {
         clientId: string;
@@ -56,10 +64,18 @@ function mapOAuthProfileEmail(profile: unknown) {
  *    `{BASE_URL}/auth/callback/{provider}` (e.g., http://localhost:3000/auth/callback/github)
  * 3. Add the provider config below with credentials from the OAuth app settings
  */
-export function buildOAuthProviders(
-    baseURL: string,
-    oauth: OAuthProvidersConfig,
-) {
+export function buildOAuthProviders(oauth: OAuthProvidersConfig) {
+    if (
+        !oauth.redirectURITemplate ||
+        !/\{[^}]+\}/.test(oauth.redirectURITemplate)
+    ) {
+        throw new APIError('INTERNAL_SERVER_ERROR', {
+            code: BASE_ERROR_CODES.INVALID_REDIRECT_URL.code,
+            message:
+                'OAuth redirectURITemplate must contain a placeholder (e.g., {provider})',
+        });
+    }
+
     const oauthProvidersConfig = {
         google: {
             clientId: oauth.google.clientId,
@@ -71,13 +87,13 @@ export function buildOAuthProviders(
     return Object.fromEntries(
         Object.entries(oauthProvidersConfig).map(([key, config]) => [
             key,
+            // The below config applies to every provider by default; override this by providing a
+            // different value for them in `oauthProvidersConfig` above.
             {
-                // The below redirect URI is the same as what we set in oauth provider's dashboard.
-                // We write the same thing in two places because the below will be validated by the
-                // provider based on what we have in the provider's dashboard.
-                redirectURI: `${baseURL}/auth/callback/${key}`,
-                // Applies to every provider by default; a provider can override this
-                // by setting its own `mapProfileToUser` in `oauthProvidersConfig` above.
+                redirectURI: oauth.redirectURITemplate.replace(
+                    /\{[^}]+\}/,
+                    key,
+                ),
                 mapProfileToUser: mapOAuthProfileEmail,
                 ...config,
             },
