@@ -16,9 +16,9 @@ import {
 
 export const auth = oc.prefix('/auth').router({
     me: rb.query('/me').responses({ OK: UserSchema.nullable() }),
-    email: oc.router({
+    email: oc.prefix('/email').router({
         signIn: rb
-            .mutation('/email/sign-in')
+            .mutation('/sign-in')
             .input({
                 body: EmailSignInBodySchema,
             })
@@ -29,7 +29,7 @@ export const auth = oc.prefix('/auth').router({
                 OK: undefined,
             }),
         verifyOtp: rb
-            .mutation('/email/verify-otp')
+            .mutation('/verify-otp')
             .input({
                 body: VerifyOtpBodySchema,
             })
@@ -42,7 +42,7 @@ export const auth = oc.prefix('/auth').router({
                 OK: UserSchema,
             }),
         verifyMagicLink: rb
-            .query('/email/verify-magic-link')
+            .query('/verify-magic-link')
             .input({
                 query: VerifyMagicLinkQuerySchema,
             })
