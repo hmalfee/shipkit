@@ -1,6 +1,8 @@
+import { trace } from '@opentelemetry/api';
+
 import type { AnyProcedure, Context, Middleware } from '@orpc/server';
 
-import { getActiveSpan, setRouteTemplate } from '../spans';
+import { setRouteTemplate } from '../spans';
 
 /**
  * oRPC server middleware that extracts the HTTP route template
@@ -21,7 +23,7 @@ export const captureORPCTemplate: Middleware<
         ?.path;
 
     if (typeof routePath === 'string') {
-        const span = getActiveSpan();
+        const span = trace.getActiveSpan();
         if (span) {
             setRouteTemplate(span, routePath);
         }

@@ -17,7 +17,7 @@ import type { Context, MiddlewareHandler } from 'hono';
 import { logger } from '../../logger';
 import { applyServerTimingHeader } from '../../server-timing';
 import { PROPAGATION_HEADERS } from '../../shared';
-import { getActiveSpan, getRouteTemplate, startSpan } from '../spans';
+import { getRouteTemplate, startSpan } from '../spans';
 
 const TELEMETRY_MOUNTED = Symbol('telemetry_mounted');
 
@@ -50,7 +50,7 @@ export function traceHonoRequest({
         }
         req[TELEMETRY_MOUNTED] = true;
 
-        const existingSpan = getActiveSpan();
+        const existingSpan = trace.getActiveSpan();
 
         const extractedContext = propagation.extract(
             context.active(),
@@ -62,9 +62,9 @@ export function traceHonoRequest({
             : extractedContext;
 
         return context.with(activeContext, async () => {
-            const span = getActiveSpan();
+            const span = trace.getActiveSpan();
 
-            if (!span || !span.isRecording()) {
+            if (!span?.isRecording()) {
                 return startSpan(
                     `${c.req.method} ${c.req.path}`,
                     {},

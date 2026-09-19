@@ -1,5 +1,4 @@
 import { createCatchAllRouter } from '@shipkit/shared/next/catch-all';
-import { getActiveSpan } from '@shipkit/telemetry/node';
 import { createOtelIngestHandler } from '@shipkit/telemetry/source-maps/next/server';
 
 import { env } from '@/env';
@@ -20,16 +19,5 @@ export const { GET, POST, PUT, PATCH, DELETE } = createCatchAllRouter(
     endpoints,
     {
         stripMountPrefix: true,
-        onMatch: (_req, { route, method }) => {
-            const span = getActiveSpan();
-            span?.setAttribute('http.route', route);
-            span?.updateName(`${method} ${route}`);
-        },
-        onNotFound: (_req, { path, method }) => {
-            const span = getActiveSpan();
-            span?.setAttribute('http.route', path);
-            span?.updateName(`${method} ${path}`);
-            return Response.json({ error: 'Not found' }, { status: 404 });
-        },
     },
 );

@@ -1,3 +1,5 @@
+import { trace } from '@opentelemetry/api';
+
 import type { NextRequest } from 'next/server';
 
 export type RouteHandler = (
@@ -32,6 +34,12 @@ export interface CatchAllOptions {
         req: NextRequest,
         info: { path: string; method: string },
     ) => Response | Promise<Response>;
+}
+
+function fixSpan(route: string, method: string) {
+    const span = trace.getActiveSpan();
+    span?.setAttribute('http.route', route);
+    span?.updateName(`${method} ${route}`);
 }
 
 /**
@@ -88,6 +96,7 @@ export function createCatchAllRouter(
         }
 
         if (router) {
+            fixSpan(matchedKey, req.method);
             options?.onMatch?.(req, {
                 route: matchedKey,
                 method: req.method,
@@ -109,6 +118,7 @@ export function createCatchAllRouter(
             }
 
             if (router) {
+                fixSpan(matchedKey, req.method);
                 options?.onMatch?.(req, {
                     route: matchedKey,
                     method: req.method,
@@ -119,6 +129,7 @@ export function createCatchAllRouter(
         }
 
         const fallbackPath = new URL(req.url).pathname;
+        fixSpan(fallbackPath, req.method);
         if (options?.onNotFound) {
             return options.onNotFound(req, {
                 path: fallbackPath,

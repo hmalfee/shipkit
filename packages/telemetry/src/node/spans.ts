@@ -36,10 +36,6 @@ export function startSpan<T>(
     });
 }
 
-export function getActiveSpan() {
-    return trace.getActiveSpan();
-}
-
 const routeTemplates = new WeakMap<Span, string>();
 
 /**
