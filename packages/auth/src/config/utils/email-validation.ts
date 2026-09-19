@@ -174,3 +174,12 @@ export async function runEmailValidationPipeline(
     await assertNotDisposable(sanitized, normalized, internalAdapter);
     return { sanitized, normalized };
 }
+
+/**
+ * Eagerly warms the disposable-domain list.
+ * Safe to call multiple times — subsequent calls are no-ops.
+ * Errors are swallowed internally (fail-open) so it never blocks startup.
+ */
+export async function prefetchDisposableDomains(): Promise<void> {
+    await ensureCustomDisposableDomainsLoaded();
+}

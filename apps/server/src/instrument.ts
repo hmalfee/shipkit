@@ -1,8 +1,13 @@
+import { prefetchDisposableDomains } from '@shipkit/auth/email-validation';
 import { logger } from '@shipkit/telemetry/logger';
 import { initTelemetry } from '@shipkit/telemetry/node';
 
 import pkg from '../package.json';
 import { env } from './env';
+
+// Load the disposable-domain list at startup so that the
+// auth requests doesn't have to wait for it to load.
+await prefetchDisposableDomains();
 
 await initTelemetry({
     serviceName: pkg.name,
