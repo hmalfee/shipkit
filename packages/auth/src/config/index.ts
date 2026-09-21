@@ -39,6 +39,11 @@ export type AuthConfig = {
         };
         expiresInMinutes: number;
     }) => Promise<void>;
+    onSendChangeEmailVerification?: (payload: {
+        newEmail: string;
+        token: string;
+        callbackURL: string;
+    }) => Promise<void>;
 };
 
 export function createBetterAuthConfig(
@@ -66,6 +71,26 @@ export function createBetterAuthConfig(
                     input: false,
                 },
             },
+            ...(config.onSendChangeEmailVerification
+                ? {
+                      changeEmail: {
+                          enabled: true,
+                          sendChangeEmailConfirmation: async ({
+                              newEmail,
+                              url,
+                              token,
+                          }) =>
+                              config.onSendChangeEmailVerification?.({
+                                  newEmail,
+                                  token,
+                                  callbackURL:
+                                      new URL(url).searchParams.get(
+                                          'callbackURL',
+                                      ) ?? '',
+                              }),
+                      },
+                  }
+                : {}),
         },
         // Dummy baseURL, so that query params on a url can be parsed correctly.
         baseURL: 'http://auth',

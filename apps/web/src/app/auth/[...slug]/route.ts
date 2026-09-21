@@ -8,23 +8,21 @@ import type { Routers } from '@shipkit/shared/next/catch-all';
 
 export const dynamic = 'force-dynamic';
 
-const endpoints: Routers = {};
+// Redirect proxies so transactional emails can use the main domain
+// instead of the backend's domain/subdomain.
+const proxiedPaths = [
+    contract.auth.email.verifyMagicLink['~orpc'].route.path,
+    contract.auth.changeEmail.verify['~orpc'].route.path,
+].filter(Boolean) as string[];
 
-const verifyMagicLinkPath =
-    contract.auth.email.verifyMagicLink['~orpc'].route.path;
-
-if (verifyMagicLinkPath) {
-    // We create a redirect proxy to this route so that in transactional emails we
-    // can use the main domain instead of the backend's domain/subdomain.
-    endpoints[verifyMagicLinkPath] = createProxyHandler(
-        // use the internal URL since this is server-side
-        env.INTERNAL_SERVER_URL,
-    );
-}
+const endpoints: Routers = Object.fromEntries(
+    proxiedPaths.map((path) => [
+        path,
+        createProxyHandler(env.INTERNAL_SERVER_URL),
+    ]),
+);
 
 export const { GET, POST, PUT, PATCH, DELETE } = createCatchAllRouter(
     endpoints,
-    {
-        stripMountPrefix: true,
-    },
+    { stripMountPrefix: true },
 );

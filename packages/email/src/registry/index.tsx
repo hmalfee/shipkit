@@ -1,9 +1,14 @@
+import ChangeEmailVerification from './templates/change-email-verification';
 import EmailSignIn from './templates/email-sign-in';
 
 export const TEMPLATE_REGISTRY = {
     'email-sign-in': {
         component: EmailSignIn,
         subject: 'Sign in to your account',
+    },
+    'change-email-verification': {
+        component: ChangeEmailVerification,
+        subject: 'Verify your new email address',
     },
 } as const;
 

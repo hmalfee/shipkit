@@ -5,10 +5,13 @@ import { rb } from '@shipkit/orpc-utils/contract';
 import {
     CallbackParamsSchema,
     CallbackQuerySchema,
+    ChangeEmailBodySchema,
+    ChangeEmailVerifyQuerySchema,
     EmailSignInBodySchema,
     OauthSignInBodySchema,
     OauthSignInParamsSchema,
     OauthSignInResponseSchema,
+    UpdateProfileBodySchema,
     UserSchema,
     VerifyMagicLinkQuerySchema,
     VerifyOtpBodySchema,
@@ -40,7 +43,7 @@ export const auth = oc.prefix('/auth').router({
                 FORBIDDEN: {},
             })
             .responses({
-                OK: UserSchema,
+                OK: UserSchema.omit({ image: true }),
             }),
         verifyMagicLink: rb
             .query('/verify-magic-link')
@@ -92,5 +95,45 @@ export const auth = oc.prefix('/auth').router({
         })
         .responses({
             NO_CONTENT: undefined,
+        }),
+
+    changeEmail: oc.router({
+        send: rb
+            .mutation('/change-email')
+            .input({
+                body: ChangeEmailBodySchema,
+            })
+            .errors({
+                UNAUTHORIZED: {},
+                TOO_MANY_REQUESTS: {},
+            })
+            .responses({
+                OK: undefined,
+            }),
+        verify: rb
+            .query('/change-email/verify')
+            .input({
+                query: ChangeEmailVerifyQuerySchema,
+            })
+            .errors({
+                TOO_MANY_REQUESTS: {},
+                UNAUTHORIZED: {},
+            })
+            .responses({
+                FOUND: undefined,
+            }),
+    }),
+
+    updateProfile: rb
+        .mutation('/profile')
+        .input({
+            body: UpdateProfileBodySchema,
+        })
+        .errors({
+            UNAUTHORIZED: {},
+            TOO_MANY_REQUESTS: {},
+        })
+        .responses({
+            OK: undefined,
         }),
 });

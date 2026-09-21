@@ -21,6 +21,22 @@ export const UserSchema = z.object({
     id: z.string(),
     name: z.string(),
     email: z.email(),
+    image: z.url().nullable(),
+});
+
+export const UpdateProfileBodySchema = z.object({
+    name: z.string().min(1).max(255).optional(),
+    image: z.url().nullish(),
+});
+
+export const ChangeEmailBodySchema = z.object({
+    newEmail: z.email(),
+    callbackURL: z.string().optional(),
+});
+
+export const ChangeEmailVerifyQuerySchema = z.object({
+    token: z.string().min(32),
+    callbackURL: z.string().optional(),
 });
 
 export const OauthSignInParamsSchema = z.object({

@@ -19,6 +19,8 @@ const smtpConfig = {
 
 const verifyMagicLinkPath =
     contract.auth.email.verifyMagicLink['~orpc'].route.path;
+const changeEmailVerifyPath =
+    contract.auth.changeEmail.verify['~orpc'].route.path;
 
 // Instead of the raw server URL, we use the main app's domain in transactional emails so that
 // users see a familiar domain instead of a backend subdomain.
@@ -79,6 +81,42 @@ const onSendSignInEmail: CreateAuthContext['config']['onSendSignInEmail'] =
               );
           };
 
+const onSendChangeEmailVerification: CreateAuthContext['config']['onSendChangeEmailVerification'] =
+    env.SMTP_HOST
+        ? async ({ newEmail, token, callbackURL }) => {
+              void sendEmail({
+                  template: 'change-email-verification',
+                  to: newEmail,
+                  props: {
+                      url: buildAuthLink(changeEmailVerifyPath, {
+                          token,
+                          callbackURL,
+                      }),
+                      newEmail,
+                  },
+                  config: smtpConfig,
+              }).catch((error) => {
+                  logger.error('[auth] Background change-email send failed', {
+                      error,
+                  });
+              });
+          }
+        : async ({ newEmail, token, callbackURL }) => {
+              logger.warn(
+                  '[auth] SMTP not configured — simulating change-email verification to {newEmail}',
+                  { newEmail },
+              );
+              logger.info(
+                  '[auth] Simulated change-email email\n  Link:    {link}',
+                  {
+                      link: buildAuthLink(changeEmailVerifyPath, {
+                          token,
+                          callbackURL,
+                      }),
+                  },
+              );
+          };
+
 const serverHost = new URL(env.SERVER_URL).hostname;
 const cookieDomain =
     serverHost === 'localhost'
@@ -104,4 +142,5 @@ export const authConfig: CreateAuthContext['config'] = {
         },
     },
     onSendSignInEmail,
+    onSendChangeEmailVerification,
 };
