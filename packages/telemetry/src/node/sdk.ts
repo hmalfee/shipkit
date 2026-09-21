@@ -11,14 +11,11 @@ import { PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
 import { NodeSDK } from '@opentelemetry/sdk-node';
 import { BatchSpanProcessor } from '@opentelemetry/sdk-trace-base';
 
-import type {
-    ReadableSpan,
-    SpanProcessor,
-} from '@opentelemetry/sdk-trace-base';
+import type { SpanProcessor } from '@opentelemetry/sdk-trace-base';
 import type { BaseTelemetryConfig } from '../shared';
 
 import { createOtlpExporter, defaultExportErrorHandler } from '../exporter';
-import { DelegatingSpanProcessor } from '../processor-base';
+import { PipelineSpanProcessor } from '../processor-base';
 import {
     buildResource,
     createDefaultPropagator,
@@ -26,13 +23,7 @@ import {
     isProdEnv,
     normalizeEndpoint,
 } from '../shared';
-import {
-    enrichNextSpan,
-    isNoisyNextSpan,
-    matchesIgnoredRoute,
-    matchesIgnoredUrl,
-    shouldIgnoreNextIncomingRequest,
-} from './next';
+import { nextJsStages, redactionStage, scopeFilterStage } from './stages';
 
 export interface TelemetryConfig extends BaseTelemetryConfig {
     /** Routes to ignore from telemetry tracing. */
@@ -46,40 +37,6 @@ export interface TelemetryConfig extends BaseTelemetryConfig {
     nextjs?: boolean;
     /** Fraction of traces to sample (0–1). Defaults to 1.0 (sample all). */
     sampleRatio?: number;
-}
-
-interface FilteringSpanProcessorOptions {
-    ignoredRoutes?: string[];
-    ignoredUrls?: string[];
-    ignoredScopes?: string[];
-    nextjs?: boolean;
-}
-
-class FilteringSpanProcessor extends DelegatingSpanProcessor {
-    private readonly ignoredRoutes: string[];
-    private readonly ignoredUrls: string[];
-    private readonly ignoredScopes: string[];
-    private readonly nextjs: boolean;
-
-    constructor(
-        delegate: SpanProcessor,
-        options: FilteringSpanProcessorOptions = {},
-    ) {
-        super(delegate);
-        this.ignoredRoutes = options.ignoredRoutes ?? [];
-        this.ignoredUrls = options.ignoredUrls ?? [];
-        this.ignoredScopes = options.ignoredScopes ?? [];
-        this.nextjs = options.nextjs ?? false;
-    }
-
-    override onEnd(span: ReadableSpan): void {
-        if (this.ignoredScopes.includes(span.instrumentationScope.name)) return;
-        if (this.nextjs && isNoisyNextSpan(span)) return;
-        if (matchesIgnoredUrl(span, this.ignoredUrls)) return;
-        if (this.nextjs) enrichNextSpan(span); // enrich only survivors, before the route check below
-        if (matchesIgnoredRoute(span, this.ignoredRoutes)) return;
-        this._delegate.onEnd(span);
-    }
 }
 
 export function initializeSdk(config: TelemetryConfig) {
@@ -97,8 +54,11 @@ export function initializeSdk(config: TelemetryConfig) {
     const endpoint = normalizeEndpoint(config.otelEndpoint);
     const hasEndpoint = !!endpoint;
 
+    const scope = scopeFilterStage({ ignoredScopes: config.ignoredScopes });
+    const nextJs = nextJsStages({ enabled: config.nextjs });
+
     const spanProcessor = hasEndpoint
-        ? new FilteringSpanProcessor(
+        ? new PipelineSpanProcessor(
               new BatchSpanProcessor(
                   createOtlpExporter(OTLPTraceExporter, {
                       endpoint,
@@ -107,12 +67,13 @@ export function initializeSdk(config: TelemetryConfig) {
                       onExportError: defaultExportErrorHandler,
                   }),
               ),
-              {
-                  ignoredRoutes: config.ignoredRoutes,
-                  ignoredUrls: config.ignoredUrls,
-                  ignoredScopes: config.ignoredScopes,
-                  nextjs: config.nextjs,
-              },
+              [
+                  scope.filter,
+                  nextJs.noiseFilter,
+                  nextJs.enrich,
+                  redactionStage(),
+                  scope.reparent,
+              ],
           )
         : undefined;
 
@@ -147,25 +108,46 @@ export function initializeSdk(config: TelemetryConfig) {
                     }
                 },
                 ignoreIncomingRequestHook: (req) => {
-                    if (req.method === 'OPTIONS') {
-                        return true;
-                    }
-
+                    if (req.method === 'OPTIONS') return true;
                     const url = req.url ?? '';
-                    if (url === '/favicon.ico' || url === '/health') {
+                    if (url === '/favicon.ico' || url === '/health')
                         return true;
+                    if (config.ignoredRoutes?.some((r) => url.startsWith(r)))
+                        return true;
+                    if (config.nextjs) {
+                        if (
+                            url.includes('/_next/') ||
+                            url.includes('__nextjs_') ||
+                            url.includes('.hot-update.') ||
+                            url.includes('_rsc=')
+                        )
+                            return true;
                     }
-
-                    // Single source of truth for "is this Next.js internal noise" — see integrations/nextjs.ts.
-                    if (config.nextjs)
-                        return shouldIgnoreNextIncomingRequest(url);
-
-                    return url === '/';
+                    return false;
+                },
+                ignoreOutgoingRequestHook: (req) => {
+                    const host = req.hostname ?? req.host ?? '';
+                    const path = req.path ?? '';
+                    const full = host + path;
+                    if (config.ignoredUrls?.some((u) => full.includes(u)))
+                        return true;
+                    if (config.nextjs && full.includes('registry.npmjs.org'))
+                        return true;
+                    return false;
                 },
             }),
             new PgInstrumentation(),
             new IORedisInstrumentation(),
-            new UndiciInstrumentation(),
+            new UndiciInstrumentation({
+                ignoreRequestHook: (req) => {
+                    const full = (req.origin ?? '') + (req.path ?? '');
+                    if (config.ignoredUrls?.some((u) => full.includes(u)))
+                        return true;
+                    if (config.nextjs && full.includes('registry.npmjs.org'))
+                        return true;
+                    return false;
+                },
+            }),
             new RuntimeNodeInstrumentation(),
         ],
     });

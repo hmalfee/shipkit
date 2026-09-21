@@ -42,3 +42,36 @@ export abstract class DelegatingSpanProcessor implements SpanProcessor {
         return this._delegate.shutdown();
     }
 }
+
+export interface SpanPipelineStage {
+    readonly name: string;
+    onStart?(span: Span, ctx: Context): void;
+    /** 'drop' short-circuits the rest of the pipeline — the span never reaches the delegate. */
+    onEnd(span: ReadableSpan): 'keep' | 'drop';
+}
+
+/**
+ * Runs an ordered list of stages against every span. This class is the
+ * single place "what order do filtering/enrichment/redaction happen in"
+ * lives — read the array passed at the call site, not this file.
+ */
+export class PipelineSpanProcessor extends DelegatingSpanProcessor {
+    constructor(
+        delegate: SpanProcessor,
+        private readonly stages: SpanPipelineStage[],
+    ) {
+        super(delegate);
+    }
+
+    override onStart(span: Span, ctx: Context): void {
+        for (const stage of this.stages) stage.onStart?.(span, ctx);
+        super.onStart(span, ctx);
+    }
+
+    override onEnd(span: ReadableSpan): void {
+        for (const stage of this.stages) {
+            if (stage.onEnd(span) === 'drop') return;
+        }
+        this._delegate.onEnd(span);
+    }
+}
