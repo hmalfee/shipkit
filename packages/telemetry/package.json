@@ -11,6 +11,7 @@
     },
     "scripts": {
         "clean": "git clean -xdf .cache .turbo node_modules -e .env -e .env.*",
+        "predev": "docker compose down -v --remove-orphans",
         "dev": "local-manager --persist docker compose up -d --quiet-pull",
         "typecheck": "tsc"
     },
