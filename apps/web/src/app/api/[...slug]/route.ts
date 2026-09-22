@@ -10,9 +10,10 @@ export const dynamic = 'force-dynamic';
 const endpoints: Routers = {};
 
 if (env.NEXT_PUBLIC_OTEL_PROXY_PATH) {
-    endpoints[env.NEXT_PUBLIC_OTEL_PROXY_PATH + '/*'] = createOtelIngestHandler(
-        env.OTEL_URL,
-    );
+    endpoints[env.NEXT_PUBLIC_OTEL_PROXY_PATH + '/*'] = {
+        // otel requests are always POST method
+        POST: createOtelIngestHandler(env.OTEL_URL),
+    };
 }
 
 export const { GET, POST, PUT, PATCH, DELETE } = createCatchAllRouter(

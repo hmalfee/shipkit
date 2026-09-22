@@ -1,5 +1,7 @@
 import { trace } from '@opentelemetry/api';
 
+import { ALLOWED_HTTP_METHODS } from '@shipkit/shared/constants';
+
 import type { NextRequest } from 'next/server';
 
 export type RouteHandler = (
@@ -7,13 +9,23 @@ export type RouteHandler = (
     context: { params?: { path?: string[] } | Promise<{ path?: string[] }> },
 ) => Response | Promise<Response>;
 
-export type Routers = Record<string, RouteHandler>;
+/** One of the allowlisted HTTP methods this router will dispatch. */
+export type HttpMethod = (typeof ALLOWED_HTTP_METHODS)[number];
+
+/**
+ * Map of path → HTTP method → handler.
+ *
+ * Paths should start with `/`. Append `/*` to a path for wildcard
+ * (prefix) matching — e.g. `"/otel/*"` matches `/otel/v1/traces`, etc.
+ * Method keys must be one of `ALLOWED_HTTP_METHODS`.
+ */
+export type Routers = Record<string, Partial<Record<HttpMethod, RouteHandler>>>;
 
 export interface CatchAllOptions {
     /**
      * Auto-detect the mount point from the request URL and also try
      * matching registered keys that include it.
-     * e.g. mounted at /api → key "/api/otel" resolves as if registered as "/otel"
+     * e.g. mounted at /api → path "/api/otel" resolves as if registered as "/otel"
      *
      * @default false
      */
@@ -43,37 +55,80 @@ function fixSpan(route: string, method: string) {
 }
 
 /**
+ * Validates every declared path/method combination up front, so a typo'd
+ * method fails loudly at router-creation time rather than as a silent
+ * 404 at request time. (TS callers also get this for free via excess
+ * property checking on the object literal; this covers plain-JS callers too.)
+ */
+function validateEndpoints(endpoints: Routers): void {
+    for (const [path, methods] of Object.entries(endpoints)) {
+        if (!path.startsWith('/')) {
+            throw new Error(
+                `Invalid route path "${path}": path must start with "/".`,
+            );
+        }
+        for (const method of Object.keys(methods ?? {})) {
+            if (!ALLOWED_HTTP_METHODS.includes(method as HttpMethod)) {
+                throw new Error(
+                    `Invalid route method "${method}" for path "${path}". ` +
+                        `Use one of ${ALLOWED_HTTP_METHODS.join(', ')}.`,
+                );
+            }
+        }
+    }
+}
+
+function resolveRoute(
+    endpoints: Routers,
+    method: string,
+    path: string,
+): { handler: RouteHandler; path: string } | undefined {
+    const handler = endpoints[path]?.[method as HttpMethod];
+    return handler ? { handler, path } : undefined;
+}
+
+/**
  * Creates a Next.js catch-all route handler that dispatches requests to
- * registered handlers based on the incoming URL path.
+ * registered handlers based on the incoming URL path and HTTP method.
  *
- * Routes are **exact by default**. To match a path and all sub-paths beneath
- * it (e.g. a proxy), append `/*` to the key:
+ * Each path maps to an object of methods (one of `ALLOWED_HTTP_METHODS`).
+ * Paths are **exact by default**; to match a path and all sub-paths
+ * beneath it (e.g. a proxy), append `/*` to the path.
  *
  * ```ts
- * // exact — only matches POST /health
- * createCatchAllRouter({ '/health': healthHandler })
+ * createCatchAllRouter({
+ *   // exact — only matches GET /health
+ *   '/health': { GET: healthHandler },
  *
- * // wildcard — matches /otel/v1/traces, /otel/v1/logs, etc.
- * // remaining segments are forwarded as `context.params.path`
- * createCatchAllRouter({ '/otel/*': otelProxyHandler })
+ *   // multiple methods on one path
+ *   '/users': { GET: listUsers, POST: createUser },
+ *
+ *   // wildcard — matches POST /otel/v1/traces, POST /otel/v1/logs, etc.
+ *   // remaining segments are forwarded as `context.params.path`
+ *   '/otel/*': { POST: otelProxyHandler },
+ * })
  * ```
  *
  * Place this in `app/api/[...slug]/route.ts` and re-export the returned
  * `{ GET, POST, PUT, PATCH, DELETE }` object.
  *
- * @param endpoints - Map of path → handler. Keys should start with `/`.
- *   Append `/*` to a key for wildcard (prefix) matching.
+ * @param endpoints - Map of path → method → handler. Paths should start
+ *   with `/`. Append `/*` to a path for wildcard (prefix) matching.
+ *   Malformed entries throw immediately.
  * @param options - Optional config: mount-prefix stripping and lifecycle hooks.
  */
 export function createCatchAllRouter(
     endpoints: Routers,
     options?: CatchAllOptions,
 ) {
+    validateEndpoints(endpoints);
+
     async function handler(
         req: NextRequest,
         { params }: { params: Promise<{ slug: string[] }> },
     ) {
         const { slug } = await params;
+        const method = req.method;
 
         let mountPath = '';
         if (options?.stripMountPrefix) {
@@ -86,64 +141,56 @@ export function createCatchAllRouter(
 
         // --- Phase 1: Exact match ---
         const exactPath = '/' + slug.join('/');
-        let router = endpoints[exactPath];
-        let matchedKey = exactPath;
+        let match = resolveRoute(endpoints, method, exactPath);
 
-        if (!router && mountPath) {
-            const mounted = mountPath + exactPath;
-            router = endpoints[mounted];
-            if (router) matchedKey = mounted;
+        if (!match && mountPath) {
+            match = resolveRoute(endpoints, method, mountPath + exactPath);
         }
 
-        if (router) {
-            fixSpan(matchedKey, req.method);
+        if (match) {
+            fixSpan(match.path, method);
             options?.onMatch?.(req, {
-                route: matchedKey,
-                method: req.method,
+                route: match.path,
+                method,
                 prefix: exactPath,
             });
-            return router(req, { params: { path: [] } });
+            return match.handler(req, { params: { path: [] } });
         }
 
         // --- Phase 2: Wildcard match (longest prefix first) ---
         for (let i = slug.length - 1; i > 0; i--) {
             const prefix = '/' + slug.slice(0, i).join('/') + '/*';
-            router = endpoints[prefix];
-            matchedKey = prefix;
 
-            if (!router && mountPath) {
-                const mounted = mountPath + prefix;
-                router = endpoints[mounted];
-                if (router) matchedKey = mounted;
+            match = resolveRoute(endpoints, method, prefix);
+            if (!match && mountPath) {
+                match = resolveRoute(endpoints, method, mountPath + prefix);
             }
 
-            if (router) {
-                fixSpan(matchedKey, req.method);
+            if (match) {
+                fixSpan(match.path, method);
                 options?.onMatch?.(req, {
-                    route: matchedKey,
-                    method: req.method,
+                    route: match.path,
+                    method,
                     prefix,
                 });
-                return router(req, { params: { path: slug.slice(i) } });
+                return match.handler(req, { params: { path: slug.slice(i) } });
             }
         }
 
         const fallbackPath = new URL(req.url).pathname;
-        fixSpan(fallbackPath, req.method);
+        fixSpan(fallbackPath, method);
         if (options?.onNotFound) {
             return options.onNotFound(req, {
                 path: fallbackPath,
-                method: req.method,
+                method,
             });
         }
         return Response.json({ error: 'Not found' }, { status: 404 });
     }
 
-    return {
-        GET: handler,
-        POST: handler,
-        PUT: handler,
-        PATCH: handler,
-        DELETE: handler,
-    } as const;
+    // Derived from ALLOWED_HTTP_METHODS rather than hardcoded, so this can never
+    // drift out of sync with the allowlist.
+    return Object.fromEntries(
+        ALLOWED_HTTP_METHODS.map((method) => [method, handler]),
+    ) as Record<HttpMethod, RouteHandler>;
 }

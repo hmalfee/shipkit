@@ -2,6 +2,7 @@ import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 
+import { ALLOWED_HTTP_METHODS } from '@shipkit/shared/constants';
 import { logger } from '@shipkit/telemetry/logger';
 import { traceHonoRequest } from '@shipkit/telemetry/node/hono';
 
@@ -29,7 +30,7 @@ app.use(
     '/*',
     cors({
         origin: [env.WEB_URL],
-        allowMethods: ['GET', 'POST', 'DELETE', 'PUT', 'PATCH'],
+        allowMethods: ALLOWED_HTTP_METHODS as unknown as string[],
         allowHeaders: ['Content-Type', 'Authorization'],
         credentials: true,
         maxAge: 86400, // Cache preflight requests for 24 hours

@@ -23,3 +23,11 @@ export const OAUTH_PROVIDER_IDS = Object.values(OAUTH_PROVIDERS) as [
     (typeof OAUTH_PROVIDERS)[keyof typeof OAUTH_PROVIDERS],
     ...(typeof OAUTH_PROVIDERS)[keyof typeof OAUTH_PROVIDERS][],
 ];
+
+export const ALLOWED_HTTP_METHODS = [
+    'GET',
+    'POST',
+    'PUT',
+    'PATCH',
+    'DELETE',
+] as const;
