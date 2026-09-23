@@ -1,5 +1,5 @@
 import { redisStorage } from '@better-auth/redis-storage';
-import { betterAuth } from 'better-auth';
+import { APIError, BASE_ERROR_CODES, betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 
 import type { USER_ROLE_VALUES } from '@shipkit/shared/constants';
@@ -7,6 +7,7 @@ import type { TablesRelationalConfig } from 'drizzle-orm';
 import type { PgDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core';
 import type { OAuthProvidersConfig } from './social-providers';
 
+import { authRequestContext } from '../context-store';
 import { databaseHooks, hooks } from './hooks';
 import { cookieForwarderPlugin } from './plugins/cookie-forwarder';
 import { emailSignInPlugin } from './plugins/email-sign-in';
@@ -69,6 +70,20 @@ export function createBetterAuthConfig(
                     type: 'string',
                     required: true,
                     input: false,
+                    defaultValue: () => {
+                        const store = authRequestContext.getStore();
+                        const displayEmail = store?.pendingDisplayEmail;
+                        if (store) store.pendingDisplayEmail = undefined;
+                        if (!displayEmail) {
+                            const { code, message } =
+                                BASE_ERROR_CODES.FAILED_TO_CREATE_USER;
+                            throw new APIError('INTERNAL_SERVER_ERROR', {
+                                code,
+                                message,
+                            });
+                        }
+                        return displayEmail;
+                    },
                 },
             },
             ...(config.onSendChangeEmailVerification

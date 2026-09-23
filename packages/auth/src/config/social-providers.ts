@@ -4,6 +4,7 @@ import { z } from 'zod/mini';
 import type { OAUTH_PROVIDER_IDS } from '@shipkit/shared/constants';
 import type { betterAuth } from 'better-auth';
 
+import { authRequestContext } from '../context-store';
 import { normalizeEmail, sanitizeEmail } from './utils/email-validation';
 
 type BetterAuthOAuthProviders = NonNullable<
@@ -49,9 +50,12 @@ function mapOAuthProfileEmail(profile: unknown) {
 
     const sanitized = sanitizeEmail(parsed.data.email);
     const normalized = normalizeEmail(sanitized);
+
+    const store = authRequestContext.getStore();
+    if (store) store.pendingDisplayEmail = sanitized;
+
     return {
         email: normalized,
-        displayEmail: sanitized,
     };
 }
 
