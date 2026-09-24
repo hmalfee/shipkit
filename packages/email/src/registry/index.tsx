@@ -1,3 +1,4 @@
+import ChangeEmailConfirmation from './templates/change-email-confirmation';
 import ChangeEmailVerification from './templates/change-email-verification';
 import EmailSignIn from './templates/email-sign-in';
 
@@ -5,6 +6,10 @@ export const TEMPLATE_REGISTRY = {
     'email-sign-in': {
         component: EmailSignIn,
         subject: 'Sign in to your account',
+    },
+    'change-email-confirmation': {
+        component: ChangeEmailConfirmation,
+        subject: 'Confirm your email change request',
     },
     'change-email-verification': {
         component: ChangeEmailVerification,

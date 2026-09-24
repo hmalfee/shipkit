@@ -1,51 +1,20 @@
 import { redisStorage } from '@better-auth/redis-storage';
-import { APIError, BASE_ERROR_CODES, betterAuth } from 'better-auth';
+import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 
-import type { USER_ROLE_VALUES } from '@shipkit/shared/constants';
-import type { TablesRelationalConfig } from 'drizzle-orm';
-import type { PgDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core';
-import type { OAuthProvidersConfig } from './social-providers';
+import type { AuthConfig, AuthDatabase, Redis } from './types';
 
-import { authRequestContext } from '../context-store';
+import {
+    getChangeEmailConfig,
+    sendChangeEmailVerification,
+} from './change-email';
 import { databaseHooks, hooks } from './hooks';
 import { cookieForwarderPlugin } from './plugins/cookie-forwarder';
 import { emailSignInPlugin } from './plugins/email-sign-in';
-import { buildOAuthProviders } from './social-providers';
-
-type Redis = Parameters<typeof redisStorage>[0]['client'];
-
-export type AuthDatabase = PgDatabase<
-    PgQueryResultHKT,
-    Record<string, unknown>,
-    TablesRelationalConfig
->;
-
-export type AuthConfig = {
-    secret: string;
-    useSecureCookies: boolean;
-    /**
-     * Root domain for cross-subdomain cookie sharing. Use the most specific scope
-     * needed to avoid exposing session cookies to untrusted subdomains. Omit if
-     * all services share the same origin.
-     */
-    cookieDomain?: string;
-    oauth: OAuthProvidersConfig;
-    onSendSignInEmail?: (payload: {
-        email: string;
-        otp: string;
-        magicLink: {
-            token: string;
-            callbackURL: string;
-        };
-        expiresInMinutes: number;
-    }) => Promise<void>;
-    onSendChangeEmailVerification?: (payload: {
-        newEmail: string;
-        token: string;
-        callbackURL: string;
-    }) => Promise<void>;
-};
+import {
+    getPendingDisplayEmail,
+    getSocialProvidersConfig,
+} from './social-providers';
 
 export function createBetterAuthConfig(
     db: AuthDatabase,
@@ -70,46 +39,19 @@ export function createBetterAuthConfig(
                     type: 'string',
                     required: true,
                     input: false,
-                    defaultValue: () => {
-                        const store = authRequestContext.getStore();
-                        const displayEmail = store?.pendingDisplayEmail;
-                        if (store) store.pendingDisplayEmail = undefined;
-                        if (!displayEmail) {
-                            const { code, message } =
-                                BASE_ERROR_CODES.FAILED_TO_CREATE_USER;
-                            throw new APIError('INTERNAL_SERVER_ERROR', {
-                                code,
-                                message,
-                            });
-                        }
-                        return displayEmail;
-                    },
+                    defaultValue: getPendingDisplayEmail,
                 },
             },
-            ...(config.onSendChangeEmailVerification
-                ? {
-                      changeEmail: {
-                          enabled: true,
-                          sendChangeEmailConfirmation: async ({
-                              newEmail,
-                              url,
-                              token,
-                          }) =>
-                              config.onSendChangeEmailVerification?.({
-                                  newEmail,
-                                  token,
-                                  callbackURL:
-                                      new URL(url).searchParams.get(
-                                          'callbackURL',
-                                      ) ?? '',
-                              }),
-                      },
-                  }
-                : {}),
+            changeEmail: getChangeEmailConfig(config),
+        },
+        emailVerification: {
+            sendVerificationEmail: async (data) => {
+                await sendChangeEmailVerification(config, data);
+            },
         },
         // Dummy baseURL, so that query params on a url can be parsed correctly.
         baseURL: 'http://auth',
-        socialProviders: buildOAuthProviders(config.oauth),
+        socialProviders: getSocialProvidersConfig(config),
         hooks,
         databaseHooks,
         onAPIError: {
@@ -140,9 +82,6 @@ export function createBetterAuthConfig(
         plugins: [
             emailSignInPlugin({
                 onSendSignInEmail: async (props) =>
-                    // Better-auth builds its own magic-link URL, but that's not necessarily our
-                    // backend's actual verification route. So we pass the token and callbackURL
-                    // to let the consumer build the URL on their own.
                     config.onSendSignInEmail?.({
                         email: props.email,
                         otp: props.otp,
@@ -164,4 +103,4 @@ export function createBetterAuthConfig(
     });
 }
 
-export type Roles = typeof USER_ROLE_VALUES;
+export * from './types';

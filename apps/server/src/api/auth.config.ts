@@ -19,6 +19,10 @@ const smtpConfig = {
 
 const verifyMagicLinkPath =
     contract.auth.email.verifyMagicLink['~orpc'].route.path;
+
+// Note: The same /verify endpoint is used for BOTH steps of the change-email flow.
+// @shipkit/auth internally distinguishes whether it's confirming the request or
+// verifying the new email based entirely on the contents of the JWT token passed to it.
 const changeEmailVerifyPath =
     contract.auth.changeEmail.verify['~orpc'].route.path;
 
@@ -81,40 +85,85 @@ const onSendSignInEmail: CreateAuthContext['config']['onSendSignInEmail'] =
               );
           };
 
-const onSendChangeEmailVerification: CreateAuthContext['config']['onSendChangeEmailVerification'] =
+const onSendChangeEmail: CreateAuthContext['config']['onSendChangeEmail'] =
     env.SMTP_HOST
-        ? async ({ newEmail, token, callbackURL }) => {
-              void sendEmail({
-                  template: 'change-email-verification',
-                  to: newEmail,
-                  props: {
-                      url: buildAuthLink(changeEmailVerifyPath, {
-                          token,
-                          callbackURL,
-                      }),
-                      newEmail,
-                  },
-                  config: smtpConfig,
-              }).catch((error) => {
-                  logger.error('[auth] Background change-email send failed', {
-                      error,
+        ? {
+              confirmation: async ({
+                  currentEmail,
+                  newEmail,
+                  token,
+                  callbackURL,
+              }) => {
+                  void sendEmail({
+                      template: 'change-email-confirmation',
+                      to: currentEmail,
+                      props: {
+                          currentEmail,
+                          url: buildAuthLink(changeEmailVerifyPath, {
+                              token,
+                              callbackURL,
+                          }),
+                          newEmail,
+                      },
+                      config: smtpConfig,
+                  }).catch((error) => {
+                      logger.error(
+                          '[auth] Background change-email confirm send failed',
+                          { error },
+                      );
                   });
-              });
+              },
+              verification: async ({ newEmail, token, callbackURL }) => {
+                  void sendEmail({
+                      template: 'change-email-verification',
+                      to: newEmail,
+                      props: {
+                          url: buildAuthLink(changeEmailVerifyPath, {
+                              token,
+                              callbackURL,
+                          }),
+                          newEmail,
+                      },
+                      config: smtpConfig,
+                  }).catch((error) => {
+                      logger.error(
+                          '[auth] Background change-email verify send failed',
+                          { error },
+                      );
+                  });
+              },
           }
-        : async ({ newEmail, token, callbackURL }) => {
-              logger.warn(
-                  '[auth] SMTP not configured — simulating change-email verification to {newEmail}',
-                  { newEmail },
-              );
-              logger.info(
-                  '[auth] Simulated change-email email\n  Link:    {link}',
-                  {
-                      link: buildAuthLink(changeEmailVerifyPath, {
-                          token,
-                          callbackURL,
-                      }),
-                  },
-              );
+        : {
+              confirmation: async ({ currentEmail, token, callbackURL }) => {
+                  logger.warn(
+                      '[auth] SMTP not configured — simulating change-email confirmation to {currentEmail}',
+                      { currentEmail },
+                  );
+                  logger.info(
+                      '[auth] Simulated change-email confirmation\n  Link:    {link}',
+                      {
+                          link: buildAuthLink(changeEmailVerifyPath, {
+                              token,
+                              callbackURL,
+                          }),
+                      },
+                  );
+              },
+              verification: async ({ newEmail, token, callbackURL }) => {
+                  logger.warn(
+                      '[auth] SMTP not configured — simulating change-email verification to {newEmail}',
+                      { newEmail },
+                  );
+                  logger.info(
+                      '[auth] Simulated change-email verification\n  Link:    {link}',
+                      {
+                          link: buildAuthLink(changeEmailVerifyPath, {
+                              token,
+                              callbackURL,
+                          }),
+                      },
+                  );
+              },
           };
 
 const serverHost = new URL(env.SERVER_URL).hostname;
@@ -142,5 +191,5 @@ export const authConfig: CreateAuthContext['config'] = {
         },
     },
     onSendSignInEmail,
-    onSendChangeEmailVerification,
+    onSendChangeEmail,
 };
