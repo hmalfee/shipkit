@@ -5,16 +5,15 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import type { AuthConfig, AuthDatabase, Redis } from './types';
 
 import {
+    changeEmailBeforeHooks,
+    changeEmailBeforeUserUpdateHooks,
     getChangeEmailConfig,
     sendChangeEmailVerification,
 } from './change-email';
-import { databaseHooks, hooks } from './hooks';
+import { getPendingDisplayEmail, getSocialProvidersConfig } from './oauth';
 import { cookieForwarderPlugin } from './plugins/cookie-forwarder';
 import { emailSignInPlugin } from './plugins/email-sign-in';
-import {
-    getPendingDisplayEmail,
-    getSocialProvidersConfig,
-} from './social-providers';
+import { composePathBasedDbHooks, composePathBasedHooks } from './utils/hooks';
 
 export function createBetterAuthConfig(
     db: AuthDatabase,
@@ -52,8 +51,20 @@ export function createBetterAuthConfig(
         // Dummy baseURL, so that query params on a url can be parsed correctly.
         baseURL: 'http://auth',
         socialProviders: getSocialProvidersConfig(config),
-        hooks,
-        databaseHooks,
+        hooks: composePathBasedHooks({
+            before: {
+                ...changeEmailBeforeHooks(),
+            },
+        }),
+        databaseHooks: composePathBasedDbHooks({
+            user: {
+                update: {
+                    before: {
+                        ...changeEmailBeforeUserUpdateHooks(),
+                    },
+                },
+            },
+        }),
         onAPIError: {
             throw: true,
         },
