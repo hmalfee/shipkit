@@ -19,10 +19,8 @@ const smtpConfig = {
 
 const verifyMagicLinkPath =
     contract.auth.email.verifyMagicLink['~orpc'].route.path;
-
-// Note: The same /verify endpoint is used for BOTH steps of the change-email flow.
-// @shipkit/auth internally distinguishes whether it's confirming the request or
-// verifying the new email based entirely on the contents of the JWT token passed to it.
+const changeEmailConfirmPath =
+    contract.auth.changeEmail.confirm['~orpc'].route.path;
 const changeEmailVerifyPath =
     contract.auth.changeEmail.verify['~orpc'].route.path;
 
@@ -99,7 +97,7 @@ const onSendChangeEmail: CreateAuthContext['config']['onSendChangeEmail'] =
                       to: currentEmail,
                       props: {
                           currentEmail,
-                          url: buildAuthLink(changeEmailVerifyPath, {
+                          url: buildAuthLink(changeEmailConfirmPath, {
                               token,
                               callbackURL,
                           }),
@@ -142,7 +140,7 @@ const onSendChangeEmail: CreateAuthContext['config']['onSendChangeEmail'] =
                   logger.info(
                       '[auth] Simulated change-email confirmation\n  Link:    {link}',
                       {
-                          link: buildAuthLink(changeEmailVerifyPath, {
+                          link: buildAuthLink(changeEmailConfirmPath, {
                               token,
                               callbackURL,
                           }),

@@ -31,3 +31,22 @@ export const ALLOWED_HTTP_METHODS = [
     'PATCH',
     'DELETE',
 ] as const;
+
+/**
+ * Stages for the email change flow.
+ * This is the source of truth for both the auth SDK and any API implementing email change endpoints.
+ */
+export const CHANGE_EMAIL_STAGES = {
+    /** Initial stage: waiting for user to confirm the change via their current email address */
+    AwaitingConfirmation: 'awaiting_confirmation',
+    /** Final stage: waiting for user to verify their new email address */
+    AwaitingVerification: 'awaiting_verification',
+} as const;
+
+export const CHANGE_EMAIL_STAGE_VALUES = Object.values(CHANGE_EMAIL_STAGES) as [
+    (typeof CHANGE_EMAIL_STAGES)[keyof typeof CHANGE_EMAIL_STAGES],
+    ...(typeof CHANGE_EMAIL_STAGES)[keyof typeof CHANGE_EMAIL_STAGES][],
+];
+
+export type ChangeEmailStage =
+    (typeof CHANGE_EMAIL_STAGES)[keyof typeof CHANGE_EMAIL_STAGES];

@@ -1,6 +1,9 @@
 import z from 'zod';
 
-import { OAUTH_PROVIDER_IDS } from '@shipkit/shared/constants';
+import {
+    CHANGE_EMAIL_STAGE_VALUES,
+    OAUTH_PROVIDER_IDS,
+} from '@shipkit/shared/constants';
 
 export const EmailSignInBodySchema = z.object({
     email: z.email(),
@@ -17,11 +20,25 @@ export const VerifyMagicLinkQuerySchema = z.object({
     callbackURL: z.string().optional(),
 });
 
+const ChangeEmailStatusSchema = z.union([
+    z.object({
+        newEmail: z.email(),
+        stage: z.enum(CHANGE_EMAIL_STAGE_VALUES),
+        disallowedUntil: z.number().optional(),
+    }),
+    z.object({
+        disallowedUntil: z.number(),
+        newEmail: z.never().optional(),
+        stage: z.never().optional(),
+    }),
+]);
+
 export const UserSchema = z.object({
     id: z.string(),
     name: z.string(),
     email: z.email(),
     image: z.url().nullable(),
+    changeEmailStatus: ChangeEmailStatusSchema.optional(),
 });
 
 export const UpdateProfileBodySchema = z.object({

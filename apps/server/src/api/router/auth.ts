@@ -6,9 +6,22 @@ export const auth = os.auth.router({
     me: cr.auth.me.handler(async ({ context }) => {
         if (!context.session) return { status: 200, body: null };
         const { id, name, displayEmail, image } = context.session.user;
+        const pending = await context.auth.changeEmailStatus();
         return {
             status: 200,
-            body: { id, name, email: displayEmail, image: image ?? null },
+            body: {
+                id,
+                name,
+                email: displayEmail,
+                image: image ?? null,
+                ...(pending
+                    ? {
+                          changeEmailStatus: {
+                              ...pending,
+                          },
+                      }
+                    : undefined),
+            },
         };
     }),
 
@@ -149,8 +162,8 @@ export const auth = os.auth.router({
         send: cr.auth.changeEmail.send.handler(
             async ({ context, input, errors }) => {
                 const { exceeded } = await context.rateLimit({
-                    limit: 3,
-                    blockDuration: 60,
+                    limit: 5,
+                    blockDuration: 60 * 60,
                 });
                 if (exceeded)
                     throw errors.TOO_MANY_REQUESTS({
@@ -162,11 +175,38 @@ export const auth = os.auth.router({
                     });
 
                 try {
-                    await context.auth.changeEmail({
+                    await context.auth.requestChangeEmail({
                         newEmail: input.body.newEmail,
                         callbackURL: input.body.callbackURL,
                     });
                     return { status: 200, body: undefined };
+                } catch (err) {
+                    handleAuthError(err, errors);
+                }
+            },
+        ),
+        confirm: cr.auth.changeEmail.confirm.handler(
+            async ({ context, input, errors }) => {
+                const { exceeded } = await context.rateLimit({
+                    limit: 5,
+                    blockDuration: 60,
+                });
+                if (exceeded)
+                    throw errors.TOO_MANY_REQUESTS({
+                        message: 'Too many attempts',
+                    });
+                try {
+                    const response = await context.auth.$api(
+                        'confirmChangeEmail',
+                        {
+                            query: {
+                                token: input.query.token,
+                                callbackURL: input.query.callbackURL,
+                            },
+                        },
+                    );
+                    const location = response.headers.get('location') ?? '/';
+                    return { status: 302, headers: { location } };
                 } catch (err) {
                     handleAuthError(err, errors);
                 }
@@ -182,20 +222,31 @@ export const auth = os.auth.router({
                     throw errors.TOO_MANY_REQUESTS({
                         message: 'Too many attempts',
                     });
-
                 try {
-                    const response = await context.auth.$api('verifyEmail', {
-                        query: {
-                            token: input.query.token,
-                            callbackURL: input.query.callbackURL,
+                    const response = await context.auth.$api(
+                        'verifyChangeEmail',
+                        {
+                            query: {
+                                token: input.query.token,
+                                callbackURL: input.query.callbackURL,
+                            },
                         },
-                    });
-
+                    );
                     const location = response.headers.get('location') ?? '/';
                     return { status: 302, headers: { location } };
                 } catch (err) {
                     handleAuthError(err, errors);
                 }
+            },
+        ),
+        cancel: cr.auth.changeEmail.cancel.handler(
+            async ({ context, errors }) => {
+                if (!context.session)
+                    throw errors.UNAUTHORIZED({
+                        message: 'User not signed in',
+                    });
+                await context.auth.cancelChangeEmail();
+                return { status: 200, body: undefined };
             },
         ),
     }),

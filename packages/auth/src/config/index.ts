@@ -4,16 +4,10 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 
 import type { AuthConfig, AuthDatabase, Redis } from './types';
 
-import {
-    changeEmailBeforeHooks,
-    changeEmailBeforeUserUpdateHooks,
-    getChangeEmailConfig,
-    sendChangeEmailVerification,
-} from './change-email';
 import { getPendingDisplayEmail, getSocialProvidersConfig } from './oauth';
+import { changeEmailPlugin } from './plugins/change-email';
 import { cookieForwarderPlugin } from './plugins/cookie-forwarder';
 import { emailSignInPlugin } from './plugins/email-sign-in';
-import { composePathBasedDbHooks, composePathBasedHooks } from './utils/hooks';
 
 export function createBetterAuthConfig(
     db: AuthDatabase,
@@ -41,30 +35,10 @@ export function createBetterAuthConfig(
                     defaultValue: getPendingDisplayEmail,
                 },
             },
-            changeEmail: getChangeEmailConfig(config),
-        },
-        emailVerification: {
-            sendVerificationEmail: async (data) => {
-                await sendChangeEmailVerification(config, data);
-            },
         },
         // Dummy baseURL, so that query params on a url can be parsed correctly.
         baseURL: 'http://auth',
         socialProviders: getSocialProvidersConfig(config),
-        hooks: composePathBasedHooks({
-            before: {
-                ...changeEmailBeforeHooks(),
-            },
-        }),
-        databaseHooks: composePathBasedDbHooks({
-            user: {
-                update: {
-                    before: {
-                        ...changeEmailBeforeUserUpdateHooks(),
-                    },
-                },
-            },
-        }),
         onAPIError: {
             throw: true,
         },
@@ -105,6 +79,25 @@ export function createBetterAuthConfig(
                         },
                         expiresInMinutes: props.expiresInMinutes,
                     }),
+            }),
+            changeEmailPlugin({
+                onSendChangeEmail: config.onSendChangeEmail
+                    ? {
+                          confirmation: async (props) =>
+                              config.onSendChangeEmail!.confirmation({
+                                  currentEmail: props.currentEmail,
+                                  newEmail: props.newEmail,
+                                  token: props.token,
+                                  callbackURL: props.callbackURL,
+                              }),
+                          verification: async (props) =>
+                              config.onSendChangeEmail!.verification({
+                                  newEmail: props.newEmail,
+                                  token: props.token,
+                                  callbackURL: props.callbackURL,
+                              }),
+                      }
+                    : undefined,
             }),
             cookieForwarderPlugin(), // must be last
         ],

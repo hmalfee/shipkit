@@ -97,9 +97,9 @@ export const auth = oc.prefix('/auth').router({
             NO_CONTENT: undefined,
         }),
 
-    changeEmail: oc.router({
+    changeEmail: oc.prefix('/change-email').router({
         send: rb
-            .mutation('/change-email')
+            .mutation('/')
             .input({
                 body: ChangeEmailBodySchema,
             })
@@ -110,8 +110,8 @@ export const auth = oc.prefix('/auth').router({
             .responses({
                 OK: undefined,
             }),
-        verify: rb
-            .query('/change-email/verify')
+        confirm: rb
+            .query('/confirm')
             .input({
                 query: ChangeEmailVerifyQuerySchema,
             })
@@ -121,6 +121,26 @@ export const auth = oc.prefix('/auth').router({
             })
             .responses({
                 FOUND: undefined,
+            }),
+        verify: rb
+            .query('/verify')
+            .input({
+                query: ChangeEmailVerifyQuerySchema,
+            })
+            .errors({
+                TOO_MANY_REQUESTS: {},
+                UNAUTHORIZED: {},
+            })
+            .responses({
+                FOUND: undefined,
+            }),
+        cancel: rb
+            .mutation('/cancel')
+            .errors({
+                UNAUTHORIZED: {},
+            })
+            .responses({
+                OK: undefined,
             }),
     }),
 
