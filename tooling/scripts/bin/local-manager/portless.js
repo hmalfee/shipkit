@@ -142,35 +142,36 @@ export async function ensureProxy(mode, lanIp) {
         );
     }
 
-    // Restart only if config actually changed — it's shared machine-wide, so
-    // restarting drops every session's connections. Cross-check our recorded
-    // state against portless's own on-disk state in case it was reconfigured
-    // outside this script.
     const desired = { mode, lanIp: mode === 'sslip' ? lanIp : null };
-    const prev = await fs.readJson(PROXY_STATE_FILE).catch(() => null);
     const expectedTld = mode === 'sslip' ? `${lanIp}.sslip.io` : 'local';
-    const actualTlds = await fs
-        .readFile(path.join(os.homedir(), '.portless', 'proxy.tlds'), 'utf8')
-        .then((s) => s.trim())
-        .catch(() => null);
-    const modeChanged =
-        !prev ||
-        prev.mode !== desired.mode ||
-        prev.lanIp !== desired.lanIp ||
-        actualTlds !== expectedTld;
 
     await withLock(PROXY_LOCK_DIR, async () => {
-        if (modeChanged) {
-            await run`sudo ${nodeBin} ${portlessCli} proxy stop`;
-            await new Promise((r) => setTimeout(r, 500));
-        }
+        // Read state inside the lock so we see what the previous session just did.
+        const prev = await fs.readJson(PROXY_STATE_FILE).catch(() => null);
+        const actualTlds = await fs
+            .readFile(
+                path.join(os.homedir(), '.portless', 'proxy.tlds'),
+                'utf8',
+            )
+            .then((s) => s.trim())
+            .catch(() => null);
+        const modeChanged =
+            !prev ||
+            prev.mode !== desired.mode ||
+            prev.lanIp !== desired.lanIp ||
+            actualTlds !== expectedTld;
+
+        if (!modeChanged) return; // someone already started it correctly
+
+        await run`sudo ${nodeBin} ${portlessCli} proxy stop`;
+        await new Promise((r) => setTimeout(r, 500));
 
         const proxyArgs = proxyArgsFor(mode, lanIp);
         const maxAttempts = 3;
         for (let attempt = 0; attempt < maxAttempts; attempt++) {
             const result =
                 await run`sudo ${nodeBin} ${portlessCli} ${proxyArgs}`;
-            if (result.exitCode === 0) return;
+            if (result.exitCode === 0) break;
 
             if (attempt === maxAttempts - 1) {
                 echo(chalk.red(result.stdout + result.stderr));
@@ -179,9 +180,10 @@ export async function ensureProxy(mode, lanIp) {
             await run`sudo ${nodeBin} ${portlessCli} proxy stop`;
             await new Promise((r) => setTimeout(r, 500));
         }
-    });
 
-    await fs.writeJson(PROXY_STATE_FILE, desired).catch(() => {});
+        // Write state before releasing the lock.
+        await fs.writeJson(PROXY_STATE_FILE, desired).catch(() => {});
+    });
 
     return { nodeBin, portlessCli };
 }
