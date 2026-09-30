@@ -8,6 +8,7 @@
         "dev": "local-manager next dev",
         "preview": "local-manager sh -c 'pnpm build && pnpm start'",
         "start": "node .next/standalone/apps/web/server.js",
+        "pretypecheck": "rm -rf .next/types && SKIP_ENV_VALIDATION=1 next typegen",
         "typecheck": "tsc"
     },
     "dependencies": {
