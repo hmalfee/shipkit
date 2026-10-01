@@ -265,10 +265,7 @@ export const auth = os.auth.router({
                 throw errors.UNAUTHORIZED({ message: 'User not signed in' });
 
             try {
-                await context.auth.updateUser({
-                    name: input.body.name,
-                    image: input.body.image,
-                });
+                await context.auth.updateUser(input.body);
 
                 return {
                     status: 200,

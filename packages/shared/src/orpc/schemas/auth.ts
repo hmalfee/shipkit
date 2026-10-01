@@ -42,8 +42,12 @@ export const UserSchema = z.object({
 });
 
 export const UpdateProfileBodySchema = z.object({
-    name: z.string().min(1).max(255).optional(),
-    image: z.url().nullish(),
+    // `name` is the only updatable field for now, so it's required (otherwise
+    // an empty body would be a no-op).
+    // TODO: When more fields are added, replace this with a `z.union()` of
+    // single-field schemas so partial updates are allowed and the inferred
+    // type guarantees at least one field is present (`.refine()` wouldn't).
+    name: z.string().min(1).max(255),
 });
 
 export const ChangeEmailBodySchema = z.object({
