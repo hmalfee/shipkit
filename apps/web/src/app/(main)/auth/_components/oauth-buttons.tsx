@@ -17,6 +17,7 @@ import { api } from '@/lib/api/client';
 
 import type { OAuthError } from '@/hooks/use-oauth-popup';
 import type { OAUTH_PROVIDER_IDS } from '@shipkit/shared/constants';
+import type { Route } from 'next';
 
 export function OAuthButtons() {
     const { openOAuthPopup } = useOAuthPopup();
@@ -50,7 +51,9 @@ export function OAuthButtons() {
                     .mutateAsync({
                         params: { provider },
                         body: {
-                            callbackURL: `${window.location.origin}/auth/callback/success`,
+                            callbackURL:
+                                window.location.origin +
+                                ('/auth/callback/success' satisfies Route),
                         },
                     })
                     .then((data) => data.body.url),

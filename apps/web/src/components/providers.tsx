@@ -5,6 +5,7 @@ import { useState } from 'react';
 
 import { QueryIdentitySync } from '@shipkit/posthog/react';
 import { Toaster } from '@shipkit/ui/components/sonner';
+import { TooltipProvider } from '@shipkit/ui/components/tooltip';
 
 import { api, APIProvider } from '@/lib/api/client';
 import { createQueryClient } from '@/lib/api/query-client';
@@ -27,7 +28,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
                 enableSystem
                 disableTransitionOnChange
             >
-                {children}
+                <TooltipProvider>{children}</TooltipProvider>
                 <Toaster richColors />
             </ThemeProvider>
             <ReactQueryDevtools initialIsOpen={false} />

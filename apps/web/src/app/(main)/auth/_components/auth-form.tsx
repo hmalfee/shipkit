@@ -1,6 +1,7 @@
 'use client';
 
 import { revalidateLogic, useForm } from '@tanstack/react-form';
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
@@ -20,6 +21,7 @@ import {
 
 import { api, useUtils } from '@/lib/api/client';
 
+import { useAuthRedirect } from './auth-redirect-context';
 import { OAuthButtons } from './oauth-buttons';
 
 type FieldErrors = Array<{ message?: string } | undefined>;
@@ -40,6 +42,7 @@ function AuthHeader({
 }
 
 function EmailStage({ onSent }: { onSent: (email: string) => void }) {
+    const redirectPath = useAuthRedirect();
     const { useMutation, inputSchema } = api.auth.email.signIn;
     const signIn = useMutation({
         onSuccess: (_, vars) => {
@@ -58,7 +61,9 @@ function EmailStage({ onSent }: { onSent: (email: string) => void }) {
         }),
         validators: { onDynamic: inputSchema },
         onSubmit: async ({ value }) => {
-            signIn.mutate({ body: { ...value.body, callbackURL: '/' } });
+            signIn.mutate({
+                body: { ...value.body, callbackURL: redirectPath },
+            });
         },
     });
 
@@ -126,6 +131,8 @@ function EmailStage({ onSent }: { onSent: (email: string) => void }) {
 }
 
 function OtpStage({ email, onBack }: { email: string; onBack: () => void }) {
+    const redirectPath = useAuthRedirect();
+    const router = useRouter();
     const utils = useUtils();
 
     const { useMutation, inputSchema } = api.auth.email.verifyOtp;
@@ -134,6 +141,7 @@ function OtpStage({ email, onBack }: { email: string; onBack: () => void }) {
             void utils.auth.me.invalidateQuery();
             const firstName = data.body.name.split(' ')[0] ?? 'back';
             toast.success(`Welcome back, ${firstName}!`);
+            router.push(redirectPath);
         },
     });
 
