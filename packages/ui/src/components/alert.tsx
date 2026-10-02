@@ -1,7 +1,6 @@
 import { cva } from 'class-variance-authority';
+import { cn } from 'cn';
 import * as React from 'react';
-
-import { cn } from '@shipkit/ui/lib/utils';
 
 import type { VariantProps } from 'class-variance-authority';
 
