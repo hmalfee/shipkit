@@ -33,6 +33,7 @@ import {
     TooltipTrigger,
 } from '@shipkit/ui/components/tooltip';
 
+import { useCountdown } from '@/hooks/use-countdown';
 import { api, useUtils } from '@/lib/api/client';
 
 import type { Route } from 'next';
@@ -57,13 +58,20 @@ export function ChangeEmailSection({
     const [open, setOpen] = useState(false);
     const [cancelOpen, setCancelOpen] = useState(false);
     const [now, setNow] = useState(() => Date.now());
+    const confirmCountdown = useCountdown();
+    const verifyCountdown = useCountdown();
+    const [throttledNewEmail, setThrottledNewEmail] = useState<string | null>(
+        null,
+    );
 
     const request = api.auth.changeEmail.request.useMutation({
-        onSuccess: async () => {
+        onSuccess: async (data, vars) => {
             toast.success(
                 'Check your current email inbox for a confirmation link.',
             );
             await utils.auth.me.invalidateQuery();
+            confirmCountdown.start(data.body.resendAvailableAt);
+            setThrottledNewEmail(vars.body.newEmail.trim().toLowerCase());
         },
     });
 
@@ -77,10 +85,11 @@ export function ChangeEmailSection({
 
     const resendVerification =
         api.auth.changeEmail.resendVerification.useMutation({
-            onSuccess: async () => {
+            onSuccess: async (data) => {
                 toast.success(
                     'Verification link sent. Check your new email inbox.',
                 );
+                verifyCountdown.start(data.body.resendAvailableAt);
             },
         });
 
@@ -194,7 +203,7 @@ export function ChangeEmailSection({
                                         <Button
                                             type="button"
                                             variant="link"
-                                            className="h-auto p-0"
+                                            className="h-auto p-0 tabular-nums"
                                             onClick={() =>
                                                 request.mutate({
                                                     body: {
@@ -204,11 +213,16 @@ export function ChangeEmailSection({
                                                     },
                                                 })
                                             }
-                                            disabled={request.isPending}
+                                            disabled={
+                                                request.isPending ||
+                                                confirmCountdown.isActive
+                                            }
                                         >
                                             {request.isPending
                                                 ? 'Resending...'
-                                                : 'Resend'}
+                                                : confirmCountdown.isActive
+                                                  ? `Resend in ${confirmCountdown.label}`
+                                                  : 'Resend'}
                                         </Button>
                                     ) : (
                                         <Button
@@ -223,12 +237,15 @@ export function ChangeEmailSection({
                                                 })
                                             }
                                             disabled={
-                                                resendVerification.isPending
+                                                resendVerification.isPending ||
+                                                verifyCountdown.isActive
                                             }
                                         >
                                             {resendVerification.isPending
                                                 ? 'Resending...'
-                                                : 'Resend'}
+                                                : verifyCountdown.isActive
+                                                  ? `Resend in ${verifyCountdown.label}`
+                                                  : 'Resend'}
                                         </Button>
                                     )}
                                     <span className="text-muted-foreground mx-1">
@@ -303,20 +320,35 @@ export function ChangeEmailSection({
                                     );
                                 }}
                             </form.Field>
-                            <form.Subscribe selector={(s) => s.canSubmit}>
-                                {(canSubmit) => (
-                                    <Button
-                                        type="submit"
-                                        className="w-fit"
-                                        disabled={
-                                            !canSubmit || request.isPending
-                                        }
-                                    >
-                                        {request.isPending
-                                            ? 'Sending...'
-                                            : 'Send confirmation link'}
-                                    </Button>
-                                )}
+                            <form.Subscribe
+                                selector={(s) => ({
+                                    canSubmit: s.canSubmit,
+                                    newEmail: s.values.body.newEmail,
+                                })}
+                            >
+                                {({ canSubmit, newEmail }) => {
+                                    const isThrottled =
+                                        confirmCountdown.isActive &&
+                                        throttledNewEmail ===
+                                            newEmail.trim().toLowerCase();
+                                    return (
+                                        <Button
+                                            type="submit"
+                                            className="w-fit tabular-nums"
+                                            disabled={
+                                                !canSubmit ||
+                                                request.isPending ||
+                                                isThrottled
+                                            }
+                                        >
+                                            {request.isPending
+                                                ? 'Sending...'
+                                                : isThrottled
+                                                  ? `Resend in ${confirmCountdown.label}`
+                                                  : 'Send confirmation link'}
+                                        </Button>
+                                    );
+                                }}
                             </form.Subscribe>
                         </FieldGroup>
                     </form>
