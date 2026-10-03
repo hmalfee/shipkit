@@ -182,7 +182,7 @@ export const authConfig: CreateAuthContext['config'] = {
     cookieDomain,
     oauth: {
         redirectURITemplate:
-            `${env.SERVER_URL}${contract.auth.oauth.callback['~orpc'].route.path}` as `${string}{${string}}${string}`,
+            `${env.WEB_URL}${contract.auth.oauth.callback['~orpc'].route.path}` as `${string}{${string}}${string}`,
         google: {
             clientId: env.GOOGLE_CLIENT_ID,
             clientSecret: env.GOOGLE_CLIENT_SECRET,

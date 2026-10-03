@@ -52,8 +52,7 @@ export function OAuthButtons() {
                         params: { provider },
                         body: {
                             callbackURL:
-                                window.location.origin +
-                                ('/auth/callback/success' satisfies Route),
+                                '/auth/callback/success' satisfies Route,
                         },
                     })
                     .then((data) => data.body.url),

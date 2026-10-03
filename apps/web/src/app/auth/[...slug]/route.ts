@@ -14,6 +14,7 @@ const proxiedRoutes = [
     contract.auth.email.verifyMagicLink['~orpc'].route,
     contract.auth.changeEmail.confirm['~orpc'].route,
     contract.auth.changeEmail.verify['~orpc'].route,
+    contract.auth.oauth.callback['~orpc'].route,
 ];
 
 const handler = createProxyHandler(env.INTERNAL_SERVER_URL);
@@ -23,7 +24,18 @@ for (const { path, method } of proxiedRoutes) {
     if (!path || !method) {
         continue;
     }
-    endpoints[path] = { [method]: handler };
+
+    // oRPC routes can have path parameters (e.g. /users/{id}/settings), but
+    // Next.js catch-all routes don't support them. So we just remove the first
+    // path parameter and everything after it with a wildcard.
+    // e.g. /oauth/callback/{provider} -> /oauth/callback/*
+    // e.g. /users/{id}/settings -> /users/*
+    const catchAllPath = path.replace(/\/\{.*$/, '/*');
+
+    endpoints[catchAllPath] = {
+        ...endpoints[catchAllPath],
+        [method]: handler,
+    };
 }
 
 export const { GET, POST, PUT, PATCH, DELETE } = createCatchAllRouter(
