@@ -296,3 +296,50 @@ export function createCancelChangeEmail() {
         },
     );
 }
+
+// POST /change-email/resend-verification
+export function createResendVerificationChangeEmail(
+    opts: ChangeEmailPluginOptions,
+) {
+    return createAuthEndpoint(
+        '/change-email/resend-verification',
+        {
+            method: 'POST',
+            requireHeaders: true,
+            use: [sensitiveSessionMiddleware],
+            body: z.object({
+                callbackURL: z.string().optional(),
+            }),
+        },
+        async (ctx) => {
+            if (!opts.onSendChangeEmail) {
+                throw new APIError('BAD_REQUEST', {
+                    code: BASE_ERROR_CODES.CHANGE_EMAIL_DISABLED.code,
+                    message: BASE_ERROR_CODES.CHANGE_EMAIL_DISABLED.message,
+                });
+            }
+
+            const currentUser = ctx.context.session.user;
+            const pending = await readPending(ctx, currentUser.id);
+
+            if (
+                !pending ||
+                pending.stage !== CHANGE_EMAIL_STAGES.AwaitingVerification
+            ) {
+                throw new APIError('BAD_REQUEST', {
+                    message: 'No pending email change awaiting verification.',
+                });
+            }
+
+            await ctx.context.runInBackgroundOrAwait(
+                opts.onSendChangeEmail.verification({
+                    newEmail: pending.newEmail,
+                    token: pending.token,
+                    callbackURL: ctx.body.callbackURL ?? '',
+                }),
+            );
+
+            return ctx.json({ success: true });
+        },
+    );
+}

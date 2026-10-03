@@ -11,6 +11,7 @@ import {
     OauthSignInBodySchema,
     OauthSignInParamsSchema,
     OauthSignInResponseSchema,
+    ResendVerificationBodySchema,
     UpdateProfileBodySchema,
     UserSchema,
     VerifyMagicLinkQuerySchema,
@@ -98,7 +99,7 @@ export const auth = oc.prefix('/auth').router({
         }),
 
     changeEmail: oc.prefix('/change-email').router({
-        send: rb
+        request: rb
             .mutation('/')
             .input({
                 body: ChangeEmailBodySchema,
@@ -138,6 +139,18 @@ export const auth = oc.prefix('/auth').router({
             .mutation('/cancel')
             .errors({
                 UNAUTHORIZED: {},
+            })
+            .responses({
+                OK: undefined,
+            }),
+        resendVerification: rb
+            .mutation('/resend-verification')
+            .input({
+                body: ResendVerificationBodySchema,
+            })
+            .errors({
+                UNAUTHORIZED: {},
+                TOO_MANY_REQUESTS: {},
             })
             .responses({
                 OK: undefined,

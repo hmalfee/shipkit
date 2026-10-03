@@ -6,6 +6,7 @@ import {
     createChangeEmailStatus,
     createConfirmChangeEmail,
     createRequestChangeEmail,
+    createResendVerificationChangeEmail,
     createVerifyChangeEmail,
 } from './endpoints';
 
@@ -31,6 +32,8 @@ export function changeEmailPlugin(opts: ChangeEmailPluginOptions) {
             verifyChangeEmail: createVerifyChangeEmail(),
             changeEmailStatus: createChangeEmailStatus(),
             cancelChangeEmail: createCancelChangeEmail(),
+            resendChangeEmailVerification:
+                createResendVerificationChangeEmail(opts),
         },
         rateLimit: [
             {

@@ -60,6 +60,10 @@ export const ChangeEmailVerifyQuerySchema = z.object({
     callbackURL: z.string().optional(),
 });
 
+export const ResendVerificationBodySchema = z.object({
+    callbackURL: z.string().optional(),
+});
+
 export const OauthSignInParamsSchema = z.object({
     provider: z.enum(OAUTH_PROVIDER_IDS),
 });

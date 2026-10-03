@@ -135,6 +135,14 @@ function OtpStage({ email, onBack }: { email: string; onBack: () => void }) {
     const router = useRouter();
     const utils = useUtils();
 
+    const resend = api.auth.email.signIn.useMutation({
+        onSuccess: () => {
+            toast.success(
+                'Check your inbox — we resent the magic link and code.',
+            );
+        },
+    });
+
     const { useMutation, inputSchema } = api.auth.email.verifyOtp;
     const verifyOtp = useMutation({
         onSuccess: (data) => {
@@ -233,15 +241,31 @@ function OtpStage({ email, onBack }: { email: string; onBack: () => void }) {
                     </>
                 )}
             </form.Subscribe>
-            <Button
-                type="button"
-                variant="link"
-                size="sm"
-                className="w-full"
-                onClick={onBack}
-            >
-                Use a different email
-            </Button>
+            <div className="flex items-center justify-center gap-3 text-sm">
+                <Button
+                    type="button"
+                    variant="link"
+                    size="sm"
+                    className="text-muted-foreground hover:text-foreground h-auto p-0"
+                    disabled={resend.isPending}
+                    onClick={() =>
+                        resend.mutate({
+                            body: { email, callbackURL: redirectPath },
+                        })
+                    }
+                >
+                    {resend.isPending ? 'Resending...' : 'Resend'}
+                </Button>
+                <Button
+                    type="button"
+                    variant="link"
+                    size="sm"
+                    className="text-muted-foreground hover:text-foreground h-auto p-0"
+                    onClick={onBack}
+                >
+                    Use a different email
+                </Button>
+            </div>
         </form>
     );
 }

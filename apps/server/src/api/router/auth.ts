@@ -159,7 +159,7 @@ export const auth = os.auth.router({
     }),
 
     changeEmail: os.auth.changeEmail.router({
-        send: cr.auth.changeEmail.send.handler(
+        request: cr.auth.changeEmail.request.handler(
             async ({ context, input, errors }) => {
                 const { exceeded } = await context.rateLimit({
                     limit: 5,
@@ -247,6 +247,31 @@ export const auth = os.auth.router({
                     });
                 await context.auth.cancelChangeEmail();
                 return { status: 200, body: undefined };
+            },
+        ),
+        resendVerification: cr.auth.changeEmail.resendVerification.handler(
+            async ({ context, input, errors }) => {
+                const { exceeded } = await context.rateLimit({
+                    limit: 5,
+                    blockDuration: 60 * 60,
+                });
+                if (exceeded)
+                    throw errors.TOO_MANY_REQUESTS({
+                        message: 'Too many attempts',
+                    });
+                if (!context.session)
+                    throw errors.UNAUTHORIZED({
+                        message: 'User not signed in',
+                    });
+
+                try {
+                    await context.auth.resendChangeEmailVerification({
+                        callbackURL: input.body.callbackURL,
+                    });
+                    return { status: 200, body: undefined };
+                } catch (err) {
+                    handleAuthError(err, errors);
+                }
             },
         ),
     }),

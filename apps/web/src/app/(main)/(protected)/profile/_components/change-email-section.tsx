@@ -58,7 +58,7 @@ export function ChangeEmailSection({
     const [cancelOpen, setCancelOpen] = useState(false);
     const [now, setNow] = useState(() => Date.now());
 
-    const send = api.auth.changeEmail.send.useMutation({
+    const request = api.auth.changeEmail.request.useMutation({
         onSuccess: async () => {
             toast.success(
                 'Check your current email inbox for a confirmation link.',
@@ -75,15 +75,24 @@ export function ChangeEmailSection({
         },
     });
 
+    const resendVerification =
+        api.auth.changeEmail.resendVerification.useMutation({
+            onSuccess: async () => {
+                toast.success(
+                    'Verification link sent. Check your new email inbox.',
+                );
+            },
+        });
+
     const form = useForm({
         defaultValues: { body: { newEmail: '' } },
         validationLogic: revalidateLogic({
             mode: 'submit',
             modeAfterSubmission: 'change',
         }),
-        validators: { onDynamic: api.auth.changeEmail.send.inputSchema },
+        validators: { onDynamic: api.auth.changeEmail.request.inputSchema },
         onSubmit: ({ value, formApi }) =>
-            send.mutate(
+            request.mutate(
                 {
                     body: {
                         ...value.body,
@@ -157,30 +166,84 @@ export function ChangeEmailSection({
                         <MailIcon />
                         <AlertTitle>Email change pending</AlertTitle>
                         <AlertDescription>
-                            <p className="text-wrap">
-                                {pending.stage ===
-                                CHANGE_EMAIL_STAGES.AwaitingConfirmation ? (
-                                    <>
-                                        Check <Emphasis>{email}</Emphasis> to
-                                        confirm the change to{' '}
-                                        <Emphasis>{pending.newEmail}</Emphasis>.
-                                    </>
-                                ) : (
-                                    <>
-                                        Verification link sent to{' '}
-                                        <Emphasis>{pending.newEmail}</Emphasis>.
-                                        Click it to finish the change.
-                                    </>
-                                )}{' '}
-                                <Button
-                                    type="button"
-                                    variant="link"
-                                    className="h-auto p-0 align-baseline"
-                                    onClick={() => setCancelOpen(true)}
-                                >
-                                    Cancel request
-                                </Button>
-                            </p>
+                            <div className="space-y-1">
+                                <p className="text-wrap">
+                                    {pending.stage ===
+                                    CHANGE_EMAIL_STAGES.AwaitingConfirmation ? (
+                                        <>
+                                            Check <Emphasis>{email}</Emphasis>{' '}
+                                            to confirm the change to{' '}
+                                            <Emphasis>
+                                                {pending.newEmail}
+                                            </Emphasis>
+                                            .
+                                        </>
+                                    ) : (
+                                        <>
+                                            Verification link sent to{' '}
+                                            <Emphasis>
+                                                {pending.newEmail}
+                                            </Emphasis>
+                                            . Click it to finish the change.
+                                        </>
+                                    )}
+                                </p>
+                                <div className="flex items-center gap-1 text-sm">
+                                    {pending.stage ===
+                                    CHANGE_EMAIL_STAGES.AwaitingConfirmation ? (
+                                        <Button
+                                            type="button"
+                                            variant="link"
+                                            className="h-auto p-0"
+                                            onClick={() =>
+                                                request.mutate({
+                                                    body: {
+                                                        newEmail:
+                                                            pending.newEmail,
+                                                        callbackURL: '/profile',
+                                                    },
+                                                })
+                                            }
+                                            disabled={request.isPending}
+                                        >
+                                            {request.isPending
+                                                ? 'Resending...'
+                                                : 'Resend'}
+                                        </Button>
+                                    ) : (
+                                        <Button
+                                            type="button"
+                                            variant="link"
+                                            className="h-auto p-0"
+                                            onClick={() =>
+                                                resendVerification.mutate({
+                                                    body: {
+                                                        callbackURL: '/profile',
+                                                    },
+                                                })
+                                            }
+                                            disabled={
+                                                resendVerification.isPending
+                                            }
+                                        >
+                                            {resendVerification.isPending
+                                                ? 'Resending...'
+                                                : 'Resend'}
+                                        </Button>
+                                    )}
+                                    <span className="text-muted-foreground mx-1">
+                                        &middot;
+                                    </span>
+                                    <Button
+                                        type="button"
+                                        variant="link"
+                                        className="h-auto p-0"
+                                        onClick={() => setCancelOpen(true)}
+                                    >
+                                        Cancel request
+                                    </Button>
+                                </div>
+                            </div>
                         </AlertDescription>
                     </Alert>
                 )}
@@ -197,7 +260,7 @@ export function ChangeEmailSection({
                     <DialogHeader>
                         <DialogTitle>Change email</DialogTitle>
                         <DialogDescription>
-                            We&apos;ll send a confirmation link to{' '}
+                            We&apos;ll request a confirmation link to{' '}
                             <Emphasis>{email}</Emphasis> first, then a
                             verification link to your new address.
                         </DialogDescription>
@@ -245,9 +308,11 @@ export function ChangeEmailSection({
                                     <Button
                                         type="submit"
                                         className="w-fit"
-                                        disabled={!canSubmit || send.isPending}
+                                        disabled={
+                                            !canSubmit || request.isPending
+                                        }
                                     >
-                                        {send.isPending
+                                        {request.isPending
                                             ? 'Sending...'
                                             : 'Send confirmation link'}
                                     </Button>
