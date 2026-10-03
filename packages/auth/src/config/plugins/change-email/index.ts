@@ -12,28 +12,22 @@ import {
 
 export type { ChangeEmailPluginOptions } from './types';
 
-const DEFAULT_EXPIRES_IN_MINUTES = 60;
-
 export function changeEmailPlugin(opts: ChangeEmailPluginOptions) {
-    const expiresInMinutes =
-        opts.expiresInMinutes ?? DEFAULT_EXPIRES_IN_MINUTES;
-
     return {
         id: 'change-email',
         endpoints: {
-            requestChangeEmail: createRequestChangeEmail(
-                opts,
-                expiresInMinutes,
-            ),
-            confirmChangeEmail: createConfirmChangeEmail(
-                opts,
-                expiresInMinutes,
-            ),
+            requestChangeEmail: createRequestChangeEmail(opts),
+            confirmChangeEmail: createConfirmChangeEmail({
+                onSendChangeEmail: opts.onSendChangeEmail,
+                expiresInMinutes: opts.expiresInMinutes,
+            }),
             verifyChangeEmail: createVerifyChangeEmail(),
             changeEmailStatus: createChangeEmailStatus(),
             cancelChangeEmail: createCancelChangeEmail(),
-            resendChangeEmailVerification:
-                createResendVerificationChangeEmail(opts),
+            resendChangeEmailVerification: createResendVerificationChangeEmail({
+                onSendChangeEmail: opts.onSendChangeEmail,
+                resendCooldownSeconds: opts.resendCooldownSeconds,
+            }),
         },
         rateLimit: [
             {

@@ -13,6 +13,10 @@ import { z } from 'zod';
 import type { BetterAuthPlugin, GenericEndpointContext } from 'better-auth';
 
 import { runEmailValidationPipeline } from '../utils/email-validation';
+import {
+    DEFAULT_RESEND_COOLDOWN_SECONDS,
+    enforceResendCooldown,
+} from '../utils/resend-cooldown';
 
 function otpKey(normalizedEmail: string) {
     return `email-auth-otp:${normalizedEmail}`;
@@ -49,6 +53,7 @@ export type EmailSignInOptions = {
     expiresInMinutes?: number;
     allowedAttempts?: number;
     disableSignUp?: boolean;
+    resendCooldownSeconds?: number;
 };
 
 async function findOrCreateUser(
@@ -91,6 +96,8 @@ async function findOrCreateUser(
 export function emailSignInPlugin(opts: EmailSignInOptions) {
     const expiresInMinutes = opts.expiresInMinutes ?? 15;
     const allowedAttempts = opts.allowedAttempts ?? 3;
+    const resendCooldownSeconds =
+        opts.resendCooldownSeconds ?? DEFAULT_RESEND_COOLDOWN_SECONDS;
 
     return {
         id: 'email-sign-in',
@@ -114,6 +121,13 @@ export function emailSignInPlugin(opts: EmailSignInOptions) {
                             ctx.body.email,
                             ctx.context.internalAdapter,
                         );
+
+                    const { resendAvailableAt } = await enforceResendCooldown(
+                        ctx,
+                        `email-auth-resend-cooldown:${normalized}`,
+                        resendCooldownSeconds,
+                    );
+
                     const { callbackURL, name } = ctx.body;
                     const expiresAt = new Date(
                         Date.now() + expiresInMinutes * 60_000,
@@ -176,7 +190,7 @@ export function emailSignInPlugin(opts: EmailSignInOptions) {
                         );
                     }
 
-                    return ctx.json({ success: true });
+                    return ctx.json({ success: true, resendAvailableAt });
                 },
             ),
 
@@ -220,7 +234,6 @@ export function emailSignInPlugin(opts: EmailSignInOptions) {
 
                     if (attempts >= allowedAttempts) {
                         throw new APIError('TOO_MANY_REQUESTS', {
-                            code: BASE_ERROR_CODES.INVALID_TOKEN.code,
                             message:
                                 'Too many attempts. Please request a new OTP and try again.',
                         });

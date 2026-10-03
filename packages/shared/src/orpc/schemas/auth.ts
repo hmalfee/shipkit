@@ -20,6 +20,10 @@ export const VerifyMagicLinkQuerySchema = z.object({
     callbackURL: z.string().optional(),
 });
 
+export const SendThrottleSchema = z.object({
+    resendAvailableAt: z.number(), // ms timestamp
+});
+
 const ChangeEmailStatusSchema = z.union([
     z.object({
         newEmail: z.email(),

@@ -12,6 +12,7 @@ import {
     OauthSignInParamsSchema,
     OauthSignInResponseSchema,
     ResendVerificationBodySchema,
+    SendThrottleSchema,
     UpdateProfileBodySchema,
     UserSchema,
     VerifyMagicLinkQuerySchema,
@@ -31,7 +32,7 @@ export const auth = oc.prefix('/auth').router({
                 TOO_MANY_REQUESTS: {},
             })
             .responses({
-                OK: undefined,
+                OK: SendThrottleSchema,
             }),
         verifyOtp: rb
             .mutation('/verify-otp')
@@ -109,7 +110,7 @@ export const auth = oc.prefix('/auth').router({
                 TOO_MANY_REQUESTS: {},
             })
             .responses({
-                OK: undefined,
+                OK: SendThrottleSchema,
             }),
         confirm: rb
             .query('/confirm')
@@ -153,7 +154,7 @@ export const auth = oc.prefix('/auth').router({
                 TOO_MANY_REQUESTS: {},
             })
             .responses({
-                OK: undefined,
+                OK: SendThrottleSchema,
             }),
     }),
 

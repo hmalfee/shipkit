@@ -37,8 +37,9 @@ export const auth = os.auth.router({
                         message: 'Too many attempts',
                     });
                 try {
-                    await context.auth.signInWithEmail(input.body);
-                    return { status: 200, body: undefined };
+                    const { resendAvailableAt } =
+                        await context.auth.signInWithEmail(input.body);
+                    return { status: 200, body: { resendAvailableAt } };
                 } catch (err) {
                     handleAuthError(err, errors);
                 }
@@ -175,11 +176,12 @@ export const auth = os.auth.router({
                     });
 
                 try {
-                    await context.auth.requestChangeEmail({
-                        newEmail: input.body.newEmail,
-                        callbackURL: input.body.callbackURL,
-                    });
-                    return { status: 200, body: undefined };
+                    const { resendAvailableAt } =
+                        await context.auth.requestChangeEmail({
+                            newEmail: input.body.newEmail,
+                            callbackURL: input.body.callbackURL,
+                        });
+                    return { status: 200, body: { resendAvailableAt } };
                 } catch (err) {
                     handleAuthError(err, errors);
                 }
@@ -265,10 +267,11 @@ export const auth = os.auth.router({
                     });
 
                 try {
-                    await context.auth.resendChangeEmailVerification({
-                        callbackURL: input.body.callbackURL,
-                    });
-                    return { status: 200, body: undefined };
+                    const { resendAvailableAt } =
+                        await context.auth.resendChangeEmailVerification({
+                            callbackURL: input.body.callbackURL,
+                        });
+                    return { status: 200, body: { resendAvailableAt } };
                 } catch (err) {
                     handleAuthError(err, errors);
                 }

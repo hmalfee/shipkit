@@ -15,6 +15,12 @@ export function pendingChangeKey(userId: string) {
 export function tokenIndexKey(token: string) {
     return `change-email-token:${token}`;
 }
+export function confirmThrottleKey(email: string) {
+    return `change-email-resend-cooldown-confirm:${email}`;
+}
+export function verifyThrottleKey(email: string) {
+    return `change-email-resend-cooldown-verify:${email}`;
+}
 function quotaKey(userId: string) {
     return `change-email-quota:${userId}`;
 }

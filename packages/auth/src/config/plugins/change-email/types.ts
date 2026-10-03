@@ -29,4 +29,5 @@ export type ChangeEmailPluginOptions = {
         }) => Promise<void>;
     };
     expiresInMinutes?: number;
+    resendCooldownSeconds?: number;
 };

@@ -17,7 +17,12 @@ import {
     runEmailValidationPipeline,
 } from '../../utils/email-validation';
 import {
+    DEFAULT_RESEND_COOLDOWN_SECONDS,
+    enforceResendCooldown,
+} from '../../utils/resend-cooldown';
+import {
     clearExistingRequest,
+    confirmThrottleKey,
     getQuotaBlock,
     issueToken,
     pendingChangeKey,
@@ -27,7 +32,10 @@ import {
     redirectWithError,
     resolveTokenLink,
     tokenIndexKey,
+    verifyThrottleKey,
 } from './helpers';
+
+const DEFAULT_EXPIRES_IN_MINUTES = 60;
 
 // Shared by the two email-link endpoints (confirm + verify).
 const tokenLinkQuery = z.object({
@@ -39,10 +47,11 @@ const callbackOriginCheck = originCheck(
 );
 
 // POST /change-email/request
-export function createRequestChangeEmail(
-    opts: ChangeEmailPluginOptions,
-    expiresInMinutes: number,
-) {
+export function createRequestChangeEmail({
+    onSendChangeEmail,
+    expiresInMinutes,
+    resendCooldownSeconds,
+}: ChangeEmailPluginOptions) {
     return createAuthEndpoint(
         '/change-email/request',
         {
@@ -55,7 +64,7 @@ export function createRequestChangeEmail(
             }),
         },
         async (ctx) => {
-            if (!opts.onSendChangeEmail) {
+            if (!onSendChangeEmail) {
                 throw new APIError('BAD_REQUEST', {
                     code: BASE_ERROR_CODES.CHANGE_EMAIL_DISABLED.code,
                     message: BASE_ERROR_CODES.CHANGE_EMAIL_DISABLED.message,
@@ -87,12 +96,18 @@ export function createRequestChangeEmail(
                 });
             }
 
+            const { resendAvailableAt } = await enforceResendCooldown(
+                ctx,
+                confirmThrottleKey(normalized),
+                resendCooldownSeconds ?? DEFAULT_RESEND_COOLDOWN_SECONDS,
+            );
+
             await clearExistingRequest(ctx, currentUser.id);
 
             const { token, expiresAt } = await issueToken(
                 ctx,
                 currentUser.id,
-                expiresInMinutes,
+                expiresInMinutes ?? DEFAULT_EXPIRES_IN_MINUTES,
             );
 
             await ctx.context.internalAdapter.createVerificationValue({
@@ -106,7 +121,7 @@ export function createRequestChangeEmail(
             });
 
             await ctx.context.runInBackgroundOrAwait(
-                opts.onSendChangeEmail.confirmation({
+                onSendChangeEmail.confirmation({
                     currentEmail: currentUser.email,
                     newEmail: sanitized,
                     token,
@@ -114,16 +129,16 @@ export function createRequestChangeEmail(
                 }),
             );
 
-            return ctx.json({ success: true });
+            return ctx.json({ success: true, resendAvailableAt });
         },
     );
 }
 
 // GET /change-email/confirm — click from the CURRENT inbox.
-export function createConfirmChangeEmail(
-    opts: ChangeEmailPluginOptions,
-    expiresInMinutes: number,
-) {
+export function createConfirmChangeEmail({
+    onSendChangeEmail,
+    expiresInMinutes,
+}: Omit<ChangeEmailPluginOptions, 'resendCooldownSeconds'>) {
     return createAuthEndpoint(
         '/change-email/confirm',
         {
@@ -133,7 +148,7 @@ export function createConfirmChangeEmail(
             use: [callbackOriginCheck],
         },
         async (ctx) => {
-            if (!opts.onSendChangeEmail) {
+            if (!onSendChangeEmail) {
                 throw new APIError('BAD_REQUEST', {
                     code: BASE_ERROR_CODES.CHANGE_EMAIL_DISABLED.code,
                     message: BASE_ERROR_CODES.CHANGE_EMAIL_DISABLED.message,
@@ -147,7 +162,11 @@ export function createConfirmChangeEmail(
                 CHANGE_EMAIL_STAGES.AwaitingConfirmation,
             );
 
-            const next = await issueToken(ctx, userId, expiresInMinutes);
+            const next = await issueToken(
+                ctx,
+                userId,
+                expiresInMinutes ?? DEFAULT_EXPIRES_IN_MINUTES,
+            );
 
             await Promise.all([
                 ctx.context.internalAdapter.updateVerificationByIdentifier(
@@ -168,7 +187,7 @@ export function createConfirmChangeEmail(
             ]);
 
             await ctx.context.runInBackgroundOrAwait(
-                opts.onSendChangeEmail.verification({
+                onSendChangeEmail.verification({
                     newEmail: pending.newEmail,
                     token: next.token,
                     callbackURL: callbackURL ?? '',
@@ -298,9 +317,10 @@ export function createCancelChangeEmail() {
 }
 
 // POST /change-email/resend-verification
-export function createResendVerificationChangeEmail(
-    opts: ChangeEmailPluginOptions,
-) {
+export function createResendVerificationChangeEmail({
+    onSendChangeEmail,
+    resendCooldownSeconds,
+}: Omit<ChangeEmailPluginOptions, 'expiresInMinutes'>) {
     return createAuthEndpoint(
         '/change-email/resend-verification',
         {
@@ -312,7 +332,7 @@ export function createResendVerificationChangeEmail(
             }),
         },
         async (ctx) => {
-            if (!opts.onSendChangeEmail) {
+            if (!onSendChangeEmail) {
                 throw new APIError('BAD_REQUEST', {
                     code: BASE_ERROR_CODES.CHANGE_EMAIL_DISABLED.code,
                     message: BASE_ERROR_CODES.CHANGE_EMAIL_DISABLED.message,
@@ -331,15 +351,21 @@ export function createResendVerificationChangeEmail(
                 });
             }
 
+            const { resendAvailableAt } = await enforceResendCooldown(
+                ctx,
+                verifyThrottleKey(normalizeEmail(pending.newEmail)),
+                resendCooldownSeconds ?? DEFAULT_RESEND_COOLDOWN_SECONDS,
+            );
+
             await ctx.context.runInBackgroundOrAwait(
-                opts.onSendChangeEmail.verification({
+                onSendChangeEmail.verification({
                     newEmail: pending.newEmail,
                     token: pending.token,
                     callbackURL: ctx.body.callbackURL ?? '',
                 }),
             );
 
-            return ctx.json({ success: true });
+            return ctx.json({ resendAvailableAt });
         },
     );
 }
