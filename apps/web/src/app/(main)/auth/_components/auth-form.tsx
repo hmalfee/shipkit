@@ -233,7 +233,8 @@ function OtpStage({
         void form.handleSubmit();
     };
 
-    const isBusy = verifyOtp.isPending || resend.isPending;
+    const isVerified = verifyOtp.isSuccess;
+    const isBusy = verifyOtp.isPending || isVerified || resend.isPending;
 
     return (
         <form
@@ -306,7 +307,9 @@ function OtpStage({
                         >
                             {verifyOtp.isPending
                                 ? 'Verifying...'
-                                : 'Verify code'}
+                                : isVerified
+                                  ? 'Redirecting...'
+                                  : 'Verify code'}
                         </Button>
                     </>
                 )}
