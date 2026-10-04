@@ -304,7 +304,9 @@ function OtpStage({
                             className="w-full"
                             disabled={!canSubmit || isBusy}
                         >
-                            {isBusy ? 'Verifying...' : 'Verify code'}
+                            {verifyOtp.isPending
+                                ? 'Verifying...'
+                                : 'Verify code'}
                         </Button>
                     </>
                 )}
@@ -315,7 +317,7 @@ function OtpStage({
                     variant="link"
                     size="sm"
                     className="text-muted-foreground hover:text-foreground h-auto p-0 tabular-nums"
-                    disabled={resend.isPending || countdown.isActive}
+                    disabled={isBusy || countdown.isActive}
                     onClick={() =>
                         resend.mutate({
                             body: { email, callbackURL: redirectPath },
