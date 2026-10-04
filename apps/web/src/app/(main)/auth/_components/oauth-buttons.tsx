@@ -11,6 +11,7 @@ import {
     AlertTitle,
 } from '@shipkit/ui/components/alert';
 import { Button } from '@shipkit/ui/components/button';
+import { cn } from '@shipkit/ui/lib/utils';
 
 import { useOAuthPopup } from '@/hooks/use-oauth-popup';
 import { api } from '@/lib/api/client';
@@ -19,12 +20,16 @@ import type { OAuthError } from '@/hooks/use-oauth-popup';
 import type { OAUTH_PROVIDER_IDS } from '@shipkit/shared/constants';
 import type { Route } from 'next';
 
+type OAuthProviderId = (typeof OAUTH_PROVIDER_IDS)[number];
+
+// Providers whose default.svg is dark and vanishes on dark backgrounds
+const INVERT_IN_DARK = new Set<OAuthProviderId>([]);
+
 export function OAuthButtons() {
     const { openOAuthPopup } = useOAuthPopup();
     const [oAuthError, setOAuthError] = useState<OAuthError | null>(null);
-    const [pendingProvider, setPendingProvider] = useState<
-        (typeof OAUTH_PROVIDER_IDS)[number] | null
-    >(null);
+    const [pendingProvider, setPendingProvider] =
+        useState<OAuthProviderId | null>(null);
 
     const oauthSignInMutation = api.auth.oauth.signIn.useMutation({
         onError: (error) => {
@@ -39,9 +44,7 @@ export function OAuthButtons() {
         },
     });
 
-    const handleOAuthClick = async (
-        provider: (typeof OAUTH_PROVIDER_IDS)[number],
-    ) => {
+    const handleOAuthClick = async (provider: OAuthProviderId) => {
         setOAuthError(null);
         setPendingProvider(provider);
 
@@ -96,12 +99,15 @@ export function OAuthButtons() {
                         <Loader2 className="animate-spin" />
                     ) : (
                         <Image
-                            src={`https://thesvg.org/icons/${value}/default.svg`}
+                            src={`https://cdn.jsdelivr.net/gh/glincker/thesvg@main/public/icons/${value}/default.svg`}
                             alt=""
                             width={16}
                             height={16}
                             priority
-                            className="size-4"
+                            className={cn(
+                                'size-4',
+                                INVERT_IN_DARK.has(value) && 'dark:invert',
+                            )}
                             aria-hidden="true"
                         />
                     )}

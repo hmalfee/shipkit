@@ -33,12 +33,11 @@ let nextConfig: NextConfig = {
         NEXT_TELEMETRY_DISABLED: '1',
     },
     images: {
+        // thesvg: useful cdn for brand icons
         remotePatterns: [
-            // useful cdn for brand icons of google, github, etc.
-            {
-                protocol: 'https',
-                hostname: 'thesvg.org',
-            },
+            new URL(
+                'https://cdn.jsdelivr.net/gh/glincker/thesvg@*/public/icons/**',
+            ),
         ],
         minimumCacheTTL: 86400, // 1 day
     },
