@@ -269,6 +269,7 @@ export function ChangeEmailSection({
             <Dialog
                 open={open}
                 onOpenChange={(next) => {
+                    if (request.isPending) return;
                     setOpen(next);
                     if (!next) form.reset();
                 }}
@@ -297,7 +298,10 @@ export function ChangeEmailSection({
                                         { message?: string } | undefined
                                     >;
                                     return (
-                                        <Field data-invalid={errors.length > 0}>
+                                        <Field
+                                            data-invalid={errors.length > 0}
+                                            data-disabled={request.isPending}
+                                        >
                                             <FieldLabel htmlFor={field.name}>
                                                 New email
                                             </FieldLabel>
@@ -312,6 +316,7 @@ export function ChangeEmailSection({
                                                     )
                                                 }
                                                 onBlur={field.handleBlur}
+                                                disabled={request.isPending}
                                             />
                                             {errors.length > 0 && (
                                                 <FieldError errors={errors} />

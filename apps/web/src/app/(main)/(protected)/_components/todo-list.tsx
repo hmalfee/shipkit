@@ -57,6 +57,7 @@ function AddTodoForm() {
                                         }
                                         onBlur={field.handleBlur}
                                         placeholder="Add a todo..."
+                                        disabled={isPending}
                                     />
                                     {field.state.meta.isTouched &&
                                         field.state.meta.errors.length > 0 && (
@@ -148,6 +149,7 @@ function TodoItem({
                         value={editTitle}
                         onChange={(e) => setEditTitle(e.target.value)}
                         className="flex-1"
+                        disabled={isBusy}
                     />
                     <Button type="submit" size="sm" disabled={update.isPending}>
                         Save
@@ -183,7 +185,7 @@ function TodoItem({
                         onClick={() =>
                             remove.mutate({ params: { id: todo.id } })
                         }
-                        disabled={remove.isPending}
+                        disabled={isBusy}
                     >
                         Delete
                     </Button>

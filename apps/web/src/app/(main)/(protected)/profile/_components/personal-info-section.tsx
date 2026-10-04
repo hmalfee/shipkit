@@ -58,7 +58,10 @@ export function PersonalInfoSection({ name }: { name: string }) {
                             const errors = field.state.meta
                                 .errors as FieldErrors;
                             return (
-                                <Field data-invalid={errors.length > 0}>
+                                <Field
+                                    data-invalid={errors.length > 0}
+                                    data-disabled={update.isPending}
+                                >
                                     <FieldLabel htmlFor={field.name}>
                                         Name
                                     </FieldLabel>
@@ -70,6 +73,7 @@ export function PersonalInfoSection({ name }: { name: string }) {
                                             field.handleChange(e.target.value)
                                         }
                                         onBlur={field.handleBlur}
+                                        disabled={update.isPending}
                                     />
                                     {errors.length > 0 && (
                                         <FieldError errors={errors} />

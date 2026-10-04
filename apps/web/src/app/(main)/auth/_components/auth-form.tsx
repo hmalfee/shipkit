@@ -126,6 +126,7 @@ function EmailStage({
                                         data-invalid={
                                             field.state.meta.errors.length > 0
                                         }
+                                        data-disabled={isPending}
                                     >
                                         <FieldLabel htmlFor={field.name}>
                                             Email address
@@ -142,6 +143,7 @@ function EmailStage({
                                                 )
                                             }
                                             onBlur={field.handleBlur}
+                                            disabled={isPending}
                                         />
                                         {field.state.meta.errors.length > 0 && (
                                             <FieldError
@@ -198,7 +200,7 @@ function OtpStage({
     const resend = api.auth.email.signIn.useMutation({
         onSuccess: (data) => {
             countdown.start(data.body.resendAvailableAt);
-            form.setFieldValue('body.otp', '');
+            form.reset();
             toast.success(
                 'Check your inbox — we resent the magic link and code.',
             );
@@ -231,7 +233,7 @@ function OtpStage({
         void form.handleSubmit();
     };
 
-    const isBusy = verifyOtp.isPending;
+    const isBusy = verifyOtp.isPending || resend.isPending;
 
     return (
         <form
@@ -263,6 +265,7 @@ function OtpStage({
                                     data-invalid={
                                         field.state.meta.errors.length > 0
                                     }
+                                    data-disabled={isBusy}
                                 >
                                     <FieldLabel htmlFor={field.name}>
                                         Sign-in code
@@ -277,7 +280,10 @@ function OtpStage({
                                             if (v.length === 6)
                                                 handleOtpComplete();
                                         }}
-                                        disabled={isBusy}
+                                        readOnly={isBusy}
+                                        containerClassName={
+                                            isBusy ? 'opacity-70' : undefined
+                                        }
                                         autoComplete="one-time-code"
                                         id={field.name}
                                     >
@@ -329,6 +335,7 @@ function OtpStage({
                     size="sm"
                     className="text-muted-foreground hover:text-foreground h-auto p-0"
                     onClick={onBack}
+                    disabled={isBusy}
                 >
                     Use a different email
                 </Button>
