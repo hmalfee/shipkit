@@ -322,6 +322,7 @@ function OtpStage({
                           ? `Resend in ${countdown.label}`
                           : 'Resend'}
                 </Button>
+                <span className="text-muted-foreground">&middot;</span>
                 <Button
                     type="button"
                     variant="link"
