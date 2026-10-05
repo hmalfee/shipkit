@@ -1,5 +1,7 @@
+import { OAUTH_POPUP_CALLBACK_PATH } from '@shipkit/shared/constants';
 import { createCatchAllRouter } from '@shipkit/shared/next/catch-all';
 import { createProxyHandler } from '@shipkit/shared/next/proxy-handler';
+import { createOAuthPopupHandler } from '@shipkit/shared/oauth-popup/next';
 import { contract } from '@shipkit/shared/orpc';
 
 import { env } from '@/env';
@@ -19,7 +21,13 @@ const proxiedRoutes = [
 
 const handler = createProxyHandler(env.INTERNAL_SERVER_URL);
 
-const endpoints: Routers = {};
+const endpoints: Routers = {
+    // @see [OAuth Popup Flow] Mounts the callback page which receives the backend redirect and securely messages the opener window to close the popup.
+    [OAUTH_POPUP_CALLBACK_PATH]: {
+        GET: createOAuthPopupHandler(),
+    },
+};
+
 for (const { path, method } of proxiedRoutes) {
     if (!path || !method) {
         continue;

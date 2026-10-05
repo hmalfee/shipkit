@@ -16,6 +16,7 @@ export async function generateAuthSchema() {
         useSecureCookies: false,
         oauth: {
             redirectURITemplate: '{provider}',
+            callbackURL: '/',
             google: { clientId: '', clientSecret: '' },
         },
     });

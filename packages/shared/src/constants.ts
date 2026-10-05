@@ -50,3 +50,7 @@ export const CHANGE_EMAIL_STAGE_VALUES = Object.values(CHANGE_EMAIL_STAGES) as [
 
 export type ChangeEmailStage =
     (typeof CHANGE_EMAIL_STAGES)[keyof typeof CHANGE_EMAIL_STAGES];
+
+// @see [OAuth Popup Flow] Defines the shared callback path used by the backend for redirects and
+// the frontend for mounting the popup handler.
+export const OAUTH_POPUP_CALLBACK_PATH = '/auth/callback';

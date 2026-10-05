@@ -8,7 +8,6 @@ import {
     ChangeEmailBodySchema,
     ChangeEmailVerifyQuerySchema,
     EmailSignInBodySchema,
-    OauthSignInBodySchema,
     OauthSignInParamsSchema,
     OauthSignInResponseSchema,
     ResendVerificationBodySchema,
@@ -66,7 +65,6 @@ export const auth = oc.prefix('/auth').router({
             .mutation('/sign-in/{provider}')
             .input({
                 params: OauthSignInParamsSchema,
-                body: OauthSignInBodySchema,
             })
             .errors({
                 FORBIDDEN: {},

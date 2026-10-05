@@ -72,10 +72,6 @@ export const OauthSignInParamsSchema = z.object({
     provider: z.enum(OAUTH_PROVIDER_IDS),
 });
 
-export const OauthSignInBodySchema = z.object({
-    callbackURL: z.string().optional(),
-});
-
 export const OauthSignInResponseSchema = z.object({
     url: z.string(),
     redirect: z.boolean(),

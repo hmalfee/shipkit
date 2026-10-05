@@ -28,11 +28,30 @@ type OptionsOf<K extends keyof BetterAuthAPI> = NonNullable<
     Parameters<BetterAuthAPI[K]>[0]
 >;
 
+/** Callback props the auth config owns; callers can neither pass nor see them. */
+type ManagedSocialSignInKeys =
+    'callbackURL' | 'errorCallbackURL' | 'newUserCallbackURL';
+
+type DistributiveOmit<T, K extends PropertyKey> = T extends unknown
+    ? Omit<T, K>
+    : never;
+
+/** `signInSocial`'s body without the config-managed callback props. */
+type SocialSignInBody = DistributiveOmit<
+    OptionsOf<'signInSocial'> extends { body: infer B } ? B : never,
+    ManagedSocialSignInKeys
+>;
+
 /** Only the input shapes we let external callers set via $api. */
-type CallOpts<K extends keyof BetterAuthAPI> = Pick<
+type BaseCallOpts<K extends keyof BetterAuthAPI> = Pick<
     OptionsOf<K>,
     Extract<keyof OptionsOf<K>, 'body' | 'query' | 'params'>
 >;
+
+/** Same as `BaseCallOpts`, except `signInSocial`'s body can't carry the managed callbacks. */
+type CallOpts<K extends keyof BetterAuthAPI> = K extends 'signInSocial'
+    ? Omit<BaseCallOpts<K>, 'body'> & { body: SocialSignInBody }
+    : BaseCallOpts<K>;
 
 /**
  * Session with strictly typed roles enum (not just string[])
@@ -45,7 +64,9 @@ export type StrictSession = Omit<DefaultSession, 'user'> & {
 
 type BetterAuthAPIMethods = {
     [
-        K in keyof BetterAuthAPI as K extends 'getSession' ? never : K
+        K in keyof BetterAuthAPI as K extends 'getSession' | 'signInSocial'
+            ? never
+            : K
     ]: BetterAuthAPI[K] extends (options?: infer O) => infer R
         ? NonNullable<O> extends { body: infer B }
             ? (body: B) => R
@@ -54,6 +75,9 @@ type BetterAuthAPIMethods = {
 };
 
 export type Auth = BetterAuthAPIMethods & {
+    signInSocial: (
+        body: SocialSignInBody,
+    ) => ReturnType<BetterAuthAPI['signInSocial']>;
     getSession: () => Promise<StrictSession | null>;
     $api: <K extends keyof BetterAuthAPI>(
         endpointName: K,
@@ -89,9 +113,25 @@ export function createAuth(ctx: CreateAuthContext): Auth {
             );
         }
 
+        let callOpts = extraOpts;
+        if (endpointName === 'signInSocial') {
+            // Always derived from config. The caller's body is spread first so
+            // our values win over anything passed at runtime (plain JS, casts).
+            const callbackURL = ctx.config.oauth.callbackURL;
+            callOpts = {
+                ...extraOpts,
+                body: {
+                    ...(extraOpts.body as Record<string, unknown> | undefined),
+                    callbackURL,
+                    errorCallbackURL: callbackURL,
+                    newUserCallbackURL: callbackURL,
+                },
+            };
+        }
+
         const opts: Record<string, unknown> = {
             headers: ctx.headers.request,
-            ...extraOpts,
+            ...callOpts,
         };
 
         return authRequestContext.run(

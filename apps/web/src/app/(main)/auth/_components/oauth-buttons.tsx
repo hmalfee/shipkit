@@ -2,9 +2,11 @@
 
 import { AlertCircleIcon, Loader2 } from 'lucide-react';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 import { OAUTH_PROVIDERS } from '@shipkit/shared/constants';
+import { useOAuthPopup } from '@shipkit/shared/oauth-popup/react';
 import {
     Alert,
     AlertDescription,
@@ -13,12 +15,11 @@ import {
 import { Button } from '@shipkit/ui/components/button';
 import { cn } from '@shipkit/ui/lib/utils';
 
-import { useOAuthPopup } from '@/hooks/use-oauth-popup';
-import { api } from '@/lib/api/client';
+import { api, useUtils } from '@/lib/api/client';
 
-import type { OAuthError } from '@/hooks/use-oauth-popup';
 import type { OAUTH_PROVIDER_IDS } from '@shipkit/shared/constants';
-import type { Route } from 'next';
+
+import { useAuthRedirect } from './auth-redirect-context';
 
 type OAuthProviderId = (typeof OAUTH_PROVIDER_IDS)[number];
 
@@ -26,26 +27,17 @@ type OAuthProviderId = (typeof OAUTH_PROVIDER_IDS)[number];
 const INVERT_IN_DARK = new Set<OAuthProviderId>([]);
 
 export function OAuthButtons() {
-    const { openOAuthPopup } = useOAuthPopup();
-    const [oAuthError, setOAuthError] = useState<OAuthError | null>(null);
+    const router = useRouter();
+    const utils = useUtils();
+    const redirectPath = useAuthRedirect();
+    // @see [OAuth Popup Flow] Opens the OAuth login popup and listens for the success message from the callback page to complete the sign-in.
+    const { openOAuthPopup, error } = useOAuthPopup();
     const [pendingProvider, setPendingProvider] =
         useState<OAuthProviderId | null>(null);
 
-    const oauthSignInMutation = api.auth.oauth.signIn.useMutation({
-        onError: (error) => {
-            setOAuthError({
-                success: false,
-                error: {
-                    message: error.message,
-                    description: 'Failed to initiate OAuth',
-                },
-            });
-            setPendingProvider(null);
-        },
-    });
+    const oauthSignInMutation = api.auth.oauth.signIn.useMutation();
 
     const handleOAuthClick = async (provider: OAuthProviderId) => {
-        setOAuthError(null);
         setPendingProvider(provider);
 
         const result = await openOAuthPopup(
@@ -53,19 +45,16 @@ export function OAuthButtons() {
                 oauthSignInMutation
                     .mutateAsync({
                         params: { provider },
-                        body: {
-                            callbackURL:
-                                '/auth/callback/success' satisfies Route,
-                        },
                     })
                     .then((data) => data.body.url),
             { width: 600, height: 700 },
         );
 
         if (result.success) {
-            window.location.reload();
+            void utils.auth.me.invalidateQuery();
+            router.replace(redirectPath);
+            router.refresh();
         } else {
-            setOAuthError(result);
             setPendingProvider(null);
         }
     };
@@ -75,15 +64,11 @@ export function OAuthButtons() {
 
     return (
         <div className="flex w-full flex-col space-y-3">
-            {oAuthError && (
+            {error && (
                 <Alert variant="destructive">
                     <AlertCircleIcon />
-                    <AlertTitle>
-                        {oAuthError.error.message ?? 'Authentication error'}
-                    </AlertTitle>
-                    <AlertDescription>
-                        {oAuthError.error.description ?? 'Please try again.'}
-                    </AlertDescription>
+                    <AlertTitle>{error.title}</AlertTitle>
+                    <AlertDescription>{error.description}</AlertDescription>
                 </Alert>
             )}
 

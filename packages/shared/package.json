@@ -4,7 +4,9 @@
     "exports": {
         "./orpc": "./src/orpc/index.ts",
         "./constants": "./src/constants.ts",
-        "./next/*": "./src/next/*.ts"
+        "./next/*": "./src/next/*.ts",
+        "./oauth-popup/next": "./src/oauth-popup/next.ts",
+        "./oauth-popup/react": "./src/oauth-popup/react.ts"
     },
     "scripts": {
         "clean": "git clean -xdf .cache .turbo node_modules",
@@ -13,12 +15,26 @@
     "dependencies": {
         "@opentelemetry/api": "catalog:",
         "@orpc/contract": "catalog:",
-        "@shipkit/orpc-utils": "workspace:*"
+        "@shipkit/orpc-utils": "workspace:*",
+        "server-only": "^0.0.1"
     },
     "devDependencies": {
         "@shipkit/ts-config": "workspace:*",
+        "@types/react": "catalog:",
         "better-auth": "catalog:",
         "next": "catalog:",
         "typescript": "catalog:"
+    },
+    "peerDependencies": {
+        "next": "*",
+        "react": "*"
+    },
+    "peerDependenciesMeta": {
+        "next": {
+            "optional": true
+        },
+        "react": {
+            "optional": true
+        }
     }
 }

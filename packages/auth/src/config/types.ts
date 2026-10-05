@@ -21,6 +21,10 @@ type OAuthProvidersConfig = {
      * Must contain a `{bracketed}` placeholder (e.g. `http://localhost:3000/auth/callback/{provider}`).
      */
     redirectURITemplate: `${string}{${string}}${string}`;
+    /**
+     * The destination where the backend redirects the user after the provider flow (success, error, or signup).
+     */
+    callbackURL: string;
 } & Record<
     (typeof OAUTH_PROVIDER_IDS)[number],
     {

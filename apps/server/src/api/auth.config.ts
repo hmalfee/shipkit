@@ -1,4 +1,5 @@
 import { sendEmail } from '@shipkit/email';
+import { OAUTH_POPUP_CALLBACK_PATH } from '@shipkit/shared/constants';
 import { contract } from '@shipkit/shared/orpc';
 import { logger } from '@shipkit/telemetry/logger';
 
@@ -183,6 +184,8 @@ export const authConfig: CreateAuthContext['config'] = {
     oauth: {
         redirectURITemplate:
             `${env.WEB_URL}${contract.auth.oauth.callback['~orpc'].route.path}` as `${string}{${string}}${string}`,
+        // @see [OAuth Popup Flow] Configures the backend to redirect the user to the frontend callback page upon successful authentication.
+        callbackURL: `${env.WEB_URL}${OAUTH_POPUP_CALLBACK_PATH}`,
         google: {
             clientId: env.GOOGLE_CLIENT_ID,
             clientSecret: env.GOOGLE_CLIENT_SECRET,

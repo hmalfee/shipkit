@@ -111,7 +111,6 @@ export const auth = os.auth.router({
                 try {
                     const result = await context.auth.signInSocial({
                         provider: input.params.provider,
-                        ...input.body,
                     });
                     return {
                         status: 200,
