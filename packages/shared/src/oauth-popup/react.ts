@@ -28,6 +28,12 @@ export interface PopupWindowOptions {
     left?: number;
 }
 
+export const POPUP_SIZES = {
+    compact: { width: 464, height: 560 },
+    default: { width: 480, height: 620 },
+    tall: { width: 520, height: 700 },
+} satisfies Record<string, PopupWindowOptions>;
+
 const KNOWN_COPY: Record<OAuthPopupErrorCode, OAuthErrorCopy> = {
     [OAUTH_POPUP_ERROR_CODES.Closed]: {
         title: 'Sign-in cancelled',
@@ -78,9 +84,9 @@ const failure = (code: string): OAuthError => ({
     error: { code, ...getOAuthErrorCopy(code) },
 });
 
-function popupFeatures({
-    width = 600,
-    height = 700,
+function getPopupFeatures({
+    width = POPUP_SIZES.default.width,
+    height = POPUP_SIZES.default.height,
     top = window.screenY + Math.round((window.outerHeight - height) / 2),
     left = window.screenX + Math.round((window.outerWidth - width) / 2),
 }: PopupWindowOptions = {}) {
@@ -151,7 +157,7 @@ export function useOAuthPopup() {
                 const popup = window.open(
                     'about:blank',
                     OAUTH_POPUP_CHANNEL,
-                    popupFeatures(options),
+                    getPopupFeatures(options),
                 );
                 if (!popup) {
                     const response = failure(OAUTH_POPUP_ERROR_CODES.Blocked);

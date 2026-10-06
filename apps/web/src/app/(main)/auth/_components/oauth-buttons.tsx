@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 import { OAUTH_PROVIDERS } from '@shipkit/shared/constants';
-import { useOAuthPopup } from '@shipkit/shared/oauth-popup/react';
+import { POPUP_SIZES, useOAuthPopup } from '@shipkit/shared/oauth-popup/react';
 import {
     Alert,
     AlertDescription,
@@ -47,7 +47,7 @@ export function OAuthButtons() {
                         params: { provider },
                     })
                     .then((data) => data.body.url),
-            { width: 600, height: 700 },
+            POPUP_SIZES.compact,
         );
 
         if (result.success) {
