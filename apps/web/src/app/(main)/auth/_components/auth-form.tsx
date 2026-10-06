@@ -207,7 +207,7 @@ function OtpStage({
         },
     });
 
-    const { useMutation, inputSchema } = api.auth.email.verifyOtp;
+    const { useMutation, inputSchema } = api.auth.email.verify.otp;
     const verifyOtp = useMutation({
         onSuccess: (data) => {
             void utils.auth.me.invalidateQuery();

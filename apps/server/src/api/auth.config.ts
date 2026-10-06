@@ -19,7 +19,7 @@ const smtpConfig = {
 };
 
 const verifyMagicLinkPath =
-    contract.auth.email.verifyMagicLink['~orpc'].route.path;
+    contract.auth.email.verify.magicLink['~orpc'].route.path;
 const changeEmailConfirmPath =
     contract.auth.changeEmail.confirm['~orpc'].route.path;
 const changeEmailVerifyPath =

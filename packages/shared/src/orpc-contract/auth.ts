@@ -58,37 +58,39 @@ export const auth = group('/auth', {
             .responses({
                 OK: SendThrottleSchema,
             }),
-        verifyOtp: rb
-            .mutation('/verify-otp')
-            .input({
-                body: z.object({
-                    email: z.email(),
-                    otp: z.string().regex(/^\d{6}$/),
+        verify: group('/verify', {
+            otp: rb
+                .mutation('/otp')
+                .input({
+                    body: z.object({
+                        email: z.email(),
+                        otp: z.string().regex(/^\d{6}$/),
+                    }),
+                })
+                .errors({
+                    UNAUTHORIZED: {},
+                    TOO_MANY_REQUESTS: {},
+                    FORBIDDEN: {},
+                })
+                .responses({
+                    OK: UserSchema.omit({ image: true }),
                 }),
-            })
-            .errors({
-                UNAUTHORIZED: {},
-                TOO_MANY_REQUESTS: {},
-                FORBIDDEN: {},
-            })
-            .responses({
-                OK: UserSchema.omit({ image: true }),
-            }),
-        verifyMagicLink: rb
-            .query('/verify-magic-link')
-            .input({
-                query: z.object({
-                    token: z.string().min(32),
-                    callbackURL: z.string().optional(),
+            magicLink: rb
+                .query('/magic-link')
+                .input({
+                    query: z.object({
+                        token: z.string().min(32),
+                        callbackURL: z.string().optional(),
+                    }),
+                })
+                .errors({
+                    FORBIDDEN: {},
+                    TOO_MANY_REQUESTS: {},
+                })
+                .responses({
+                    FOUND: undefined,
                 }),
-            })
-            .errors({
-                FORBIDDEN: {},
-                TOO_MANY_REQUESTS: {},
-            })
-            .responses({
-                FOUND: undefined,
-            }),
+        }),
     }),
     oauth: group('/oauth', {
         signIn: rb

@@ -13,7 +13,7 @@ export const dynamic = 'force-dynamic';
 // Redirect proxies so transactional emails can use the main domain
 // instead of the backend's domain/subdomain.
 const proxiedRoutes = [
-    contract.auth.email.verifyMagicLink['~orpc'].route,
+    contract.auth.email.verify.magicLink['~orpc'].route,
     contract.auth.changeEmail.confirm['~orpc'].route,
     contract.auth.changeEmail.verify['~orpc'].route,
     contract.auth.oauth.callback['~orpc'].route,

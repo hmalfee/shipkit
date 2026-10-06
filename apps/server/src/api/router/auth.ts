@@ -46,53 +46,58 @@ export const auth = os.auth.router({
                 }
             },
         ),
-        verifyOtp: cr.auth.email.verifyOtp.handler(
-            async ({ context, input, errors }) => {
-                const { exceeded } = await context.rateLimit({
-                    limit: 5,
-                    blockDuration: 300,
-                });
-                if (exceeded)
-                    throw errors.TOO_MANY_REQUESTS({
-                        message: 'Too many attempts',
+        verify: os.auth.email.verify.router({
+            otp: cr.auth.email.verify.otp.handler(
+                async ({ context, input, errors }) => {
+                    const { exceeded } = await context.rateLimit({
+                        limit: 5,
+                        blockDuration: 300,
                     });
-                try {
-                    const res = await context.auth.verifyOtp(input.body);
-                    return {
-                        status: 200,
-                        body: {
-                            id: res.user.id,
-                            name: res.user.name,
-                            email: res.user.email,
+                    if (exceeded)
+                        throw errors.TOO_MANY_REQUESTS({
+                            message: 'Too many attempts',
+                        });
+                    try {
+                        const res = await context.auth.verifyOtp(input.body);
+                        return {
+                            status: 200,
+                            body: {
+                                id: res.user.id,
+                                name: res.user.name,
+                                email: res.user.email,
+                            },
+                        };
+                    } catch (err) {
+                        handleAuthError(err, errors);
+                    }
+                },
+            ),
+            magicLink: cr.auth.email.verify.magicLink.handler(
+                async ({ context, input, errors }) => {
+                    const { exceeded } = await context.rateLimit({
+                        limit: 10,
+                        blockDuration: 60,
+                    });
+                    if (exceeded)
+                        throw errors.TOO_MANY_REQUESTS({
+                            message: 'Too many attempts',
+                        });
+
+                    const response = await context.auth.$api(
+                        'verifyMagicLink',
+                        {
+                            query: {
+                                token: input.query.token,
+                                callbackURL: input.query.callbackURL,
+                            },
                         },
-                    };
-                } catch (err) {
-                    handleAuthError(err, errors);
-                }
-            },
-        ),
-        verifyMagicLink: cr.auth.email.verifyMagicLink.handler(
-            async ({ context, input, errors }) => {
-                const { exceeded } = await context.rateLimit({
-                    limit: 10,
-                    blockDuration: 60,
-                });
-                if (exceeded)
-                    throw errors.TOO_MANY_REQUESTS({
-                        message: 'Too many attempts',
-                    });
+                    );
 
-                const response = await context.auth.$api('verifyMagicLink', {
-                    query: {
-                        token: input.query.token,
-                        callbackURL: input.query.callbackURL,
-                    },
-                });
-
-                const location = response.headers.get('location') ?? '/';
-                return { status: 302, headers: { location } };
-            },
-        ),
+                    const location = response.headers.get('location') ?? '/';
+                    return { status: 302, headers: { location } };
+                },
+            ),
+        }),
     }),
 
     oauth: os.auth.oauth.router({
