@@ -3,8 +3,19 @@
 import { LogOutIcon, UserIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useState, useTransition } from 'react';
 import { toast } from 'sonner';
 
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@shipkit/ui/components/alert-dialog';
 import {
     Avatar,
     AvatarFallback,
@@ -30,20 +41,26 @@ export default function Header() {
     const { data } = api.auth.me.useQuery();
     const utils = useUtils();
     const router = useRouter();
+    const [logoutOpen, setLogoutOpen] = useState(false);
+    const [isNavigating, startNavigation] = useTransition();
 
     const signOut = api.auth.signOut.useMutation({
         onSuccess: () => {
-            // Optimistically update the cache to rerender the signed out state of the user,
-            // and re-validate in the background to sync with server true state
-            utils.auth.me.setQueryData({
-                status: 200,
-                body: null,
-            });
             toast.success('Signed out');
             void utils.auth.me.invalidateQuery();
-            router.push('/auth');
+            // isNavigating stays true until the new route commits, and the
+            // close below commits together with it
+            startNavigation(() => {
+                router.push('/auth');
+                setLogoutOpen(false);
+            });
+        },
+        onError: () => {
+            toast.error('Failed to sign out. Please try again.');
         },
     });
+
+    const isSigningOut = signOut.isPending || isNavigating;
 
     const user = data?.body;
 
@@ -93,8 +110,7 @@ export default function Header() {
                                 <DropdownMenuSeparator />
                                 <DropdownMenuItem
                                     variant="destructive"
-                                    onClick={() => signOut.mutate(undefined)}
-                                    disabled={signOut.isPending}
+                                    onClick={() => setLogoutOpen(true)}
                                 >
                                     <LogOutIcon />
                                     Logout
@@ -102,6 +118,37 @@ export default function Header() {
                             </DropdownMenuContent>
                         </DropdownMenu>
                     )}
+
+                    {/* Outside `user &&` so the refetched null user doesn't unmount it mid-logout */}
+                    <AlertDialog
+                        open={logoutOpen}
+                        onOpenChange={(open) => {
+                            if (!isSigningOut) setLogoutOpen(open);
+                        }}
+                    >
+                        <AlertDialogContent size="sm">
+                            <AlertDialogHeader>
+                                <AlertDialogTitle>Log out?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    You&apos;ll need to sign in again to access
+                                    your account.
+                                </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                                <AlertDialogCancel disabled={isSigningOut}>
+                                    Cancel
+                                </AlertDialogCancel>
+                                <AlertDialogAction
+                                    variant="destructive"
+                                    onClick={() => signOut.mutate(undefined)}
+                                    disabled={isSigningOut}
+                                >
+                                    {isSigningOut ? 'Logging out…' : 'Logout'}
+                                </AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
+
                     <ModeToggle />
                 </div>
             </div>
