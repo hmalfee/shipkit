@@ -5,7 +5,7 @@ import { cr, os } from '../base';
 export const auth = os.auth.router({
     me: cr.auth.me.handler(async ({ context }) => {
         if (!context.session) return { status: 200, body: null };
-        const { id, name, displayEmail, image } = context.session.user;
+        const { id, name, displayEmail, image, roles } = context.session.user;
         const pending = await context.auth.changeEmailStatus();
         return {
             status: 200,
@@ -14,6 +14,7 @@ export const auth = os.auth.router({
                 name,
                 email: displayEmail,
                 image: image ?? null,
+                ...(roles.includes('admin') ? { isAdmin: true } : undefined),
                 ...(pending
                     ? {
                           changeEmailStatus: {

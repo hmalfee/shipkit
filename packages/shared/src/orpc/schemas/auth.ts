@@ -42,6 +42,7 @@ export const UserSchema = z.object({
     name: z.string(),
     email: z.email(),
     image: z.url().nullable(),
+    isAdmin: z.boolean().optional(),
     changeEmailStatus: ChangeEmailStatusSchema.optional(),
 });
 
