@@ -1,16 +1,21 @@
-import { oc } from '@orpc/contract';
 import z from 'zod';
 
-import { rb } from '@shipkit/orpc-utils/contract';
+import { group, rb } from '@shipkit/orpc-utils/contract';
 
-import {
-    CreateTodoBodySchema,
-    TodoParamsSchema,
-    TodoSchema,
-    UpdateTodoBodySchema,
-} from '../schemas/todo';
+const TodoSchema = z.object({
+    id: z.uuid(),
+    userId: z.uuid(),
+    title: z.string(),
+    completed: z.boolean(),
+    createdAt: z.date(),
+    updatedAt: z.date(),
+});
 
-export const todo = oc.prefix('/todo').router({
+const TodoParamsSchema = z.object({
+    id: z.uuid(),
+});
+
+export const todo = group('/todo', {
     list: rb
         .query('/')
         .errors({ UNAUTHORIZED: {} })
@@ -29,14 +34,24 @@ export const todo = oc.prefix('/todo').router({
         }),
     create: rb
         .mutation('/')
-        .input({ body: CreateTodoBodySchema })
+        .input({
+            body: z.object({
+                title: z.string().min(1).max(500),
+            }),
+        })
         .errors({ UNAUTHORIZED: {} })
         .responses({
             CREATED: TodoSchema,
         }),
     update: rb
         .mutation('/{id}', 'PUT')
-        .input({ params: TodoParamsSchema, body: UpdateTodoBodySchema })
+        .input({
+            params: TodoParamsSchema,
+            body: z.object({
+                title: z.string().min(1).max(500).optional(),
+                completed: z.boolean().optional(),
+            }),
+        })
         .responses({
             OK: TodoSchema,
         })

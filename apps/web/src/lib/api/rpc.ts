@@ -1,5 +1,5 @@
 import { createFetchClient } from '@shipkit/orpc-utils/query';
-import { contract } from '@shipkit/shared/orpc';
+import { contract } from '@shipkit/shared/orpc-contract';
 
 import { env } from '@/env';
 

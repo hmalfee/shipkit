@@ -1,7 +1,7 @@
 'use client';
 
 import { createQueryApi } from '@shipkit/orpc-utils/query/react';
-import { contract } from '@shipkit/shared/orpc';
+import { contract } from '@shipkit/shared/orpc-contract';
 
 import { rpc } from './rpc';
 

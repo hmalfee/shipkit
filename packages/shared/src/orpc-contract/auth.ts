@@ -1,31 +1,56 @@
-import { oc } from '@orpc/contract';
+import z from 'zod';
 
-import { rb } from '@shipkit/orpc-utils/contract';
-
+import { group, rb } from '@shipkit/orpc-utils/contract';
 import {
-    CallbackParamsSchema,
-    CallbackQuerySchema,
-    ChangeEmailBodySchema,
-    ChangeEmailVerifyQuerySchema,
-    EmailSignInBodySchema,
-    OauthSignInParamsSchema,
-    OauthSignInResponseSchema,
-    ResendVerificationBodySchema,
-    SendThrottleSchema,
-    UpdateProfileBodySchema,
-    UserSchema,
-    VerifyMagicLinkQuerySchema,
-    VerifyOtpBodySchema,
-} from '../schemas/auth';
+    CHANGE_EMAIL_STAGE_VALUES,
+    OAUTH_PROVIDER_IDS,
+} from '@shipkit/shared/constants';
 
-export const auth = oc.prefix('/auth').router({
+const UserSchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    email: z.email(),
+    image: z.url().nullable(),
+    isAdmin: z.boolean().optional(),
+    changeEmailStatus: z
+        .union([
+            z.object({
+                newEmail: z.email(),
+                stage: z.enum(CHANGE_EMAIL_STAGE_VALUES),
+                disallowedUntil: z.number().optional(),
+            }),
+            z.object({
+                disallowedUntil: z.number(),
+                newEmail: z.never().optional(),
+                stage: z.never().optional(),
+            }),
+        ])
+        .optional(),
+});
+
+const SendThrottleSchema = z.object({
+    resendAvailableAt: z.number(), // ms timestamp
+});
+
+const ChangeEmailVerifyQuerySchema = z.object({
+    token: z.string().min(32),
+    callbackURL: z.string().optional(),
+});
+
+const OauthProviderParamsSchema = z.object({
+    provider: z.enum(OAUTH_PROVIDER_IDS),
+});
+
+export const auth = group('/auth', {
     me: rb.query('/me').responses({ OK: UserSchema.nullable() }),
-
-    email: oc.prefix('/email').router({
+    email: group('/email', {
         signIn: rb
             .mutation('/sign-in')
             .input({
-                body: EmailSignInBodySchema,
+                body: z.object({
+                    email: z.email(),
+                    callbackURL: z.string().optional(),
+                }),
             })
             .errors({
                 TOO_MANY_REQUESTS: {},
@@ -36,7 +61,10 @@ export const auth = oc.prefix('/auth').router({
         verifyOtp: rb
             .mutation('/verify-otp')
             .input({
-                body: VerifyOtpBodySchema,
+                body: z.object({
+                    email: z.email(),
+                    otp: z.string().regex(/^\d{6}$/),
+                }),
             })
             .errors({
                 UNAUTHORIZED: {},
@@ -49,7 +77,10 @@ export const auth = oc.prefix('/auth').router({
         verifyMagicLink: rb
             .query('/verify-magic-link')
             .input({
-                query: VerifyMagicLinkQuerySchema,
+                query: z.object({
+                    token: z.string().min(32),
+                    callbackURL: z.string().optional(),
+                }),
             })
             .errors({
                 FORBIDDEN: {},
@@ -59,25 +90,32 @@ export const auth = oc.prefix('/auth').router({
                 FOUND: undefined,
             }),
     }),
-
-    oauth: oc.prefix('/oauth').router({
+    oauth: group('/oauth', {
         signIn: rb
             .mutation('/sign-in/{provider}')
             .input({
-                params: OauthSignInParamsSchema,
+                params: OauthProviderParamsSchema,
             })
             .errors({
                 FORBIDDEN: {},
                 TOO_MANY_REQUESTS: {},
             })
             .responses({
-                OK: OauthSignInResponseSchema,
+                OK: z.object({
+                    url: z.string(),
+                    redirect: z.boolean(),
+                }),
             }),
         callback: rb
             .query('/callback/{provider}')
             .input({
-                params: CallbackParamsSchema,
-                query: CallbackQuerySchema,
+                params: OauthProviderParamsSchema,
+                query: z.looseObject({
+                    code: z.string().optional(),
+                    state: z.string().optional(),
+                    error: z.string().optional(),
+                    error_description: z.string().optional(),
+                }),
             })
             .errors({
                 FORBIDDEN: {},
@@ -87,7 +125,6 @@ export const auth = oc.prefix('/auth').router({
                 FOUND: undefined,
             }),
     }),
-
     signOut: rb
         .mutation('/sign-out')
         .errors({
@@ -96,12 +133,14 @@ export const auth = oc.prefix('/auth').router({
         .responses({
             NO_CONTENT: undefined,
         }),
-
-    changeEmail: oc.prefix('/change-email').router({
+    changeEmail: group('/change-email', {
         request: rb
             .mutation('/')
             .input({
-                body: ChangeEmailBodySchema,
+                body: z.object({
+                    newEmail: z.email(),
+                    callbackURL: z.string().optional(),
+                }),
             })
             .errors({
                 UNAUTHORIZED: {},
@@ -145,7 +184,9 @@ export const auth = oc.prefix('/auth').router({
         resendVerification: rb
             .mutation('/resend-verification')
             .input({
-                body: ResendVerificationBodySchema,
+                body: z.object({
+                    callbackURL: z.string().optional(),
+                }),
             })
             .errors({
                 UNAUTHORIZED: {},
@@ -155,11 +196,18 @@ export const auth = oc.prefix('/auth').router({
                 OK: SendThrottleSchema,
             }),
     }),
-
     updateProfile: rb
         .mutation('/profile')
         .input({
-            body: UpdateProfileBodySchema,
+            body: z.object({
+                // `name` is the only updatable field for now, so it's required
+                // (otherwise an empty body would be a no-op).
+                // TODO: When more fields are added, replace this with a
+                // `z.union()` of single-field schemas so partial updates are
+                // allowed and the inferred type guarantees at least one field
+                // is present (`.refine()` wouldn't).
+                name: z.string().min(1).max(255),
+            }),
         })
         .errors({
             UNAUTHORIZED: {},

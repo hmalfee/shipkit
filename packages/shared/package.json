@@ -2,7 +2,7 @@
     "name": "@shipkit/shared",
     "type": "module",
     "exports": {
-        "./orpc": "./src/orpc/index.ts",
+        "./orpc-contract": "./src/orpc-contract/index.ts",
         "./constants": "./src/constants.ts",
         "./next/*": "./src/next/*.ts",
         "./oauth-popup/next": "./src/oauth-popup/next.ts",
@@ -14,7 +14,6 @@
     },
     "dependencies": {
         "@opentelemetry/api": "catalog:",
-        "@orpc/contract": "catalog:",
         "@shipkit/orpc-utils": "workspace:*",
         "server-only": "^0.0.1"
     },

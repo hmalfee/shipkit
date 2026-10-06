@@ -2,7 +2,7 @@ import { OAUTH_POPUP_CALLBACK_PATH } from '@shipkit/shared/constants';
 import { createCatchAllRouter } from '@shipkit/shared/next/catch-all';
 import { createProxyHandler } from '@shipkit/shared/next/proxy-handler';
 import { createOAuthPopupHandler } from '@shipkit/shared/oauth-popup/next';
-import { contract } from '@shipkit/shared/orpc';
+import { contract } from '@shipkit/shared/orpc-contract';
 
 import { env } from '@/env';
 

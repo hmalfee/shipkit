@@ -3,7 +3,7 @@ import 'server-only';
 import { cache } from 'react';
 
 import { createSSRHelpers } from '@shipkit/orpc-utils/query/react';
-import { contract } from '@shipkit/shared/orpc';
+import { contract } from '@shipkit/shared/orpc-contract';
 
 import { createQueryClient } from './query-client';
 import { rpc } from './rpc';

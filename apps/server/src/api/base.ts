@@ -1,6 +1,6 @@
 import { implement } from '@orpc/server';
 
-import { contract } from '@shipkit/shared/orpc';
+import { contract } from '@shipkit/shared/orpc-contract';
 import { captureORPCTemplate } from '@shipkit/telemetry/node/orpc';
 
 import { env } from '@/env';

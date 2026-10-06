@@ -445,9 +445,6 @@ importers:
       '@opentelemetry/api':
         specifier: 'catalog:'
         version: 1.9.1
-      '@orpc/contract':
-        specifier: 'catalog:'
-        version: 1.14.8(@opentelemetry/api@1.9.1)
       '@shipkit/orpc-utils':
         specifier: workspace:*
         version: link:../orpc-utils

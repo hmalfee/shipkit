@@ -1,6 +1,6 @@
 import { sendEmail } from '@shipkit/email';
 import { OAUTH_POPUP_CALLBACK_PATH } from '@shipkit/shared/constants';
-import { contract } from '@shipkit/shared/orpc';
+import { contract } from '@shipkit/shared/orpc-contract';
 import { logger } from '@shipkit/telemetry/logger';
 
 import { env } from '@/env';
