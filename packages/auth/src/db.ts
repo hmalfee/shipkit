@@ -19,6 +19,12 @@ export async function generateAuthSchema() {
             callbackURL: '/',
             google: { clientId: '', clientSecret: '' },
         },
+        onSendChangeEmail: async () => {
+            /* dummy */
+        },
+        onSendSignInEmail: async () => {
+            /* dummy */
+        },
     });
 
     const { options, adapter } = await auth.$context;

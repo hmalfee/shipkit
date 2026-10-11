@@ -4,6 +4,7 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 
 import type { AuthConfig, AuthDatabase, Redis } from './types';
 
+import { resolveAuthDefaults } from './defaults';
 import { getPendingDisplayEmail, getSocialProvidersConfig } from './oauth';
 import { changeEmailPlugin } from './plugins/change-email';
 import { cookieForwarderPlugin } from './plugins/cookie-forwarder';
@@ -14,6 +15,8 @@ export function createBetterAuthConfig(
     redisClient: Redis,
     config: AuthConfig,
 ) {
+    const { otp, changeEmail } = resolveAuthDefaults(config);
+
     return betterAuth({
         appName: 'shipkit',
         secret: config.secret,
@@ -66,38 +69,13 @@ export function createBetterAuthConfig(
         }),
         plugins: [
             emailSignInPlugin({
-                onSendSignInEmail: async (props) =>
-                    config.onSendSignInEmail?.({
-                        email: props.email,
-                        otp: props.otp,
-                        magicLink: {
-                            token: props.magicLink.token,
-                            callbackURL:
-                                new URL(props.magicLink.url).searchParams.get(
-                                    'callbackURL',
-                                ) ?? '',
-                        },
-                        expiresInMinutes: props.expiresInMinutes,
-                    }),
+                otp,
+                onSendSignInEmail: config.onSendSignInEmail,
             }),
             changeEmailPlugin({
-                onSendChangeEmail: config.onSendChangeEmail
-                    ? {
-                          confirmation: async (props) =>
-                              config.onSendChangeEmail!.confirmation({
-                                  currentEmail: props.currentEmail,
-                                  newEmail: props.newEmail,
-                                  token: props.token,
-                                  callbackURL: props.callbackURL,
-                              }),
-                          verification: async (props) =>
-                              config.onSendChangeEmail!.verification({
-                                  newEmail: props.newEmail,
-                                  token: props.token,
-                                  callbackURL: props.callbackURL,
-                              }),
-                      }
-                    : undefined,
+                otp,
+                onSendChangeEmail: config.onSendChangeEmail,
+                ...changeEmail,
             }),
             cookieForwarderPlugin(), // must be last
         ],

@@ -14,8 +14,6 @@ export const dynamic = 'force-dynamic';
 // instead of the backend's domain/subdomain.
 const proxiedRoutes = [
     contract.auth.email.verify.magicLink['~orpc'].route,
-    contract.auth.changeEmail.confirm['~orpc'].route,
-    contract.auth.changeEmail.verify['~orpc'].route,
     contract.auth.oauth.callback['~orpc'].route,
 ];
 

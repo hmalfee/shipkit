@@ -1,12 +1,13 @@
 import { handleAuthError } from '@shipkit/auth/orpc';
 
 import { cr, os } from '../base';
+import { RATE_LIMIT_PRESETS } from '../rate-limiter';
 
 export const auth = os.auth.router({
     me: cr.auth.me.handler(async ({ context }) => {
         if (!context.session) return { status: 200, body: null };
         const { id, name, displayEmail, image, roles } = context.session.user;
-        const pending = await context.auth.changeEmailStatus();
+        const status = await context.auth.changeEmailStatus();
         return {
             status: 200,
             body: {
@@ -15,13 +16,7 @@ export const auth = os.auth.router({
                 email: displayEmail,
                 image: image ?? null,
                 ...(roles.includes('admin') ? { isAdmin: true } : undefined),
-                ...(pending
-                    ? {
-                          changeEmailStatus: {
-                              ...pending,
-                          },
-                      }
-                    : undefined),
+                ...(status ? { changeEmailStatus: status } : undefined),
             },
         };
     }),
@@ -29,18 +24,16 @@ export const auth = os.auth.router({
     email: os.auth.email.router({
         signIn: cr.auth.email.signIn.handler(
             async ({ context, input, errors }) => {
-                const { exceeded } = await context.rateLimit({
-                    limit: 3,
-                    blockDuration: 60,
-                });
+                const { exceeded } = await context.rateLimit(
+                    RATE_LIMIT_PRESETS.MODERATE,
+                );
                 if (exceeded)
                     throw errors.TOO_MANY_REQUESTS({
                         message: 'Too many attempts',
                     });
                 try {
-                    const { resendAvailableAt } =
-                        await context.auth.signInWithEmail(input.body);
-                    return { status: 200, body: { resendAvailableAt } };
+                    await context.auth.signInWithEmail(input.body);
+                    return { status: 200, body: undefined };
                 } catch (err) {
                     handleAuthError(err, errors);
                 }
@@ -49,10 +42,9 @@ export const auth = os.auth.router({
         verify: os.auth.email.verify.router({
             otp: cr.auth.email.verify.otp.handler(
                 async ({ context, input, errors }) => {
-                    const { exceeded } = await context.rateLimit({
-                        limit: 5,
-                        blockDuration: 300,
-                    });
+                    const { exceeded } = await context.rateLimit(
+                        RATE_LIMIT_PRESETS.MODERATE,
+                    );
                     if (exceeded)
                         throw errors.TOO_MANY_REQUESTS({
                             message: 'Too many attempts',
@@ -74,10 +66,9 @@ export const auth = os.auth.router({
             ),
             magicLink: cr.auth.email.verify.magicLink.handler(
                 async ({ context, input, errors }) => {
-                    const { exceeded } = await context.rateLimit({
-                        limit: 10,
-                        blockDuration: 60,
-                    });
+                    const { exceeded } = await context.rateLimit(
+                        RATE_LIMIT_PRESETS.RELAXED,
+                    );
                     if (exceeded)
                         throw errors.TOO_MANY_REQUESTS({
                             message: 'Too many attempts',
@@ -103,9 +94,9 @@ export const auth = os.auth.router({
     oauth: os.auth.oauth.router({
         signIn: cr.auth.oauth.signIn.handler(
             async ({ context, input, errors }) => {
-                const { exceeded } = await context.rateLimit({
-                    blockDuration: 60,
-                });
+                const { exceeded } = await context.rateLimit(
+                    RATE_LIMIT_PRESETS.RELAXED,
+                );
                 if (exceeded)
                     throw errors.TOO_MANY_REQUESTS({
                         message: 'Too many attempts',
@@ -132,7 +123,9 @@ export const auth = os.auth.router({
         ),
         callback: cr.auth.oauth.callback.handler(
             async ({ context, input, errors }) => {
-                const { exceeded } = await context.rateLimit({ limit: 15 });
+                const { exceeded } = await context.rateLimit(
+                    RATE_LIMIT_PRESETS.RELAXED,
+                );
                 if (exceeded)
                     throw errors.TOO_MANY_REQUESTS({
                         message: 'Too many attempts',
@@ -165,131 +158,111 @@ export const auth = os.auth.router({
     }),
 
     changeEmail: os.auth.changeEmail.router({
-        request: cr.auth.changeEmail.request.handler(
-            async ({ context, input, errors }) => {
-                const { exceeded } = await context.rateLimit({
-                    limit: 5,
-                    blockDuration: 60 * 60,
-                });
-                if (exceeded)
-                    throw errors.TOO_MANY_REQUESTS({
-                        message: 'Too many attempts',
-                    });
-                if (!context.session)
-                    throw errors.UNAUTHORIZED({
-                        message: 'User not signed in',
-                    });
+        confirmation: os.auth.changeEmail.confirmation.router({
+            send: cr.auth.changeEmail.confirmation.send.handler(
+                async ({ context, errors }) => {
+                    const { exceeded } = await context.rateLimit(
+                        RATE_LIMIT_PRESETS.STRICT,
+                    );
+                    if (exceeded)
+                        throw errors.TOO_MANY_REQUESTS({
+                            message: 'Too many attempts',
+                        });
+                    if (!context.session)
+                        throw errors.UNAUTHORIZED({
+                            message: 'User not signed in',
+                        });
 
-                try {
-                    const { resendAvailableAt } =
-                        await context.auth.requestChangeEmail({
+                    try {
+                        await context.auth.sendChangeEmailConfirmation();
+                        return { status: 200, body: undefined };
+                    } catch (err) {
+                        handleAuthError(err, errors);
+                    }
+                },
+            ),
+            submit: cr.auth.changeEmail.confirmation.submit.handler(
+                async ({ context, input, errors }) => {
+                    const { exceeded } = await context.rateLimit(
+                        RATE_LIMIT_PRESETS.MODERATE,
+                    );
+                    if (exceeded)
+                        throw errors.TOO_MANY_REQUESTS({
+                            message: 'Too many attempts',
+                        });
+                    if (!context.session)
+                        throw errors.UNAUTHORIZED({
+                            message: 'User not signed in',
+                        });
+
+                    try {
+                        await context.auth.confirmChangeEmail({
+                            otp: input.body.otp,
+                        });
+                        return { status: 200, body: undefined };
+                    } catch (err) {
+                        handleAuthError(err, errors);
+                    }
+                },
+            ),
+        }),
+        verification: os.auth.changeEmail.verification.router({
+            send: cr.auth.changeEmail.verification.send.handler(
+                async ({ context, input, errors }) => {
+                    const { exceeded } = await context.rateLimit(
+                        RATE_LIMIT_PRESETS.STRICT,
+                    );
+                    if (exceeded)
+                        throw errors.TOO_MANY_REQUESTS({
+                            message: 'Too many attempts',
+                        });
+                    if (!context.session)
+                        throw errors.UNAUTHORIZED({
+                            message: 'User not signed in',
+                        });
+
+                    try {
+                        await context.auth.sendChangeEmailVerification({
                             newEmail: input.body.newEmail,
-                            callbackURL: input.body.callbackURL,
                         });
-                    return { status: 200, body: { resendAvailableAt } };
-                } catch (err) {
-                    handleAuthError(err, errors);
-                }
-            },
-        ),
-        confirm: cr.auth.changeEmail.confirm.handler(
-            async ({ context, input, errors }) => {
-                const { exceeded } = await context.rateLimit({
-                    limit: 5,
-                    blockDuration: 60,
-                });
-                if (exceeded)
-                    throw errors.TOO_MANY_REQUESTS({
-                        message: 'Too many attempts',
-                    });
-                try {
-                    const response = await context.auth.$api(
-                        'confirmChangeEmail',
-                        {
-                            query: {
-                                token: input.query.token,
-                                callbackURL: input.query.callbackURL,
-                            },
-                        },
+                        return { status: 200, body: undefined };
+                    } catch (err) {
+                        handleAuthError(err, errors);
+                    }
+                },
+            ),
+            submit: cr.auth.changeEmail.verification.submit.handler(
+                async ({ context, input, errors }) => {
+                    const { exceeded } = await context.rateLimit(
+                        RATE_LIMIT_PRESETS.MODERATE,
                     );
-                    const location = response.headers.get('location') ?? '/';
-                    return { status: 302, headers: { location } };
-                } catch (err) {
-                    handleAuthError(err, errors);
-                }
-            },
-        ),
-        verify: cr.auth.changeEmail.verify.handler(
-            async ({ context, input, errors }) => {
-                const { exceeded } = await context.rateLimit({
-                    limit: 5,
-                    blockDuration: 60,
-                });
-                if (exceeded)
-                    throw errors.TOO_MANY_REQUESTS({
-                        message: 'Too many attempts',
-                    });
-                try {
-                    const response = await context.auth.$api(
-                        'verifyChangeEmail',
-                        {
-                            query: {
-                                token: input.query.token,
-                                callbackURL: input.query.callbackURL,
-                            },
-                        },
-                    );
-                    const location = response.headers.get('location') ?? '/';
-                    return { status: 302, headers: { location } };
-                } catch (err) {
-                    handleAuthError(err, errors);
-                }
-            },
-        ),
-        cancel: cr.auth.changeEmail.cancel.handler(
-            async ({ context, errors }) => {
-                if (!context.session)
-                    throw errors.UNAUTHORIZED({
-                        message: 'User not signed in',
-                    });
-                await context.auth.cancelChangeEmail();
-                return { status: 200, body: undefined };
-            },
-        ),
-        resendVerification: cr.auth.changeEmail.resendVerification.handler(
-            async ({ context, input, errors }) => {
-                const { exceeded } = await context.rateLimit({
-                    limit: 5,
-                    blockDuration: 60 * 60,
-                });
-                if (exceeded)
-                    throw errors.TOO_MANY_REQUESTS({
-                        message: 'Too many attempts',
-                    });
-                if (!context.session)
-                    throw errors.UNAUTHORIZED({
-                        message: 'User not signed in',
-                    });
+                    if (exceeded)
+                        throw errors.TOO_MANY_REQUESTS({
+                            message: 'Too many attempts',
+                        });
+                    if (!context.session)
+                        throw errors.UNAUTHORIZED({
+                            message: 'User not signed in',
+                        });
 
-                try {
-                    const { resendAvailableAt } =
-                        await context.auth.resendChangeEmailVerification({
-                            callbackURL: input.body.callbackURL,
+                    try {
+                        await context.auth.verifyChangeEmail({
+                            otp: input.body.otp,
                         });
-                    return { status: 200, body: { resendAvailableAt } };
-                } catch (err) {
-                    handleAuthError(err, errors);
-                }
-            },
-        ),
+                        return { status: 200, body: undefined };
+                    } catch (err) {
+                        handleAuthError(err, errors);
+                    }
+                },
+            ),
+        }),
     }),
 
     updateProfile: cr.auth.updateProfile.handler(
         async ({ context, input, errors }) => {
-            const { exceeded } = await context.rateLimit({
-                limit: 10,
-                blockDuration: 60,
-            });
+            const { exceeded } = await context.rateLimit(
+                RATE_LIMIT_PRESETS.STANDARD,
+            );
             if (exceeded)
                 throw errors.TOO_MANY_REQUESTS({
                     message: 'Too many attempts',

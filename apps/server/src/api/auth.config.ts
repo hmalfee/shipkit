@@ -1,5 +1,10 @@
 import { sendEmail } from '@shipkit/email';
-import { OAUTH_POPUP_CALLBACK_PATH } from '@shipkit/shared/constants';
+import {
+    CHANGE_EMAIL_MAX_VERIFICATION_SENDS,
+    OAUTH_POPUP_CALLBACK_PATH,
+    OTP_LENGTH,
+    OTP_RESEND_COOLDOWN_SECONDS,
+} from '@shipkit/shared/constants';
 import { contract } from '@shipkit/shared/orpc-contract';
 import { logger } from '@shipkit/telemetry/logger';
 
@@ -20,10 +25,6 @@ const smtpConfig = {
 
 const verifyMagicLinkPath =
     contract.auth.email.verify.magicLink['~orpc'].route.path;
-const changeEmailConfirmPath =
-    contract.auth.changeEmail.confirm['~orpc'].route.path;
-const changeEmailVerifyPath =
-    contract.auth.changeEmail.verify['~orpc'].route.path;
 
 // Instead of the raw server URL, we use the main app's domain in transactional emails so that
 // users see a familiar domain instead of a backend subdomain.
@@ -85,85 +86,44 @@ const onSendSignInEmail: CreateAuthContext['config']['onSendSignInEmail'] =
           };
 
 const onSendChangeEmail: CreateAuthContext['config']['onSendChangeEmail'] =
-    env.SMTP_HOST
-        ? {
-              confirmation: async ({
-                  currentEmail,
-                  newEmail,
-                  token,
-                  callbackURL,
-              }) => {
-                  void sendEmail({
-                      template: 'change-email-confirmation',
-                      to: currentEmail,
+    async (payload) => {
+        if (!env.SMTP_HOST) {
+            logger.warn(
+                '[auth] SMTP not configured — simulating change-email {stage} email to {email}',
+                {
+                    stage: payload.stage,
+                    email: payload.email,
+                },
+            );
+            logger.info('[auth] Simulated change-email email: {payload}', {
+                payload: { ...payload },
+            });
+            return;
+        }
+        const send =
+            payload.stage === 'notification'
+                ? sendEmail({
+                      template: 'change-email-notice',
+                      to: payload.email,
                       props: {
-                          currentEmail,
-                          url: buildAuthLink(changeEmailConfirmPath, {
-                              token,
-                              callbackURL,
-                          }),
-                          newEmail,
+                          email: payload.email,
+                          newEmail: payload.newEmail,
                       },
                       config: smtpConfig,
-                  }).catch((error) => {
-                      logger.error(
-                          '[auth] Background change-email confirm send failed',
-                          { error },
-                      );
-                  });
-              },
-              verification: async ({ newEmail, token, callbackURL }) => {
-                  void sendEmail({
-                      template: 'change-email-verification',
-                      to: newEmail,
-                      props: {
-                          url: buildAuthLink(changeEmailVerifyPath, {
-                              token,
-                              callbackURL,
-                          }),
-                          newEmail,
-                      },
+                  })
+                : sendEmail({
+                      template: 'change-email-code',
+                      to: payload.email,
+                      props: payload, // already { stage, email, otp, expiresInMinutes }
                       config: smtpConfig,
-                  }).catch((error) => {
-                      logger.error(
-                          '[auth] Background change-email verify send failed',
-                          { error },
-                      );
                   });
-              },
-          }
-        : {
-              confirmation: async ({ currentEmail, token, callbackURL }) => {
-                  logger.warn(
-                      '[auth] SMTP not configured — simulating change-email confirmation to {currentEmail}',
-                      { currentEmail },
-                  );
-                  logger.info(
-                      '[auth] Simulated change-email confirmation\n  Link:    {link}',
-                      {
-                          link: buildAuthLink(changeEmailConfirmPath, {
-                              token,
-                              callbackURL,
-                          }),
-                      },
-                  );
-              },
-              verification: async ({ newEmail, token, callbackURL }) => {
-                  logger.warn(
-                      '[auth] SMTP not configured — simulating change-email verification to {newEmail}',
-                      { newEmail },
-                  );
-                  logger.info(
-                      '[auth] Simulated change-email verification\n  Link:    {link}',
-                      {
-                          link: buildAuthLink(changeEmailVerifyPath, {
-                              token,
-                              callbackURL,
-                          }),
-                      },
-                  );
-              },
-          };
+        void send.catch((error) =>
+            logger.error('[auth] Background change-email {stage} send failed', {
+                stage: payload.stage,
+                error,
+            }),
+        );
+    };
 
 const serverHost = new URL(env.SERVER_URL).hostname;
 const cookieDomain =
@@ -180,6 +140,13 @@ const cookieDomain =
 export const authConfig: CreateAuthContext['config'] = {
     secret: env.AUTH_SECRET,
     useSecureCookies: env.USE_SECURE_AUTH_COOKIES ?? false,
+    otp: {
+        length: OTP_LENGTH,
+        resendCooldownSeconds: OTP_RESEND_COOLDOWN_SECONDS,
+    },
+    changeEmail: {
+        maxVerificationSends: CHANGE_EMAIL_MAX_VERIFICATION_SENDS,
+    },
     cookieDomain,
     oauth: {
         redirectURITemplate:

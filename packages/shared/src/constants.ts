@@ -32,24 +32,9 @@ export const ALLOWED_HTTP_METHODS = [
     'DELETE',
 ] as const;
 
-/**
- * Stages for the email change flow.
- * This is the source of truth for both the auth SDK and any API implementing email change endpoints.
- */
-export const CHANGE_EMAIL_STAGES = {
-    /** Initial stage: waiting for user to confirm the change via their current email address */
-    AwaitingConfirmation: 'awaiting_confirmation',
-    /** Final stage: waiting for user to verify their new email address */
-    AwaitingVerification: 'awaiting_verification',
-} as const;
-
-export const CHANGE_EMAIL_STAGE_VALUES = Object.values(CHANGE_EMAIL_STAGES) as [
-    (typeof CHANGE_EMAIL_STAGES)[keyof typeof CHANGE_EMAIL_STAGES],
-    ...(typeof CHANGE_EMAIL_STAGES)[keyof typeof CHANGE_EMAIL_STAGES][],
-];
-
-export type ChangeEmailStage =
-    (typeof CHANGE_EMAIL_STAGES)[keyof typeof CHANGE_EMAIL_STAGES];
+export const OTP_LENGTH = 6;
+export const OTP_RESEND_COOLDOWN_SECONDS = 30;
+export const CHANGE_EMAIL_MAX_VERIFICATION_SENDS = 3;
 
 // @see [OAuth Popup Flow] Defines the shared callback path used by the backend for redirects and
 // the frontend for mounting the popup handler.

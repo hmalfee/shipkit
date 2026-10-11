@@ -1,5 +1,5 @@
-import ChangeEmailConfirmation from './templates/change-email-confirmation';
-import ChangeEmailVerification from './templates/change-email-verification';
+import ChangeEmailCode from './templates/change-email-code';
+import ChangeEmailNotice from './templates/change-email-notice';
 import EmailSignIn from './templates/email-sign-in';
 
 export const TEMPLATE_REGISTRY = {
@@ -7,13 +7,13 @@ export const TEMPLATE_REGISTRY = {
         component: EmailSignIn,
         subject: 'Sign in to your account',
     },
-    'change-email-confirmation': {
-        component: ChangeEmailConfirmation,
-        subject: 'Confirm your email change request',
+    'change-email-code': {
+        component: ChangeEmailCode,
+        subject: 'Your email change code',
     },
-    'change-email-verification': {
-        component: ChangeEmailVerification,
-        subject: 'Verify your new email address',
+    'change-email-notice': {
+        component: ChangeEmailNotice,
+        subject: 'Your email address was changed',
     },
 } as const;
 

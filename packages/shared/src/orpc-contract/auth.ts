@@ -1,10 +1,7 @@
 import z from 'zod';
 
 import { group, rb } from '@shipkit/orpc-utils/contract';
-import {
-    CHANGE_EMAIL_STAGE_VALUES,
-    OAUTH_PROVIDER_IDS,
-} from '@shipkit/shared/constants';
+import { OAUTH_PROVIDER_IDS, OTP_LENGTH } from '@shipkit/shared/constants';
 
 const UserSchema = z.object({
     id: z.string(),
@@ -13,28 +10,14 @@ const UserSchema = z.object({
     image: z.url().nullable(),
     isAdmin: z.boolean().optional(),
     changeEmailStatus: z
-        .union([
-            z.object({
-                newEmail: z.email(),
-                stage: z.enum(CHANGE_EMAIL_STAGE_VALUES),
-                disallowedUntil: z.number().optional(),
-            }),
-            z.object({
-                disallowedUntil: z.number(),
-                newEmail: z.never().optional(),
-                stage: z.never().optional(),
-            }),
-        ])
+        .object({
+            disallowedUntil: z.number(), // ms timestamp
+        })
         .optional(),
 });
 
-const SendThrottleSchema = z.object({
-    resendAvailableAt: z.number(), // ms timestamp
-});
-
-const ChangeEmailVerifyQuerySchema = z.object({
-    token: z.string().min(32),
-    callbackURL: z.string().optional(),
+const OtpBodySchema = z.object({
+    otp: z.string().length(OTP_LENGTH).regex(/^\d+$/),
 });
 
 const OauthProviderParamsSchema = z.object({
@@ -56,16 +39,13 @@ export const auth = group('/auth', {
                 TOO_MANY_REQUESTS: {},
             })
             .responses({
-                OK: SendThrottleSchema,
+                OK: undefined,
             }),
         verify: group('/verify', {
             otp: rb
                 .mutation('/otp')
                 .input({
-                    body: z.object({
-                        email: z.email(),
-                        otp: z.string().regex(/^\d{6}$/),
-                    }),
+                    body: OtpBodySchema.extend({ email: z.email() }),
                 })
                 .errors({
                     UNAUTHORIZED: {},
@@ -136,67 +116,37 @@ export const auth = group('/auth', {
             NO_CONTENT: undefined,
         }),
     changeEmail: group('/change-email', {
-        request: rb
-            .mutation('/')
-            .input({
-                body: z.object({
-                    newEmail: z.email(),
-                    callbackURL: z.string().optional(),
-                }),
-            })
-            .errors({
-                UNAUTHORIZED: {},
-                TOO_MANY_REQUESTS: {},
-            })
-            .responses({
-                OK: SendThrottleSchema,
-            }),
-        confirm: rb
-            .query('/confirm')
-            .input({
-                query: ChangeEmailVerifyQuerySchema,
-            })
-            .errors({
-                TOO_MANY_REQUESTS: {},
-                UNAUTHORIZED: {},
-            })
-            .responses({
-                FOUND: undefined,
-            }),
-        verify: rb
-            .query('/verify')
-            .input({
-                query: ChangeEmailVerifyQuerySchema,
-            })
-            .errors({
-                TOO_MANY_REQUESTS: {},
-                UNAUTHORIZED: {},
-            })
-            .responses({
-                FOUND: undefined,
-            }),
-        cancel: rb
-            .mutation('/cancel')
-            .errors({
-                UNAUTHORIZED: {},
-            })
-            .responses({
-                OK: undefined,
-            }),
-        resendVerification: rb
-            .mutation('/resend-verification')
-            .input({
-                body: z.object({
-                    callbackURL: z.string().optional(),
-                }),
-            })
-            .errors({
-                UNAUTHORIZED: {},
-                TOO_MANY_REQUESTS: {},
-            })
-            .responses({
-                OK: SendThrottleSchema,
-            }),
+        confirmation: group('/confirmation', {
+            send: rb
+                .mutation('/')
+                .errors({ UNAUTHORIZED: {}, TOO_MANY_REQUESTS: {} })
+                .responses({ OK: undefined }),
+            submit: rb
+                .mutation('/', 'PUT')
+                .input({ body: OtpBodySchema })
+                .errors({ UNAUTHORIZED: {}, TOO_MANY_REQUESTS: {} })
+                .responses({ OK: undefined }),
+        }),
+        verification: group('/verification', {
+            send: rb
+                .mutation('/')
+                .input({ body: z.object({ newEmail: z.email() }) })
+                .errors({
+                    UNAUTHORIZED: {},
+                    FORBIDDEN: {},
+                    TOO_MANY_REQUESTS: {},
+                })
+                .responses({ OK: undefined }),
+            submit: rb
+                .mutation('/', 'PUT')
+                .input({ body: OtpBodySchema })
+                .errors({
+                    UNAUTHORIZED: {},
+                    FORBIDDEN: {},
+                    TOO_MANY_REQUESTS: {},
+                })
+                .responses({ OK: undefined }),
+        }),
     }),
     updateProfile: rb
         .mutation('/profile')

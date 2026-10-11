@@ -5,6 +5,10 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
+import {
+    OTP_LENGTH,
+    OTP_RESEND_COOLDOWN_SECONDS,
+} from '@shipkit/shared/constants';
 import { Button } from '@shipkit/ui/components/button';
 import {
     Field,
@@ -55,16 +59,16 @@ function EmailStage({
 }: {
     countdown: Countdown;
     throttledEmail: string | null;
-    onSent: (email: string, resendAvailableAt: number) => void;
+    onSent: (email: string) => void;
 }) {
     const redirectPath = useAuthRedirect();
     const { useMutation, inputSchema } = api.auth.email.signIn;
     const signIn = useMutation({
         onSuccess: (data, vars) => {
             toast.success(
-                'Check your inbox — we sent you a magic link and a 6-digit code.',
+                `Check your inbox — we sent you a magic link and a ${OTP_LENGTH}-digit code.`,
             );
-            onSent(vars.body.email, data.body.resendAvailableAt);
+            onSent(vars.body.email);
         },
     });
 
@@ -198,8 +202,8 @@ function OtpStage({
     const utils = useUtils();
 
     const resend = api.auth.email.signIn.useMutation({
-        onSuccess: (data) => {
-            countdown.start(data.body.resendAvailableAt);
+        onSuccess: () => {
+            countdown.start(OTP_RESEND_COOLDOWN_SECONDS);
             form.reset();
             toast.success(
                 'Check your inbox — we resent the magic link and code.',
@@ -250,7 +254,7 @@ function OtpStage({
                     We sent a magic link to <strong>{email}</strong>.
                 </p>
                 <p className="text-muted-foreground text-xs">
-                    Or enter the 6-digit code from the email below.
+                    Or enter the {OTP_LENGTH}-digit code from the email below.
                 </p>
             </div>
             <form.Subscribe
@@ -272,13 +276,13 @@ function OtpStage({
                                         Sign-in code
                                     </FieldLabel>
                                     <InputOTP
-                                        maxLength={6}
+                                        maxLength={OTP_LENGTH}
                                         pattern={'^\\d+$'}
                                         inputMode="numeric"
                                         value={field.state.value}
                                         onChange={(v) => {
                                             field.handleChange(v);
-                                            if (v.length === 6)
+                                            if (v.length === OTP_LENGTH)
                                                 handleOtpComplete();
                                         }}
                                         readOnly={isBusy}
@@ -289,12 +293,15 @@ function OtpStage({
                                         id={field.name}
                                     >
                                         <InputOTPGroup>
-                                            <InputOTPSlot index={0} />
-                                            <InputOTPSlot index={1} />
-                                            <InputOTPSlot index={2} />
-                                            <InputOTPSlot index={3} />
-                                            <InputOTPSlot index={4} />
-                                            <InputOTPSlot index={5} />
+                                            {Array.from(
+                                                { length: OTP_LENGTH },
+                                                (_, i) => (
+                                                    <InputOTPSlot
+                                                        key={i}
+                                                        index={i}
+                                                    />
+                                                ),
+                                            )}
                                         </InputOTPGroup>
                                     </InputOTP>
                                 </Field>
@@ -395,10 +402,10 @@ export default function AuthForm() {
                 <EmailStage
                     countdown={countdown}
                     throttledEmail={throttledEmail}
-                    onSent={(email, resendAvailableAt) => {
+                    onSent={(email) => {
                         setSent({ email });
                         setThrottledEmail(email.trim().toLowerCase());
-                        countdown.start(resendAvailableAt);
+                        countdown.start(OTP_RESEND_COOLDOWN_SECONDS);
                     }}
                 />
             )}

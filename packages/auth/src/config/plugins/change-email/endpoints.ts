@@ -2,272 +2,290 @@ import { BASE_ERROR_CODES } from 'better-auth';
 import {
     APIError,
     createAuthEndpoint,
-    originCheck,
     sensitiveSessionMiddleware,
 } from 'better-auth/api';
 import { setSessionCookie } from 'better-auth/cookies';
+import { generateRandomString } from 'better-auth/crypto';
 import { z } from 'zod';
 
-import { CHANGE_EMAIL_STAGES } from '@shipkit/shared/constants';
-
-import type { ChangeEmailPluginOptions, PendingEmailChange } from './types';
+import type { ChangeEmailPluginOptions } from '.';
 
 import {
     normalizeEmail,
     runEmailValidationPipeline,
 } from '../../utils/email-validation';
+import { enforceResendCooldown } from '../../utils/resend-cooldown';
 import {
-    DEFAULT_RESEND_COOLDOWN_SECONDS,
-    enforceResendCooldown,
-} from '../../utils/resend-cooldown';
-import {
-    clearExistingRequest,
-    confirmThrottleKey,
+    assertNoQuotaBlock,
+    claimRequest,
+    clearRequest,
     getQuotaBlock,
-    issueToken,
-    pendingChangeKey,
-    readPending,
-    readQuota,
     recordCompletedChange,
-    redirectWithError,
-    resolveTokenLink,
-    tokenIndexKey,
-    verifyThrottleKey,
+    redeemCode,
+    storeRequest,
 } from './helpers';
 
-const DEFAULT_EXPIRES_IN_MINUTES = 60;
+const otpBody = (length: number) =>
+    z.object({ otp: z.string().length(length).regex(/^\d+$/) });
 
-// Shared by the two email-link endpoints (confirm + verify).
-const tokenLinkQuery = z.object({
-    token: z.string(),
-    callbackURL: z.string().optional(),
-});
-const callbackOriginCheck = originCheck(
-    (ctx) => (ctx.query as Record<string, string>).callbackURL ?? '/',
-);
-
-// POST /change-email/request
-export function createRequestChangeEmail({
+// POST /change-email/send-confirmation — step 1: code to the CURRENT email
+export function createSendChangeEmailConfirmation({
     onSendChangeEmail,
-    expiresInMinutes,
-    resendCooldownSeconds,
+    otp: otpConfig,
 }: ChangeEmailPluginOptions) {
     return createAuthEndpoint(
-        '/change-email/request',
+        '/change-email/send-confirmation',
         {
             method: 'POST',
             requireHeaders: true,
             use: [sensitiveSessionMiddleware],
-            body: z.object({
-                newEmail: z.email(),
-                callbackURL: z.string().optional(),
-            }),
         },
         async (ctx) => {
-            if (!onSendChangeEmail) {
-                throw new APIError('BAD_REQUEST', {
-                    code: BASE_ERROR_CODES.CHANGE_EMAIL_DISABLED.code,
-                    message: BASE_ERROR_CODES.CHANGE_EMAIL_DISABLED.message,
-                });
-            }
+            const { user } = ctx.context.session;
+            await assertNoQuotaBlock(ctx, user.id);
 
-            const currentUser = ctx.context.session.user;
+            await enforceResendCooldown(
+                ctx,
+                `change-email-resend-cooldown:${user.id}`,
+                otpConfig.resendCooldownSeconds,
+            );
 
-            const block = getQuotaBlock(await readQuota(ctx, currentUser.id));
-            if (block) {
-                throw new APIError('TOO_MANY_REQUESTS', {
-                    code: BASE_ERROR_CODES.EMAIL_CAN_NOT_BE_UPDATED.code,
-                    message:
-                        block.reason === 'LIMIT_REACHED'
-                            ? 'Email change limit reached.'
-                            : 'Please wait before changing your email again.',
-                });
-            }
+            // Starting over invalidates any earlier code, grant and new-email code.
+            await clearRequest(ctx, user.id);
+
+            const otp = generateRandomString(otpConfig.length, '0-9');
+            const email =
+                (user as { displayEmail?: string }).displayEmail ?? user.email;
+
+            await storeRequest(ctx, user.id, {
+                value: {
+                    phase: 'confirmation',
+                    code: { otp, attempts: 0 },
+                    sends: 0,
+                },
+                expiresAt: new Date(
+                    Date.now() + otpConfig.expiresInMinutes * 60_000,
+                ),
+            });
+
+            await ctx.context.runInBackgroundOrAwait(
+                onSendChangeEmail({
+                    stage: 'confirmation',
+                    email,
+                    otp,
+                    expiresInMinutes: otpConfig.expiresInMinutes,
+                }),
+            );
+
+            return ctx.json({ success: true });
+        },
+    );
+}
+
+// POST /change-email/confirm — step 2: check the confirmation code, grant access
+export function createConfirmChangeEmail({
+    otp: otpConfig,
+}: Pick<ChangeEmailPluginOptions, 'otp'>) {
+    return createAuthEndpoint(
+        '/change-email/confirm',
+        {
+            method: 'POST',
+            requireHeaders: true,
+            body: otpBody(otpConfig.length),
+            use: [sensitiveSessionMiddleware],
+        },
+        async (ctx) => {
+            const { user } = ctx.context.session;
+
+            await redeemCode(
+                ctx,
+                user.id,
+                'confirmation',
+                ctx.body.otp,
+                otpConfig.allowedAttempts,
+            );
+            await storeRequest(ctx, user.id, {
+                value: { phase: 'verification', sends: 0 },
+                expiresAt: new Date(
+                    Date.now() + otpConfig.expiresInMinutes * 60_000,
+                ),
+            });
+
+            return ctx.json({ success: true });
+        },
+    );
+}
+
+// POST /change-email/send-verification — step 3: code to the NEW email
+export function createSendChangeEmailVerification({
+    onSendChangeEmail,
+    otp: otpConfig,
+    maxVerificationSends,
+}: ChangeEmailPluginOptions) {
+    return createAuthEndpoint(
+        '/change-email/send-verification',
+        {
+            method: 'POST',
+            requireHeaders: true,
+            body: z.object({ newEmail: z.email() }),
+            use: [sensitiveSessionMiddleware],
+        },
+        async (ctx) => {
+            const { user } = ctx.context.session;
 
             const { sanitized, normalized } = await runEmailValidationPipeline(
                 ctx.body.newEmail,
                 ctx.context.internalAdapter,
             );
-
-            // Both sides are normalized — safe comparison (currentUser.email is always the normalized form stored in DB)
-            if (normalized === currentUser.email) {
+            // Both sides are normalized — safe comparison (user.email is always the normalized form stored in DB)
+            if (normalized === user.email) {
                 throw new APIError('BAD_REQUEST', {
                     message: 'New email must be different from current email',
                 });
             }
 
-            const { resendAvailableAt } = await enforceResendCooldown(
-                ctx,
-                confirmThrottleKey(normalized),
-                resendCooldownSeconds ?? DEFAULT_RESEND_COOLDOWN_SECONDS,
-            );
-
-            await clearExistingRequest(ctx, currentUser.id);
-
-            const { token, expiresAt } = await issueToken(
-                ctx,
-                currentUser.id,
-                expiresInMinutes ?? DEFAULT_EXPIRES_IN_MINUTES,
-            );
-
-            await ctx.context.internalAdapter.createVerificationValue({
-                identifier: pendingChangeKey(currentUser.id),
-                value: JSON.stringify({
-                    newEmail: sanitized,
-                    stage: CHANGE_EMAIL_STAGES.AwaitingConfirmation,
-                    token,
-                } satisfies PendingEmailChange),
-                expiresAt,
-            });
-
-            await ctx.context.runInBackgroundOrAwait(
-                onSendChangeEmail.confirmation({
-                    currentEmail: currentUser.email,
-                    newEmail: sanitized,
-                    token,
-                    callbackURL: ctx.body.callbackURL ?? '',
-                }),
-            );
-
-            return ctx.json({ success: true, resendAvailableAt });
-        },
-    );
-}
-
-// GET /change-email/confirm — click from the CURRENT inbox.
-export function createConfirmChangeEmail({
-    onSendChangeEmail,
-    expiresInMinutes,
-}: Omit<ChangeEmailPluginOptions, 'resendCooldownSeconds'>) {
-    return createAuthEndpoint(
-        '/change-email/confirm',
-        {
-            method: 'GET',
-            requireHeaders: true,
-            query: tokenLinkQuery,
-            use: [callbackOriginCheck],
-        },
-        async (ctx) => {
-            if (!onSendChangeEmail) {
-                throw new APIError('BAD_REQUEST', {
-                    code: BASE_ERROR_CODES.CHANGE_EMAIL_DISABLED.code,
-                    message: BASE_ERROR_CODES.CHANGE_EMAIL_DISABLED.message,
+            const request = await claimRequest(ctx, user.id);
+            if (request.value.phase !== 'verification') {
+                await storeRequest(ctx, user.id, request);
+                throw new APIError('FORBIDDEN', {
+                    message:
+                        'Confirm the code sent to your current email first.',
                 });
             }
 
-            const { token, callbackURL } = ctx.query;
-            const { userId, pending } = await resolveTokenLink(
-                ctx,
-                ctx.query,
-                CHANGE_EMAIL_STAGES.AwaitingConfirmation,
-            );
+            // Soft failure: budget is spent, store request back so last code remains valid.
+            if (request.value.sends >= maxVerificationSends) {
+                await storeRequest(ctx, user.id, request);
+                throw new APIError('TOO_MANY_REQUESTS', {
+                    message: 'Too many codes requested. Please start over.',
+                });
+            }
 
-            const next = await issueToken(
-                ctx,
-                userId,
-                expiresInMinutes ?? DEFAULT_EXPIRES_IN_MINUTES,
-            );
+            const now = Date.now();
+            const cooldownMs = otpConfig.resendCooldownSeconds * 1000;
+            if (
+                request.value.lastSentAt &&
+                now < request.value.lastSentAt + cooldownMs
+            ) {
+                // Soft failure: put the request back untouched.
+                await storeRequest(ctx, user.id, request);
+                throw new APIError('TOO_MANY_REQUESTS', {
+                    message:
+                        'Please wait a few seconds before requesting another email.',
+                });
+            }
 
-            await Promise.all([
-                ctx.context.internalAdapter.updateVerificationByIdentifier(
-                    pendingChangeKey(userId),
-                    {
-                        value: JSON.stringify({
-                            ...pending,
-                            stage: CHANGE_EMAIL_STAGES.AwaitingVerification,
-                            token: next.token,
-                        } satisfies PendingEmailChange),
-                        expiresAt: next.expiresAt,
-                    },
+            const otp = generateRandomString(otpConfig.length, '0-9');
+            const sends = request.value.sends + 1;
+
+            await storeRequest(ctx, user.id, {
+                value: {
+                    phase: 'verification',
+                    sends,
+                    lastSentAt: now,
+                    code: { email: sanitized, otp, attempts: 0 },
+                },
+                // The pending code and the row expire together.
+                expiresAt: new Date(
+                    Date.now() + otpConfig.expiresInMinutes * 60_000,
                 ),
-                // Delete the now-consumed confirmation token index row
-                ctx.context.internalAdapter
-                    .deleteVerificationByIdentifier(tokenIndexKey(token))
-                    .catch(() => null), // best-effort; orphan on failure is harmless
-            ]);
-
+            });
             await ctx.context.runInBackgroundOrAwait(
-                onSendChangeEmail.verification({
-                    newEmail: pending.newEmail,
-                    token: next.token,
-                    callbackURL: callbackURL ?? '',
+                onSendChangeEmail({
+                    stage: 'verification',
+                    email: sanitized,
+                    otp,
+                    expiresInMinutes: otpConfig.expiresInMinutes,
                 }),
             );
 
-            throw ctx.redirect(callbackURL ?? '/');
+            return ctx.json({ success: true });
         },
     );
 }
 
-// GET /change-email/verify — click from the NEW inbox; applies the change.
-export function createVerifyChangeEmail() {
+// POST /change-email/verify — step 4: check the verification code; applies the change.
+export function createVerifyChangeEmail({
+    onSendChangeEmail,
+    otp: otpConfig,
+}: ChangeEmailPluginOptions) {
     return createAuthEndpoint(
         '/change-email/verify',
         {
-            method: 'GET',
+            method: 'POST',
             requireHeaders: true,
-            query: tokenLinkQuery,
-            use: [callbackOriginCheck],
+            body: otpBody(otpConfig.length),
+            use: [sensitiveSessionMiddleware],
         },
         async (ctx) => {
-            const { token, callbackURL } = ctx.query;
-            const { userId, pending, activeSession } = await resolveTokenLink(
+            const { user, session } = ctx.context.session;
+            await assertNoQuotaBlock(ctx, user.id);
+
+            // Stored in its sanitized form; normalize on demand for the lookup and the write.
+            const code = await redeemCode(
                 ctx,
-                ctx.query,
-                CHANGE_EMAIL_STAGES.AwaitingVerification,
+                user.id,
+                'verification',
+                ctx.body.otp,
+                otpConfig.allowedAttempts,
             );
 
-            // pending.newEmail is the sanitized form; normalize on-demand for the DB lookup and the final write
-            const sanitized = pending.newEmail;
+            // We know phase is verification so email is present.
+            const sanitized = code.email!;
             const normalized = normalizeEmail(sanitized);
+            // Captured BEFORE the update so the notice reaches the old address.
+            const previousEmail =
+                (user as { displayEmail?: string }).displayEmail ?? user.email;
 
-            // Late-binding duplicate check: the window between requestChangeEmail
-            // and verifyChangeEmail could be minutes or hours, so we re-check just before committing.
+            // Checked only after the code is proven, so this can't be used
+            // to probe which addresses are registered.
             if (await ctx.context.internalAdapter.findUserByEmail(normalized)) {
-                redirectWithError(ctx, callbackURL, 'USER_ALREADY_EXISTS');
+                throw new APIError('BAD_REQUEST', {
+                    code: BASE_ERROR_CODES.USER_ALREADY_EXISTS.code,
+                    message:
+                        'Email already exists. Please start over with a different email.',
+                });
             }
 
-            // Every check has passed — burn the token now.
-            const claimed = await ctx.context.internalAdapter
-                .consumeVerificationValue(tokenIndexKey(token))
-                .catch(() => null);
-            if (!claimed) redirectWithError(ctx, callbackURL, 'INVALID_TOKEN');
-
             const updatedUser = await ctx.context.internalAdapter
-                .updateUser(userId, {
+                .updateUser(user.id, {
                     email: normalized,
                     displayEmail: sanitized,
                     emailVerified: true,
                 })
                 .catch(() => null);
 
-            // The token is spent whether or not the write succeeded, so the
-            // pending row is dead either way.
-            await ctx.context.internalAdapter
-                .deleteVerificationByIdentifier(pendingChangeKey(userId))
-                .catch(() => null);
-
             // Probably a concurrent registration claimed this email between the
             // duplicate check and the write.
             if (!updatedUser) {
-                redirectWithError(ctx, callbackURL, 'USER_ALREADY_EXISTS');
-            }
-
-            await recordCompletedChange(ctx, userId);
-
-            if (activeSession) {
-                await setSessionCookie(ctx, {
-                    session: activeSession.session,
-                    user: updatedUser,
+                throw new APIError('BAD_REQUEST', {
+                    code: BASE_ERROR_CODES.USER_ALREADY_EXISTS.code,
+                    message:
+                        'Email already exists. Please start over with a different email.',
                 });
             }
 
-            throw ctx.redirect(callbackURL ?? '/');
+            await recordCompletedChange(ctx, user.id);
+            await setSessionCookie(ctx, { session, user: updatedUser });
+
+            // Best-effort notice to the OLD address. A mail failure must not
+            // fail a change that has already been applied.
+            await ctx.context.runInBackgroundOrAwait(
+                onSendChangeEmail({
+                    stage: 'notification',
+                    email: previousEmail,
+                    newEmail: sanitized,
+                }).catch(() => {
+                    /* empty */
+                }),
+            );
+
+            return ctx.json({ success: true });
         },
     );
 }
 
-// GET /change-email/status — non-destructive read for the settings page.
+// GET /change-email/status
 export function createChangeEmailStatus() {
     return createAuthEndpoint(
         '/change-email/status',
@@ -278,94 +296,8 @@ export function createChangeEmailStatus() {
         },
         async (ctx) => {
             const userId = ctx.context.session.user.id;
-            const [pending, quota] = await Promise.all([
-                readPending(ctx, userId),
-                readQuota(ctx, userId),
-            ]);
-
-            const block = getQuotaBlock(quota);
-            const disallowedUntil = block?.until;
-
-            if (!pending)
-                return ctx.json(
-                    disallowedUntil != null ? { disallowedUntil } : null,
-                );
-
-            return ctx.json({
-                newEmail: pending.newEmail,
-                stage: pending.stage,
-                ...(disallowedUntil != null && { disallowedUntil }),
-            });
-        },
-    );
-}
-
-// POST /change-email/cancel
-export function createCancelChangeEmail() {
-    return createAuthEndpoint(
-        '/change-email/cancel',
-        {
-            method: 'POST',
-            requireHeaders: true,
-            use: [sensitiveSessionMiddleware],
-        },
-        async (ctx) => {
-            await clearExistingRequest(ctx, ctx.context.session.user.id);
-            return ctx.json({ success: true });
-        },
-    );
-}
-
-// POST /change-email/resend-verification
-export function createResendVerificationChangeEmail({
-    onSendChangeEmail,
-    resendCooldownSeconds,
-}: Omit<ChangeEmailPluginOptions, 'expiresInMinutes'>) {
-    return createAuthEndpoint(
-        '/change-email/resend-verification',
-        {
-            method: 'POST',
-            requireHeaders: true,
-            use: [sensitiveSessionMiddleware],
-            body: z.object({
-                callbackURL: z.string().optional(),
-            }),
-        },
-        async (ctx) => {
-            if (!onSendChangeEmail) {
-                throw new APIError('BAD_REQUEST', {
-                    code: BASE_ERROR_CODES.CHANGE_EMAIL_DISABLED.code,
-                    message: BASE_ERROR_CODES.CHANGE_EMAIL_DISABLED.message,
-                });
-            }
-
-            const currentUser = ctx.context.session.user;
-            const pending = await readPending(ctx, currentUser.id);
-
-            if (
-                !pending ||
-                pending.stage !== CHANGE_EMAIL_STAGES.AwaitingVerification
-            ) {
-                throw new APIError('BAD_REQUEST', {
-                    message: 'No pending email change awaiting verification.',
-                });
-            }
-
-            const { resendAvailableAt } = await enforceResendCooldown(
-                ctx,
-                verifyThrottleKey(normalizeEmail(pending.newEmail)),
-                resendCooldownSeconds ?? DEFAULT_RESEND_COOLDOWN_SECONDS,
-            );
-
-            await ctx.context.runInBackgroundOrAwait(
-                onSendChangeEmail.verification({
-                    newEmail: pending.newEmail,
-                    token: pending.token,
-                    callbackURL: ctx.body.callbackURL ?? '',
-                }),
-            );
-
-            return ctx.json({ resendAvailableAt });
+            const block = await getQuotaBlock(ctx, userId);
+            return ctx.json(block ? { disallowedUntil: block.until } : null);
         },
     );
 }

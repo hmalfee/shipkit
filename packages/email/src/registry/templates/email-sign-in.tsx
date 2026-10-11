@@ -1,5 +1,6 @@
 import { Button, Heading, Link, Section, Text } from 'react-email';
 
+import { OTP_LENGTH } from '@shipkit/shared/constants';
 import { buttonVariants } from '@shipkit/ui/components/button';
 import { cn } from '@shipkit/ui/lib/utils';
 
@@ -8,7 +9,7 @@ import { Layout } from './layout';
 
 type EmailSignInProps = {
     magicLink: string;
-    otp: string; // 6-digit numeric string e.g. "048291" — always digits
+    otp: string;
     expiresInMinutes: number;
     unsubscribeUrl?: string;
 };
@@ -49,7 +50,7 @@ function EmailSignIn({
 
             {/* Numeric OTP block */}
             <Text className="text-muted-foreground m-0 mt-8 text-xs font-medium tracking-widest uppercase">
-                Or enter this 6-digit code on the sign-in page:
+                Or enter this {OTP_LENGTH}-digit code on the sign-in page:
             </Text>
             <Section className="bg-muted mt-4 rounded-lg px-5 py-4 text-center">
                 <Text className="text-foreground m-0 font-mono text-4xl font-bold tracking-[0.35em]">
@@ -84,8 +85,11 @@ function EmailSignIn({
 
 EmailSignIn.PreviewProps = {
     magicLink: 'https://shipkit.io/verify',
-    otp: '048291',
-    expiresInMinutes: 15,
+    otp: String(Math.floor(Math.random() * Math.pow(10, OTP_LENGTH))).padStart(
+        OTP_LENGTH,
+        '0',
+    ),
+    expiresInMinutes: 10,
 } satisfies EmailSignInProps;
 
 export default EmailSignIn;

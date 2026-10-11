@@ -11,12 +11,10 @@ import { revokeUnprovenAccountAccess } from 'better-auth/db';
 import { z } from 'zod';
 
 import type { BetterAuthPlugin, GenericEndpointContext } from 'better-auth';
+import type { OtpConfig } from '../types';
 
 import { runEmailValidationPipeline } from '../utils/email-validation';
-import {
-    DEFAULT_RESEND_COOLDOWN_SECONDS,
-    enforceResendCooldown,
-} from '../utils/resend-cooldown';
+import { enforceResendCooldown } from '../utils/resend-cooldown';
 
 function otpKey(normalizedEmail: string) {
     return `email-auth-otp:${normalizedEmail}`;
@@ -38,22 +36,19 @@ type TokenValue = {
     name?: string;
 };
 
-export type EmailSignInOptions = {
-    onSendSignInEmail:
-        | ((payload: {
-              email: string;
-              otp: string;
-              magicLink: {
-                  url: string;
-                  token: string;
-              };
-              expiresInMinutes: number;
-          }) => Promise<void>)
-        | undefined;
-    expiresInMinutes?: number;
-    allowedAttempts?: number;
+export type EmailSignInPluginOptions = {
+    onSendSignInEmail: (payload: {
+        email: string;
+        otp: string;
+        magicLink: {
+            token: string;
+            /** The callbackURL the client passed to sign-in ('' if none). */
+            callbackURL: string;
+        };
+        expiresInMinutes: number;
+    }) => Promise<void>;
+    otp: OtpConfig;
     disableSignUp?: boolean;
-    resendCooldownSeconds?: number;
 };
 
 async function findOrCreateUser(
@@ -93,11 +88,13 @@ async function findOrCreateUser(
     return user;
 }
 
-export function emailSignInPlugin(opts: EmailSignInOptions) {
-    const expiresInMinutes = opts.expiresInMinutes ?? 15;
-    const allowedAttempts = opts.allowedAttempts ?? 3;
-    const resendCooldownSeconds =
-        opts.resendCooldownSeconds ?? DEFAULT_RESEND_COOLDOWN_SECONDS;
+export function emailSignInPlugin(opts: EmailSignInPluginOptions) {
+    const {
+        length: otpLength,
+        expiresInMinutes,
+        allowedAttempts,
+        resendCooldownSeconds,
+    } = opts.otp;
 
     return {
         id: 'email-sign-in',
@@ -122,7 +119,7 @@ export function emailSignInPlugin(opts: EmailSignInOptions) {
                             ctx.context.internalAdapter,
                         );
 
-                    const { resendAvailableAt } = await enforceResendCooldown(
+                    await enforceResendCooldown(
                         ctx,
                         `email-auth-resend-cooldown:${normalized}`,
                         resendCooldownSeconds,
@@ -133,7 +130,7 @@ export function emailSignInPlugin(opts: EmailSignInOptions) {
                         Date.now() + expiresInMinutes * 60_000,
                     );
 
-                    const otp = generateRandomString(6, '0-9');
+                    const otp = generateRandomString(otpLength, '0-9');
                     const token = generateRandomString(32, 'a-z', 'A-Z');
 
                     await Promise.all([
@@ -166,31 +163,24 @@ export function emailSignInPlugin(opts: EmailSignInOptions) {
                         }),
                     ]);
 
-                    const linkUrl = new URL(
-                        '/auth/email/verify-magic-link',
-                        ctx.context.baseURL,
-                    );
-                    linkUrl.searchParams.set('token', token);
-                    if (callbackURL)
-                        linkUrl.searchParams.set('callbackURL', callbackURL);
-
                     // Fire-and-forget via the platform-aware helper (handles
                     // serverless waitUntil semantics better than a bare `void`).
-                    if (opts.onSendSignInEmail) {
-                        await ctx.context.runInBackgroundOrAwait(
-                            opts.onSendSignInEmail({
-                                // Sanitized, not normalized — this goes straight to the user
-                                // (as the "to" address and/or shown in the email body), so it
-                                // should match what they typed, not the collapsed lookup form.
-                                email: sanitized,
-                                otp,
-                                magicLink: { url: linkUrl.toString(), token },
-                                expiresInMinutes,
-                            }),
-                        );
-                    }
+                    await ctx.context.runInBackgroundOrAwait(
+                        opts.onSendSignInEmail({
+                            // Sanitized, not normalized — this goes straight to the user
+                            // (as the "to" address and/or shown in the email body), so it
+                            // should match what they typed, not the collapsed lookup form.
+                            email: sanitized,
+                            otp,
+                            magicLink: {
+                                token,
+                                callbackURL: callbackURL ?? '',
+                            },
+                            expiresInMinutes,
+                        }),
+                    );
 
-                    return ctx.json({ success: true, resendAvailableAt });
+                    return ctx.json({ success: true });
                 },
             ),
 
@@ -202,7 +192,7 @@ export function emailSignInPlugin(opts: EmailSignInOptions) {
                     requireHeaders: true,
                     body: z.object({
                         email: z.email(),
-                        otp: z.string().regex(/^\d{6}$/),
+                        otp: z.string().length(otpLength).regex(/^\d+$/),
                         name: z.string().optional(),
                     }),
                 },

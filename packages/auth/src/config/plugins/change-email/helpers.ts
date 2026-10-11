@@ -1,40 +1,46 @@
 import { BASE_ERROR_CODES } from 'better-auth';
-import { APIError, getSessionFromCtx } from 'better-auth/api';
-import { generateRandomString } from 'better-auth/crypto';
+import { APIError } from 'better-auth/api';
+import { constantTimeEqual } from 'better-auth/crypto';
 
 import type { GenericEndpointContext } from 'better-auth';
-import type { PendingEmailChange, QuotaData, TokenOwner } from './types';
 
 const CHANGE_EMAIL_WINDOW_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const CHANGE_EMAIL_MAX_PER_WINDOW = 3;
 const CHANGE_EMAIL_COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24 hours
 
-export function pendingChangeKey(userId: string) {
-    return `change-email:${userId}`;
-}
-export function tokenIndexKey(token: string) {
-    return `change-email-token:${token}`;
-}
-export function confirmThrottleKey(email: string) {
-    return `change-email-resend-cooldown-confirm:${email}`;
-}
-export function verifyThrottleKey(email: string) {
-    return `change-email-resend-cooldown-verify:${email}`;
-}
+type QuotaData = {
+    /** Completed changes in the current window. */
+    count: number;
+    /** Timestamp of the first completed change in the window. */
+    windowStart: number;
+    /** Timestamp of the most recent completed change. */
+    lastChangeAt?: number;
+};
+
+export type ChangeEmailStage = 'confirmation' | 'verification';
+
+type RequestValue = {
+    /** `confirmation`: waiting for the code sent to the current email.
+     *  `verification`: step-up done, codes go to the new email. */
+    phase: ChangeEmailStage;
+    /** The code waiting to be typed. Removed once its attempts run out.
+     *  `email` (sanitized new address) is only set in `verification`. */
+    code?: { otp: string; attempts: number; email?: string };
+    /** Verification emails sent so far, and when the last one went out. */
+    sends: number;
+    lastSentAt?: number;
+};
+
 function quotaKey(userId: string) {
     return `change-email-quota:${userId}`;
 }
+function requestKey(userId: string) {
+    return `change-email-request:${userId}`;
+}
 
-// ---------------------------------------------------------------------------
-// Quota
-// ---------------------------------------------------------------------------
+// ---------- Quota management ----------
 
-export type QuotaBlock = {
-    until: number; // timestamp when the user may request again
-    reason: 'LIMIT_REACHED' | 'COOLDOWN';
-};
-
-export async function readQuota(
+async function readQuota(
     ctx: GenericEndpointContext,
     userId: string,
 ): Promise<QuotaData | null> {
@@ -44,13 +50,17 @@ export async function readQuota(
     return row ? (JSON.parse(row.value) as QuotaData) : null;
 }
 
-// Pure: is this quota blocking a new request right now?
-export function getQuotaBlock(
-    quota: QuotaData | null,
-    now = Date.now(),
-): QuotaBlock | null {
+export async function getQuotaBlock(
+    ctx: GenericEndpointContext,
+    userId: string,
+): Promise<{
+    until: number;
+    reason: 'LIMIT_REACHED' | 'COOLDOWN';
+} | null> {
+    const quota = await readQuota(ctx, userId);
     if (!quota) return null;
 
+    const now = Date.now();
     const windowEnd = quota.windowStart + CHANGE_EMAIL_WINDOW_MS;
     const limitUntil =
         now < windowEnd && quota.count >= CHANGE_EMAIL_MAX_PER_WINDOW
@@ -69,7 +79,22 @@ export function getQuotaBlock(
     };
 }
 
-// Call ONLY after the email change has actually been applied.
+export async function assertNoQuotaBlock(
+    ctx: GenericEndpointContext,
+    userId: string,
+) {
+    const block = await getQuotaBlock(ctx, userId);
+    if (!block) return;
+
+    throw new APIError('TOO_MANY_REQUESTS', {
+        code: BASE_ERROR_CODES.EMAIL_CAN_NOT_BE_UPDATED.code,
+        message:
+            block.reason === 'LIMIT_REACHED'
+                ? 'Email change limit reached.'
+                : 'Please wait before changing your email again.',
+    });
+}
+
 export async function recordCompletedChange(
     ctx: GenericEndpointContext,
     userId: string,
@@ -107,102 +132,78 @@ export async function recordCompletedChange(
     }
 }
 
-// ---------------------------------------------------------------------------
-// Pending request + tokens
-// ---------------------------------------------------------------------------
+// ---------- Request management ----------
 
-export async function readPending(
+export async function claimRequest(
     ctx: GenericEndpointContext,
     userId: string,
-): Promise<PendingEmailChange | null> {
-    const row = await ctx.context.internalAdapter
-        .findVerificationValue(pendingChangeKey(userId))
-        .catch(() => null);
-    return row ? (JSON.parse(row.value) as PendingEmailChange) : null;
+): Promise<{ value: RequestValue; expiresAt: Date }> {
+    const row = await ctx.context.internalAdapter.consumeVerificationValue(
+        requestKey(userId),
+    );
+    if (!row || row.expiresAt.getTime() <= Date.now())
+        throw new APIError('FORBIDDEN', {
+            message: 'Confirm the code sent to your current email first.',
+        });
+    return {
+        value: JSON.parse(row.value) as RequestValue,
+        expiresAt: row.expiresAt,
+    };
 }
 
-export async function clearExistingRequest(
+export function storeRequest(
     ctx: GenericEndpointContext,
     userId: string,
+    request: { value: RequestValue; expiresAt: Date },
 ) {
-    const pending = await readPending(ctx, userId);
-    if (!pending) return;
-
-    // Delete all rows together; failures are best-effort
-    await Promise.allSettled([
-        ctx.context.internalAdapter.deleteVerificationByIdentifier(
-            pendingChangeKey(userId),
-        ),
-        ctx.context.internalAdapter.deleteVerificationByIdentifier(
-            tokenIndexKey(pending.token),
-        ),
-    ]);
-}
-
-// Mints a token and indexes it, so a clicked link can be traced back to its user.
-export async function issueToken(
-    ctx: GenericEndpointContext,
-    userId: string,
-    expiresInMinutes: number,
-) {
-    const token = generateRandomString(32, 'a-z', 'A-Z');
-    const expiresAt = new Date(Date.now() + expiresInMinutes * 60_000);
-
-    await ctx.context.internalAdapter.createVerificationValue({
-        identifier: tokenIndexKey(token),
-        value: JSON.stringify({ userId } satisfies TokenOwner),
-        expiresAt,
+    return ctx.context.internalAdapter.createVerificationValue({
+        identifier: requestKey(userId),
+        value: JSON.stringify(request.value),
+        expiresAt: request.expiresAt,
     });
-
-    return { token, expiresAt };
 }
 
-// ---------------------------------------------------------------------------
-// Email-link endpoints (confirm + verify)
-// ---------------------------------------------------------------------------
-
-export function redirectWithError(
+export async function redeemCode(
     ctx: GenericEndpointContext,
-    callbackURL: string | undefined,
-    code: keyof typeof BASE_ERROR_CODES,
-): never {
-    const error = BASE_ERROR_CODES[code];
-    if (!callbackURL) {
-        throw new APIError('UNAUTHORIZED', {
-            code: error.code,
-            message: error.message,
+    userId: string,
+    phase: RequestValue['phase'],
+    otp: string,
+    maxAttempts: number,
+) {
+    const request = await claimRequest(ctx, userId);
+    const { code, ...rest } = request.value;
+    if (request.value.phase !== phase || !code) {
+        await storeRequest(ctx, userId, request); // soft failure, put it back untouched
+        throw new APIError('BAD_REQUEST', {
+            code: BASE_ERROR_CODES.INVALID_TOKEN.code,
+            message: 'Request a code first.',
         });
     }
-    const url = new URL(callbackURL, ctx.context.baseURL);
-    url.searchParams.set('error', error.code.toLocaleLowerCase());
-    throw ctx.redirect(url.toString());
+    if (constantTimeEqual(code.otp, otp.trim())) return code;
+
+    const attempts = code.attempts + 1;
+    const locked = attempts >= maxAttempts;
+    await storeRequest(ctx, userId, {
+        ...request,
+        value: locked ? rest : { ...rest, code: { ...code, attempts } },
+    });
+    throw locked
+        ? new APIError('TOO_MANY_REQUESTS', {
+              message: 'Too many attempts. Please request a new code.',
+          })
+        : new APIError('BAD_REQUEST', {
+              code: BASE_ERROR_CODES.INVALID_TOKEN.code,
+              message: 'Code is invalid.',
+          });
 }
 
-// Resolves an emailed token to its pending request and redirects with an error
-// unless everything lines up for the expected stage.
-export async function resolveTokenLink(
+export async function clearRequest(
     ctx: GenericEndpointContext,
-    { token, callbackURL }: { token: string; callbackURL?: string },
-    stage: PendingEmailChange['stage'],
+    userId: string,
 ) {
-    const tokenRow = await ctx.context.internalAdapter
-        .findVerificationValue(tokenIndexKey(token))
-        .catch(() => null);
-    if (!tokenRow || tokenRow.expiresAt.getTime() < Date.now()) {
-        redirectWithError(ctx, callbackURL, 'INVALID_TOKEN');
-    }
-    const { userId } = JSON.parse(tokenRow.value) as TokenOwner;
-
-    const pending = await readPending(ctx, userId);
-    if (!pending || pending.stage !== stage || pending.token !== token) {
-        redirectWithError(ctx, callbackURL, 'INVALID_TOKEN');
-    }
-
-    // The link may be opened in a browser signed in as someone else
-    const activeSession = await getSessionFromCtx(ctx).catch(() => null);
-    if (activeSession && activeSession.user.id !== userId) {
-        redirectWithError(ctx, callbackURL, 'INVALID_USER');
-    }
-
-    return { userId, pending, activeSession };
+    return ctx.context.internalAdapter
+        .deleteVerificationByIdentifier(requestKey(userId))
+        .catch(() => {
+            // ignore
+        });
 }

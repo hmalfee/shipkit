@@ -29,6 +29,30 @@ interface RateLimitSystem {
     logger: Logger;
 }
 
+/**
+ * Rate limit tiers, ordered from most to least restrictive.
+ * `limit` = max requests, `blockDuration` = seconds blocked once exceeded.
+ *
+ * Pick a tier based on how risky or expensive an endpoint is to abuse,
+ * not on what the endpoint does.
+ */
+export const RATE_LIMIT_PRESETS = {
+    // Expensive or high-impact, and legit users rarely repeat it
+    // (e.g. sensitive account changes that trigger an email).
+    STRICT: { limit: 5, blockDuration: 3600 }, // 1 hour
+
+    // Abusable (spam, or guessing a short secret), but users may
+    // legitimately retry a few times (typos, "didn't get the email").
+    MODERATE: { limit: 5, blockDuration: 900 }, // 15 min
+
+    // Authenticated and cheap, but still worth guarding against spam.
+    STANDARD: { limit: 10, blockDuration: 60 }, // 1 min
+
+    // Cheap and not guessable (long random tokens, protected redirects).
+    // Only guards against floods; generous for shared IPs and link scanners.
+    RELAXED: { limit: 20, blockDuration: 60 }, // 1 min
+} as const;
+
 const V4_MAPPED = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/i;
 let _ipWarnOnce = false;
 
