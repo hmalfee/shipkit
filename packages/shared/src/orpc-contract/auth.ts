@@ -53,7 +53,7 @@ export const auth = group('/auth', {
                     FORBIDDEN: {},
                 })
                 .responses({
-                    OK: UserSchema.omit({ image: true }),
+                    OK: undefined,
                 }),
             magicLink: rb
                 .query('/magic-link')

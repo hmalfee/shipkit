@@ -50,14 +50,10 @@ export const auth = os.auth.router({
                             message: 'Too many attempts',
                         });
                     try {
-                        const res = await context.auth.verifyOtp(input.body);
+                        await context.auth.verifyOtp(input.body);
                         return {
                             status: 200,
-                            body: {
-                                id: res.user.id,
-                                name: res.user.name,
-                                email: res.user.email,
-                            },
+                            body: undefined,
                         };
                     } catch (err) {
                         handleAuthError(err, errors);

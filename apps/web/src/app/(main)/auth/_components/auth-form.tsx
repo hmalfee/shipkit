@@ -213,10 +213,8 @@ function OtpStage({
 
     const { useMutation, inputSchema } = api.auth.email.verify.otp;
     const verifyOtp = useMutation({
-        onSuccess: (data) => {
+        onSuccess: () => {
             void utils.auth.me.invalidateQuery();
-            const firstName = data.body.name.split(' ')[0] ?? 'back';
-            toast.success(`Welcome back, ${firstName}!`);
             router.push(redirectPath);
         },
     });
