@@ -1,20 +1,28 @@
-import { and, desc, eq } from '@shipkit/db/pg';
+import { and, desc, eq, pickColumns } from '@shipkit/db/pg';
 import { todos } from '@shipkit/db/pg/schema';
 
 import { cr, os } from '../base';
+
+const todoColumns = pickColumns(todos, {
+    id: true,
+    userId: true,
+    title: true,
+    completed: true,
+    createdAt: true,
+    updatedAt: true,
+});
 
 export const todo = os.todo.router({
     list: cr.todo.list.handler(async ({ context, errors }) => {
         if (!context.session) {
             throw errors.UNAUTHORIZED({ message: 'You must be logged in' });
         }
-
-        const items = await context.db.query.todos.findMany({
-            where: eq(todos.userId, context.session.user.id),
-            orderBy: desc(todos.createdAt),
-            limit: 50,
-        });
-
+        const items = await context.db
+            .select(todoColumns)
+            .from(todos)
+            .where(eq(todos.userId, context.session.user.id))
+            .orderBy(desc(todos.createdAt))
+            .limit(50);
         return { status: 200, body: items };
     }),
 
@@ -22,16 +30,17 @@ export const todo = os.todo.router({
         if (!context.session) {
             throw errors.UNAUTHORIZED({ message: 'You must be logged in' });
         }
-
-        const result = await context.db.query.todos.findFirst({
-            where: and(
-                eq(todos.id, input.params.id),
-                eq(todos.userId, context.session.user.id),
-            ),
-        });
-
+        const [result] = await context.db
+            .select(todoColumns)
+            .from(todos)
+            .where(
+                and(
+                    eq(todos.id, input.params.id),
+                    eq(todos.userId, context.session.user.id),
+                ),
+            )
+            .limit(1);
         if (!result) throw errors.NOT_FOUND();
-
         return { status: 200, body: result };
     }),
 
@@ -39,23 +48,18 @@ export const todo = os.todo.router({
         if (!context.session) {
             throw errors.UNAUTHORIZED({ message: 'You must be logged in' });
         }
-
         const [row] = await context.db
             .insert(todos)
-            .values({
-                ...input.body,
-                userId: context.session.user.id,
-            })
-            .returning();
-
-        return { status: 201, body: row! };
+            .values({ ...input.body, userId: context.session.user.id })
+            .returning(todoColumns);
+        if (!row) throw errors.INTERNAL_SERVER_ERROR();
+        return { status: 201, body: row };
     }),
 
     update: cr.todo.update.handler(async ({ context, input, errors }) => {
         if (!context.session) {
             throw errors.UNAUTHORIZED({ message: 'You must be logged in' });
         }
-
         const [row] = await context.db
             .update(todos)
             .set(input.body)
@@ -65,10 +69,8 @@ export const todo = os.todo.router({
                     eq(todos.userId, context.session.user.id),
                 ),
             )
-            .returning();
-
+            .returning(todoColumns);
         if (!row) throw errors.NOT_FOUND();
-
         return { status: 200, body: row };
     }),
 
@@ -76,7 +78,6 @@ export const todo = os.todo.router({
         if (!context.session) {
             throw errors.UNAUTHORIZED({ message: 'You must be logged in' });
         }
-
         await context.db
             .delete(todos)
             .where(
@@ -85,7 +86,6 @@ export const todo = os.todo.router({
                     eq(todos.userId, context.session.user.id),
                 ),
             );
-
         return { status: 204 };
     }),
 });

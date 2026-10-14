@@ -3,16 +3,6 @@ packages:
     - packages/*
     - tooling/*
 catalog:
-    # oRPC packages
-    '@orpc/client': ^1.13.2
-    '@orpc/contract': ^1.13.2
-    '@orpc/json-schema': ^1.14.3
-    '@orpc/openapi': ^1.14.3
-    '@orpc/openapi-client': ^1.14.3
-    '@orpc/server': ^1.14.3
-    '@orpc/tanstack-query': ^1.13.2
-    '@orpc/zod': ^1.14.3
-
     # Tanstack Query packages
     '@tanstack/react-query': ^5.60.5
     '@tanstack/react-query-devtools': ^5.60.5
@@ -27,6 +17,7 @@ catalog:
     better-auth: 1.6.25
     auth: 1.6.25 # CLI package for better-auth, make sure to keep version in sync with better-auth package
 
+    '@orpc/server': ^1.14.3
     '@opentelemetry/api': ^1.9.1
     dotenv: ^17.2.2
     lucide-react: ^0.546.0

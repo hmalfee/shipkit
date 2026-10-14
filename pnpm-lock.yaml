@@ -9,28 +9,7 @@ catalogs:
     '@opentelemetry/api':
       specifier: ^1.9.1
       version: 1.9.1
-    '@orpc/client':
-      specifier: ^1.13.2
-      version: 1.14.8
-    '@orpc/contract':
-      specifier: ^1.13.2
-      version: 1.14.8
-    '@orpc/json-schema':
-      specifier: ^1.14.3
-      version: 1.14.8
-    '@orpc/openapi':
-      specifier: ^1.14.3
-      version: 1.14.8
-    '@orpc/openapi-client':
-      specifier: ^1.14.3
-      version: 1.14.8
     '@orpc/server':
-      specifier: ^1.14.3
-      version: 1.14.8
-    '@orpc/tanstack-query':
-      specifier: ^1.13.2
-      version: 1.14.8
-    '@orpc/zod':
       specifier: ^1.14.3
       version: 1.14.8
     '@tanstack/react-query':
@@ -147,18 +126,6 @@ importers:
       '@hono/node-server':
         specifier: ^1.14.4
         version: 1.19.14(hono@4.12.30)
-      '@orpc/json-schema':
-        specifier: 'catalog:'
-        version: 1.14.8(@opentelemetry/api@1.9.1)(ws@8.21.3)
-      '@orpc/openapi':
-        specifier: 'catalog:'
-        version: 1.14.8(@opentelemetry/api@1.9.1)(ws@8.21.3)
-      '@orpc/server':
-        specifier: 'catalog:'
-        version: 1.14.8(@opentelemetry/api@1.9.1)(ws@8.21.3)
-      '@orpc/zod':
-        specifier: 'catalog:'
-        version: 1.14.8(@opentelemetry/api@1.9.1)(@orpc/contract@1.14.8(@opentelemetry/api@1.9.1))(@orpc/server@1.14.8(@opentelemetry/api@1.9.1)(ws@8.21.3))(ws@8.21.3)(zod@4.4.3)
       '@shipkit/auth':
         specifier: workspace:*
         version: link:../../packages/auth
@@ -171,15 +138,15 @@ importers:
       '@shipkit/env':
         specifier: workspace:*
         version: link:../../packages/env
+      '@shipkit/orpc-utils':
+        specifier: workspace:*
+        version: link:../../packages/orpc-utils
       '@shipkit/telemetry':
         specifier: workspace:*
         version: link:../../packages/telemetry
       hono:
         specifier: ^4.8.2
         version: 4.12.30
-      rate-limiter-flexible:
-        specifier: ^11.1.0
-        version: 11.2.0
     devDependencies:
       tsdown:
         specifier: ^0.21.9
@@ -387,26 +354,47 @@ importers:
   packages/orpc-utils:
     dependencies:
       '@orpc/client':
-        specifier: 'catalog:'
+        specifier: ^1.13.2
         version: 1.14.8(@opentelemetry/api@1.9.1)
       '@orpc/contract':
-        specifier: 'catalog:'
+        specifier: ^1.13.2
         version: 1.14.8(@opentelemetry/api@1.9.1)
+      '@orpc/json-schema':
+        specifier: ^1.14.3
+        version: 1.14.8(@opentelemetry/api@1.9.1)(ws@8.21.3)
+      '@orpc/openapi':
+        specifier: ^1.14.3
+        version: 1.14.8(@opentelemetry/api@1.9.1)(ws@8.21.3)
       '@orpc/openapi-client':
-        specifier: 'catalog:'
+        specifier: ^1.14.3
         version: 1.14.8(@opentelemetry/api@1.9.1)
-      '@orpc/tanstack-query':
+      '@orpc/server':
         specifier: 'catalog:'
+        version: 1.14.8(@opentelemetry/api@1.9.1)(ws@8.21.3)
+      '@orpc/tanstack-query':
+        specifier: ^1.13.2
         version: 1.14.8(@opentelemetry/api@1.9.1)(@orpc/client@1.14.8(@opentelemetry/api@1.9.1))(@tanstack/query-core@5.101.2)
+      '@orpc/zod':
+        specifier: ^1.14.3
+        version: 1.14.8(@opentelemetry/api@1.9.1)(@orpc/contract@1.14.8(@opentelemetry/api@1.9.1))(@orpc/server@1.14.8(@opentelemetry/api@1.9.1)(ws@8.21.3))(ws@8.21.3)(zod@4.4.3)
+      '@shipkit/db':
+        specifier: workspace:*
+        version: link:../db
       '@shipkit/telemetry':
         specifier: workspace:*
         version: link:../telemetry
       '@tanstack/react-query':
         specifier: 'catalog:'
         version: 5.101.2(react@19.2.7)
+      rate-limiter-flexible:
+        specifier: ^11.1.0
+        version: 11.2.0
       react:
         specifier: 'catalog:'
         version: 19.2.7
+      zod:
+        specifier: 'catalog:'
+        version: 4.4.3
     devDependencies:
       '@shipkit/ts-config':
         specifier: workspace:*

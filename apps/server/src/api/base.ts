@@ -1,5 +1,12 @@
-import { implement } from '@orpc/server';
-
+import {
+    createImplementer,
+    defineRouteBuilder,
+} from '@shipkit/orpc-utils/server';
+import {
+    routeLogging,
+    simulateLatency,
+} from '@shipkit/orpc-utils/server/middlewares';
+import { createRateLimit } from '@shipkit/orpc-utils/server/rate-limit';
 import { contract } from '@shipkit/shared/orpc-contract';
 import { captureORPCTemplate } from '@shipkit/telemetry/node/orpc';
 
@@ -10,8 +17,6 @@ import type { Database } from '@shipkit/db/pg';
 import type { Redis } from '@shipkit/db/redis';
 import type { Logger } from '@shipkit/telemetry/logger';
 
-import { createRateLimit } from './rate-limiter';
-
 type Context = {
     reqHeaders: Headers;
     resHeaders: Headers;
@@ -21,68 +26,19 @@ type Context = {
     logger: Logger;
 };
 
-/**
- * `os` (oRPC server): Contract-bound base for building routes
- * and assembling the router. This is a shorthand for the server
- * implementation bound to the application's oRPC `contract`.
- */
-export const os = implement(contract).$context<Context>();
+/** Contract-bound base for assembling routers. */
+export const os = createImplementer<Context>()(contract);
 
 /**
- * Base route wrapper: timing and logging for all routes
+ * `cr` (createRoute): tracing, logging, latency simulation, session and
+ * rate limit. Handler return values are checked exactly against the contract.
  */
-const base = os.middleware(async ({ context, next, path }) => {
-    const start = Date.now();
-    try {
-        const result = await next();
-        const end = Date.now();
-        if (env.NODE_ENV === 'development') {
-            context.logger.info(
-                `[oRPC] {orpcPath} executed in {durationMs}ms`,
-                {
-                    orpcPath: path.join('.'),
-                    durationMs: end - start,
-                },
-            );
-        }
-        return result;
-    } catch (error) {
-        const end = Date.now();
-        context.logger.error(
-            `[oRPC] ${path.join('.')} failed in {durationMs}ms`,
-            {
-                error,
-                durationMs: end - start,
-            },
-        );
-        // rethrow error to be handled by global error handler
-        throw error;
-    }
-});
-
-/**
- * Simulates network delay in development to catch loading-state
- * bugs that only show up under real-world latency.
- */
-const simulateLatency = os.middleware(async ({ next }) => {
-    if (env.NODE_ENV === 'development') {
-        const MIN_LATENCY_MS = 300;
-        const MAX_LATENCY_MS = 1200;
-        const delay =
-            Math.floor(Math.random() * (MAX_LATENCY_MS - MIN_LATENCY_MS + 1)) +
-            MIN_LATENCY_MS;
-        await new Promise((resolve) => setTimeout(resolve, delay));
-    }
-    return next();
-});
-
-/**
- * `cr` (createRoute): Route builder with `base` + session + rateLimit.
- * Auth enforcement is handled in route handlers via contract-defined errors.
- */
-export const cr = os.use(captureORPCTemplate).use(
-    base.concat(
-        simulateLatency.concat(
+export const cr = defineRouteBuilder(
+    os
+        .use(captureORPCTemplate)
+        .use(routeLogging({ logSuccess: env.NODE_ENV === 'development' }))
+        .use(simulateLatency({ enabled: env.NODE_ENV === 'development' }))
+        .use(
             os.middleware(async ({ context, next, path }) => {
                 // One trade-off is that by the time the rate limit is checked
                 // in routes, the session has already been fetched. However, since
@@ -90,7 +46,6 @@ export const cr = os.use(captureORPCTemplate).use(
                 // reach the database (e.g. login/signup routes) due to invalid
                 // session cookies, this is an acceptable trade-off.
                 const session = await context.auth.getSession();
-
                 const rateLimit = createRateLimit({
                     reqHeaders: context.reqHeaders,
                     resHeaders: context.resHeaders,
@@ -98,11 +53,7 @@ export const cr = os.use(captureORPCTemplate).use(
                     pathKey: path.join('.'),
                     logger: context.logger,
                 });
-
-                return next({
-                    context: { ...context, session, rateLimit },
-                });
+                return next({ context: { ...context, session, rateLimit } });
             }),
         ),
-    ),
 );

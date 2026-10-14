@@ -299,47 +299,50 @@ function handleResponses(
     responses: Record<string, z.ZodTypeAny | undefined>,
     isAfterInput: boolean,
 ): object {
-    const schemas = Object.entries(responses).map(([code, bodySchema]) => {
-        const status = RESPONSE_STATUS[code as ResponseCode];
+    const entries = Object.entries(responses) as [
+        ResponseCode,
+        z.ZodTypeAny | undefined,
+    ][];
+
+    const schemas = entries.map(([code, bodySchema]) => {
+        const status = RESPONSE_STATUS[code];
         const isRedirect = status >= 300 && status < 400;
         const shape = bodySchema
             ? { status: z.literal(status), body: bodySchema }
             : isRedirect
               ? {
                     status: z.literal(status),
-                    headers: z.object({ location: z.string() }),
+                    headers: z.strictObject({ location: z.string() }),
                 }
-              : { status: z.literal(status) };
-        return z.object(shape);
+              : {
+                    // No body key — undefined-schema routes return status only.
+                    status: z.literal(status),
+                };
+        // strictObject: undeclared keys fail output validation
+        return z.strictObject(shape);
     });
 
-    // z.union requires a tuple of ≥2; fall back to single schema or a default
     const outputSchema: z.ZodTypeAny =
-        schemas.length > 1
-            ? z.union(
-                  schemas as unknown as [
-                      z.ZodTypeAny,
-                      z.ZodTypeAny,
-                      ...z.ZodTypeAny[],
-                  ],
+        schemas.length > 0
+            ? z.discriminatedUnion(
+                  'status',
+                  schemas as unknown as Parameters<
+                      typeof z.discriminatedUnion
+                  >[1],
               )
-            : (schemas[0] ?? z.object({ status: z.literal(200) }));
+            : z.strictObject({ status: z.literal(200) });
 
-    // Detect 3xx redirect codes and apply route config
+    // Tell OpenAPI the real success status (201, 204, 302, ...), not just 200.
     let builder = target;
-    const redirectCode = Object.keys(responses).find((code) => {
-        const status = RESPONSE_STATUS[code as ResponseCode];
-        return status !== undefined && status >= 300 && status < 400;
-    }) as ResponseCode | undefined;
-
-    if (redirectCode) {
-        const orpcMeta = (target as Record<string, unknown>)['~orpc'] as
-            Record<string, unknown> | undefined;
-        const existingRoute = orpcMeta?.route as
-            Record<string, unknown> | undefined;
+    const firstCode = entries[0]?.[0];
+    if (firstCode) {
+        const existingRoute = (
+            (target as Record<string, unknown>)['~orpc'] as
+                Record<string, unknown> | undefined
+        )?.route as Record<string, unknown> | undefined;
         builder = (builder as BuilderWithRouteMethod).$route({
             ...existingRoute,
-            successStatus: RESPONSE_STATUS[redirectCode],
+            successStatus: RESPONSE_STATUS[firstCode],
             outputStructure: 'detailed',
         });
     }

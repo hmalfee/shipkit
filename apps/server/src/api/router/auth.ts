@@ -1,7 +1,7 @@
 import { handleAuthError } from '@shipkit/auth/orpc';
+import { RATE_LIMIT_PRESETS } from '@shipkit/orpc-utils/server/rate-limit';
 
 import { cr, os } from '../base';
-import { RATE_LIMIT_PRESETS } from '../rate-limiter';
 
 export const auth = os.auth.router({
     me: cr.auth.me.handler(async ({ context }) => {
@@ -33,7 +33,7 @@ export const auth = os.auth.router({
                     });
                 try {
                     await context.auth.signInWithEmail(input.body);
-                    return { status: 200, body: undefined };
+                    return { status: 200 };
                 } catch (err) {
                     handleAuthError(err, errors);
                 }
@@ -51,10 +51,7 @@ export const auth = os.auth.router({
                         });
                     try {
                         await context.auth.verifyOtp(input.body);
-                        return {
-                            status: 200,
-                            body: undefined,
-                        };
+                        return { status: 200 };
                     } catch (err) {
                         handleAuthError(err, errors);
                     }
@@ -171,7 +168,7 @@ export const auth = os.auth.router({
 
                     try {
                         await context.auth.sendChangeEmailConfirmation();
-                        return { status: 200, body: undefined };
+                        return { status: 200 };
                     } catch (err) {
                         handleAuthError(err, errors);
                     }
@@ -195,7 +192,7 @@ export const auth = os.auth.router({
                         await context.auth.confirmChangeEmail({
                             otp: input.body.otp,
                         });
-                        return { status: 200, body: undefined };
+                        return { status: 200 };
                     } catch (err) {
                         handleAuthError(err, errors);
                     }
@@ -221,7 +218,7 @@ export const auth = os.auth.router({
                         await context.auth.sendChangeEmailVerification({
                             newEmail: input.body.newEmail,
                         });
-                        return { status: 200, body: undefined };
+                        return { status: 200 };
                     } catch (err) {
                         handleAuthError(err, errors);
                     }
@@ -245,7 +242,7 @@ export const auth = os.auth.router({
                         await context.auth.verifyChangeEmail({
                             otp: input.body.otp,
                         });
-                        return { status: 200, body: undefined };
+                        return { status: 200 };
                     } catch (err) {
                         handleAuthError(err, errors);
                     }
@@ -269,10 +266,7 @@ export const auth = os.auth.router({
             try {
                 await context.auth.updateUser(input.body);
 
-                return {
-                    status: 200,
-                    body: undefined,
-                };
+                return { status: 200 };
             } catch (err) {
                 handleAuthError(err, errors);
             }

@@ -8,21 +8,25 @@ export default defineConfig({
     extends: [base],
     overrides: [
         {
-            files: ['src/api/**/*.ts'],
+            files: ['src/**/*.ts'],
             rules: {
                 'eslint-js/no-restricted-imports': [
                     'error',
                     {
-                        paths: [
+                        patterns: [
                             {
-                                name: '@orpc/server',
-                                importNames: ['os'],
+                                group: ['@orpc/*'],
                                 message:
-                                    "Do not import 'os' directly. Import it from 'src/api/base.ts' instead.",
+                                    'apps/server must not import @orpc directly. Use @shipkit/orpc-utils instead.',
                             },
                         ],
                     },
                 ],
+            },
+        },
+        {
+            files: ['src/api/**/*.ts'],
+            rules: {
                 'eslint-js/no-restricted-syntax': [
                     'error',
                     ...defaultNoRestrictedSyntaxRules,
