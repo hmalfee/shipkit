@@ -6,7 +6,7 @@ import {
     routeLogging,
     simulateLatency,
 } from '@shipkit/orpc-utils/server/middlewares';
-import { createRateLimit } from '@shipkit/orpc-utils/server/rate-limit';
+import { createRateLimiter } from '@shipkit/orpc-utils/server/rate-limit';
 import { contract } from '@shipkit/shared/orpc-contract';
 import { captureORPCTemplate } from '@shipkit/telemetry/node/orpc';
 
@@ -20,6 +20,8 @@ import type { Logger } from '@shipkit/telemetry/logger';
 type Context = {
     reqHeaders: Headers;
     resHeaders: Headers;
+    /** TCP peer address. Used for proxy headers only if the peer is in TRUSTED_PROXIES. */
+    socketIp?: string | undefined;
     auth: Auth;
     db: Database;
     redis: Redis;
@@ -28,6 +30,11 @@ type Context = {
 
 /** Contract-bound base for assembling routers. */
 export const os = createImplementer<Context>()(contract);
+
+const createRateLimit = createRateLimiter({
+    header: env.CLIENT_IP_HEADER,
+    trustedProxies: env.TRUSTED_PROXIES,
+});
 
 /**
  * `cr` (createRoute): tracing, logging, latency simulation, session and
@@ -40,20 +47,19 @@ export const cr = defineRouteBuilder(
         .use(simulateLatency({ enabled: env.NODE_ENV === 'development' }))
         .use(
             os.middleware(async ({ context, next, path }) => {
-                // One trade-off is that by the time the rate limit is checked
-                // in routes, the session has already been fetched. However, since
-                // we mostly rate limit users on routes where getSession won't
-                // reach the database (e.g. login/signup routes) due to invalid
-                // session cookies, this is an acceptable trade-off.
                 const session = await context.auth.getSession();
                 const rateLimit = createRateLimit({
                     reqHeaders: context.reqHeaders,
                     resHeaders: context.resHeaders,
                     redis: context.redis,
-                    pathKey: path.join('.'),
                     logger: context.logger,
+                    pathKey: path.join('.'),
+                    userId: session?.user.id,
+                    socketIp: context.socketIp,
                 });
-                return next({ context: { ...context, session, rateLimit } });
+                return next({
+                    context: { ...context, session, rateLimit },
+                });
             }),
         ),
 );

@@ -24,9 +24,22 @@ export const env = createEnv({
             })
             .optional(),
         OTEL_URL: z.url().optional(),
+        CLIENT_IP_HEADER: z.string().optional(),
+        /** Comma-separated IPs or CIDRs allowed to set CLIENT_IP_HEADER. */
+        TRUSTED_PROXIES: z
+            .string()
+            .transform((s) =>
+                s
+                    .split(',')
+                    .map((i) => i.trim())
+                    .filter(Boolean),
+            )
+            .pipe(z.array(z.string().min(1)).min(1))
+            .optional(),
     },
-    rules: ({ ifValueThen, allOrNone }) => [
-        ifValueThen('NODE_ENV', 'production', ['OTEL_URL']),
+    rules: ({ ifValueThen, allOrNone, ifThen }) => [
+        ifValueThen('NODE_ENV', 'production', ['OTEL_URL', 'CLIENT_IP_HEADER']),
+        ifThen('CLIENT_IP_HEADER', ['TRUSTED_PROXIES']),
         allOrNone([
             'SMTP_HOST',
             'SMTP_PORT',

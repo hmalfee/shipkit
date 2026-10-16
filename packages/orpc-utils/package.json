@@ -6,7 +6,7 @@
         "./contract": "./src/contract/index.ts",
         "./server": "./src/server/index.ts",
         "./server/middlewares": "./src/server/middlewares.ts",
-        "./server/rate-limit": "./src/server/rate-limit.ts",
+        "./server/rate-limit": "./src/server/rate-limit/index.ts",
         "./query": "./src/query/index.ts",
         "./query/react": "./src/query/react/index.ts"
     },
@@ -22,9 +22,11 @@
         "@orpc/server": "catalog:",
         "@orpc/tanstack-query": "^1.13.2",
         "@orpc/zod": "^1.14.3",
+        "@shipkit/auth": "workspace:*",
         "@shipkit/db": "workspace:*",
         "@shipkit/telemetry": "workspace:*",
         "@tanstack/react-query": "catalog:",
+        "ipaddr.js": "^2.5.0",
         "rate-limiter-flexible": "^11.1.0",
         "react": "catalog:",
         "zod": "catalog:"

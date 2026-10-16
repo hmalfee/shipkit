@@ -1,3 +1,5 @@
+import { getConnInfo } from '@hono/node-server/conninfo';
+
 import { createAuth } from '@shipkit/auth';
 import { createDb } from '@shipkit/db/pg';
 import { createRedisClient } from '@shipkit/db/redis';
@@ -17,7 +19,6 @@ const db = createDb(env.POSTGRES_URL, {
 const redis = createRedisClient(env.REDIS_URL, {
     debug: env.NODE_ENV === 'development',
 });
-
 const handler = await createFetchHandler(router, {
     logger,
     docs:
@@ -31,6 +32,7 @@ export const orpc = (): MiddlewareHandler => async (c) => {
     const response = await handler.handle(c.req.raw, {
         reqHeaders: c.req.raw.headers,
         resHeaders,
+        socketIp: getConnInfo(c).remote.address,
         auth: createAuth({
             headers: { request: c.req.raw.headers, response: resHeaders },
             storage: { database: db, redisClient: redis },
@@ -40,7 +42,6 @@ export const orpc = (): MiddlewareHandler => async (c) => {
         redis,
         logger,
     });
-
     const finalResponse = c.newResponse(response.body, response);
     resHeaders.forEach((value, key) => {
         finalResponse.headers.append(key, value);
