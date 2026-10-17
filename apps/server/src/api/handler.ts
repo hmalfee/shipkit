@@ -11,7 +11,7 @@ import { env } from '@/env';
 import type { MiddlewareHandler } from 'hono';
 
 import { authConfig } from './auth.config';
-import { router } from './router';
+import { appRouter } from './router';
 
 const db = createDb(env.POSTGRES_URL, {
     debug: env.NODE_ENV === 'development',
@@ -19,7 +19,7 @@ const db = createDb(env.POSTGRES_URL, {
 const redis = createRedisClient(env.REDIS_URL, {
     debug: env.NODE_ENV === 'development',
 });
-const handler = await createFetchHandler(router, {
+const handler = await createFetchHandler(appRouter, {
     logger,
     docs:
         env.NODE_ENV === 'development'

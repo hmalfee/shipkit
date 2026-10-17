@@ -232,7 +232,7 @@ type MyContractBuilder<
     >;
 };
 
-/** Shared initial error map type for all `rb` route entries. */
+/** Shared initial error map type for all `route` entries. */
 type BaseErrorMap = MergedErrorMap<
     Record<never, never>,
     { INTERNAL_SERVER_ERROR: Record<string, never> }
@@ -419,41 +419,35 @@ function createProxy<T extends object>(builder: T, isAfterInput: boolean): T {
 // ─── Contract Builder ─────────────────────────────────────────────────────────
 
 /**
- * `rb` (route builder) is a thin wrapper around oRPC's `oc` builder that fills
- * in two gaps the raw `oc` API leaves open:
+ * `route` is a thin wrapper around oRPC's `oc` builder that fills in two gaps:
  *
- * 1. **Typed input structure** — `oc` accepts a flat Zod schema for input, with no
- *    enforced distinction between `body`, `query`, `params`, and `headers`. `rb.input()`
- *    takes an explicit `{ body?, query?, params?, headers? }` shape and compiles it into
- *    a `z.object(shape)` automatically, keeping input sources structurally separated.
+ * 1. **Typed input structure** — `route.input()` takes an explicit
+ *    `{ body?, query?, params?, headers? }` shape and compiles it into a
+ *    `z.object(shape)`, keeping input sources structurally separated.
  *
- * 2. **Typed response responses** — `oc` has no first-class concept of HTTP response codes.
- *    `rb.responses()` accepts a `{ [ResponseCode]: ZodSchema }` map and derives a
- *    discriminated union output schema of `{ status: <literal>, body: <schema> }` objects.
+ * 2. **Typed responses** — `route.responses()` accepts a
+ *    `{ [ResponseCode]: ZodSchema }` map and derives a discriminated-union
+ *    output schema of `{ status, body }` objects.
  *
- * Reserved errors (`BAD_REQUEST`, `INTERNAL_SERVER_ERROR`) are injected automatically
- * and cannot be overridden via `.errors()` — they are always present.
+ * Reserved errors (`BAD_REQUEST`, `INTERNAL_SERVER_ERROR`) are injected
+ * automatically and cannot be overridden via `.errors()`.
  *
- * The returned contract procedure is a standard oRPC contract and can be placed
- * directly inside any `oc.router({})` definition without any extra setup.
- *
- * - `rb.query(path)` — defines a `GET` route.
- * - `rb.mutation(path, method?)` — defines a `POST/PUT/DELETE/PATCH` route (default: `POST`).
+ * - `route.query(path)` defines a `GET` route.
+ * - `route.mutation(path, method?)` defines a `POST/PUT/DELETE/PATCH` route
+ *   (default: `POST`).
  *
  * @example
- * ```ts
- * export const userContract = oc.router({
- *   get: rb.query('/users/:id')
+ * export const users = group('/users', {
+ *   byId: route.query('/{id}')
  *     .input({ params: z.object({ id: z.string() }) })
  *     .responses({ OK: UserSchema }),
  *
- *   create: rb.mutation('/users')
+ *   create: route.mutation('/')
  *     .input({ body: z.object({ name: z.string() }) })
  *     .responses({ CREATED: UserSchema }),
  * });
- * ```
  */
-export const rb = {
+export const route = {
     query: <TPath extends `/${string}`>(path: TPath) =>
         createProxy(
             base

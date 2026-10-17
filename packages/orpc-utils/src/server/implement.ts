@@ -7,7 +7,7 @@ import type { Context } from '@orpc/server';
  * Binds a contract to a server context type.
  *
  * @example
- * const os = createImplementer<AppContext>()(contract);
+ * const implementer = createImplementer<AppContext>()(contract);
  */
 export function createImplementer<TContext extends Context>() {
     return <T extends AnyContractRouter>(contract: T) =>

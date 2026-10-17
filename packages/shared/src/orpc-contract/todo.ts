@@ -1,6 +1,6 @@
 import z from 'zod';
 
-import { group, rb } from '@shipkit/orpc-utils/contract';
+import { group, route } from '@shipkit/orpc-utils/contract';
 
 const TodoSchema = z.object({
     id: z.uuid(),
@@ -16,13 +16,13 @@ const TodoParamsSchema = z.object({
 });
 
 export const todo = group('/todo', {
-    list: rb
+    list: route
         .query('/')
         .errors({ UNAUTHORIZED: {} })
         .responses({
             OK: z.array(TodoSchema),
         }),
-    byId: rb
+    byId: route
         .query('/{id}')
         .input({ params: TodoParamsSchema })
         .responses({
@@ -32,7 +32,7 @@ export const todo = group('/todo', {
             NOT_FOUND: {},
             UNAUTHORIZED: {},
         }),
-    create: rb
+    create: route
         .mutation('/')
         .input({
             body: z.object({
@@ -43,7 +43,7 @@ export const todo = group('/todo', {
         .responses({
             CREATED: TodoSchema,
         }),
-    update: rb
+    update: route
         .mutation('/{id}', 'PUT')
         .input({
             params: TodoParamsSchema,
@@ -59,7 +59,7 @@ export const todo = group('/todo', {
             NOT_FOUND: {},
             UNAUTHORIZED: {},
         }),
-    delete: rb
+    delete: route
         .mutation('/{id}', 'DELETE')
         .input({ params: TodoParamsSchema })
         .errors({ UNAUTHORIZED: {} })

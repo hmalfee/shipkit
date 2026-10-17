@@ -1,6 +1,6 @@
 import z from 'zod';
 
-import { group, rb } from '@shipkit/orpc-utils/contract';
+import { group, route } from '@shipkit/orpc-utils/contract';
 import { OAUTH_PROVIDER_IDS, OTP_LENGTH } from '@shipkit/shared/constants';
 
 const UserSchema = z.object({
@@ -25,9 +25,9 @@ const OauthProviderParamsSchema = z.object({
 });
 
 export const auth = group('/auth', {
-    me: rb.query('/me').responses({ OK: UserSchema.nullable() }),
+    me: route.query('/me').responses({ OK: UserSchema.nullable() }),
     email: group('/email', {
-        signIn: rb
+        signIn: route
             .mutation('/sign-in')
             .input({
                 body: z.object({
@@ -42,7 +42,7 @@ export const auth = group('/auth', {
                 OK: undefined,
             }),
         verify: group('/verify', {
-            otp: rb
+            otp: route
                 .mutation('/otp')
                 .input({
                     body: OtpBodySchema.extend({ email: z.email() }),
@@ -55,7 +55,7 @@ export const auth = group('/auth', {
                 .responses({
                     OK: undefined,
                 }),
-            magicLink: rb
+            magicLink: route
                 .query('/magic-link')
                 .input({
                     query: z.object({
@@ -73,7 +73,7 @@ export const auth = group('/auth', {
         }),
     }),
     oauth: group('/oauth', {
-        signIn: rb
+        signIn: route
             .mutation('/sign-in/{provider}')
             .input({
                 params: OauthProviderParamsSchema,
@@ -88,7 +88,7 @@ export const auth = group('/auth', {
                     redirect: z.boolean(),
                 }),
             }),
-        callback: rb
+        callback: route
             .query('/callback/{provider}')
             .input({
                 params: OauthProviderParamsSchema,
@@ -107,7 +107,7 @@ export const auth = group('/auth', {
                 FOUND: undefined,
             }),
     }),
-    signOut: rb
+    signOut: route
         .mutation('/sign-out')
         .errors({
             UNAUTHORIZED: {},
@@ -117,18 +117,18 @@ export const auth = group('/auth', {
         }),
     changeEmail: group('/change-email', {
         confirmation: group('/confirmation', {
-            send: rb
+            send: route
                 .mutation('/')
                 .errors({ UNAUTHORIZED: {}, TOO_MANY_REQUESTS: {} })
                 .responses({ OK: undefined }),
-            submit: rb
+            submit: route
                 .mutation('/', 'PUT')
                 .input({ body: OtpBodySchema })
                 .errors({ UNAUTHORIZED: {}, TOO_MANY_REQUESTS: {} })
                 .responses({ OK: undefined }),
         }),
         verification: group('/verification', {
-            send: rb
+            send: route
                 .mutation('/')
                 .input({ body: z.object({ newEmail: z.email() }) })
                 .errors({
@@ -137,7 +137,7 @@ export const auth = group('/auth', {
                     TOO_MANY_REQUESTS: {},
                 })
                 .responses({ OK: undefined }),
-            submit: rb
+            submit: route
                 .mutation('/', 'PUT')
                 .input({ body: OtpBodySchema })
                 .errors({
@@ -148,7 +148,7 @@ export const auth = group('/auth', {
                 .responses({ OK: undefined }),
         }),
     }),
-    updateProfile: rb
+    updateProfile: route
         .mutation('/profile')
         .input({
             body: z.object({

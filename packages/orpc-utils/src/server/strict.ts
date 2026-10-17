@@ -1,3 +1,5 @@
+import type { AnyContractRouter } from '@orpc/contract';
+
 type AnyFn = (...args: never[]) => unknown;
 
 type Opaque =
@@ -62,26 +64,105 @@ type HandlerReturn<B> = B extends { handler: (fn: never) => infer Ret }
     ? Ret
     : never;
 
-type StrictHandler<B> = <R extends PadVariants<HandlerOutput<B>>>(
-    fn: (
-        opts: HandlerOpts<B>,
-    ) => Promise<R & Exact<NoInfer<R>, PadVariants<HandlerOutput<B>>>>,
-) => HandlerReturn<B>;
+// ─── Handler tree ────────────────────────────────────────────────────────────
 
-/** Replaces `.handler` on every procedure in a builder tree. */
-type Strictify<T> = T extends AnyFn
-    ? T
-    : T extends { handler: AnyFn }
-      ? Omit<T, 'handler'> & { handler: StrictHandler<T> }
-      : {
-            [K in keyof T]: K extends '~orpc' ? T[K] : Strictify<T[K]>;
-        };
+/** Keys leading to child nodes. Skips builder methods (`use`, `router`...) and `~orpc`. */
+type ChildKeys<B> = {
+    [K in keyof B]: K extends '~orpc' ? never : B[K] extends AnyFn ? never : K;
+}[keyof B];
+
+type ChildOf<B, K> = K extends keyof B ? B[K] : never;
+
+/** Plain-function version of every procedure under a builder node. */
+type HandlerTree<B> = B extends { handler: AnyFn }
+    ? (opts: HandlerOpts<B>) => Promise<PadVariants<HandlerOutput<B>>>
+    : { [K in ChildKeys<B>]: HandlerTree<B[K]> };
+
+/** Exact-return check applied across the tree. Unknown keys become `never`. */
+type ExactTree<H, B> = B extends { handler: AnyFn }
+    ? H extends (...a: infer A) => Promise<infer R>
+        ? (...a: A) => Promise<R & Exact<R, PadVariants<HandlerOutput<B>>>>
+        : never
+    : {
+          [K in keyof H]: K extends ChildKeys<B>
+              ? ExactTree<H[K], B[K & keyof B]>
+              : never;
+      };
+
+/** The router (or procedure) that a handler tree becomes once bound. */
+type BoundRouter<B> = B extends { handler: AnyFn }
+    ? HandlerReturn<B>
+    : { [K in ChildKeys<B>]: BoundRouter<B[K]> };
+
+/** One definer per top-level contract group: `defineRouter.auth({ ... })`. */
+type DefineRouter<B> = {
+    [K in ChildKeys<B>]: <T extends HandlerTree<ChildOf<B, K>>>(
+        handlers: T & ExactTree<NoInfer<T>, ChildOf<B, K>>,
+    ) => BoundRouter<ChildOf<B, K>>;
+};
+
+// ─── Runtime ─────────────────────────────────────────────────────────────────
+
+type BuilderNode = Record<string, unknown>;
+type UntypedHandlers = AnyFn | { [key: string]: UntypedHandlers };
+
+const isProcedure = (n: unknown): n is { handler: (fn: unknown) => unknown } =>
+    typeof (n as BuilderNode | null | undefined)?.handler === 'function';
+
+/** Walks the handler object and binds each function to the builder procedure at the same path. */
+function bindHandlers(
+    node: unknown,
+    handlers: UntypedHandlers,
+    path: string[],
+): unknown {
+    const at = path.join('.');
+    if (node == null) {
+        throw new Error(`[orpc-utils] "${at}" is not in the contract`);
+    }
+    if (typeof handlers === 'function') {
+        if (!isProcedure(node)) {
+            throw new Error(
+                `[orpc-utils] "${at}" is a router, expected an object`,
+            );
+        }
+        return node.handler(handlers); // method call keeps `this`
+    }
+    if (isProcedure(node)) {
+        throw new Error(
+            `[orpc-utils] "${at}" is a procedure, expected a function`,
+        );
+    }
+    return Object.fromEntries(
+        Object.entries(handlers).map(([k, h]) => [
+            k,
+            bindHandlers((node as BuilderNode)[k], h, [...path, k]),
+        ]),
+    );
+}
 
 /**
- * Finalizes a route builder. Every `.handler()` on the result checks its
- * return value exactly against the contract. Type-only: returns the same
- * object at runtime.
+ * Creates `defineRouter`, with one entry per top-level contract group.
+ * `defineRouter.auth({ ... })` takes a handler object that mirrors the
+ * `auth` group of the contract. Position decides which procedure each
+ * handler implements. Type checks reject unknown keys, missing keys, and
+ * return values the contract doesn't declare. `bindHandlers` re-checks the
+ * shape at startup.
+ *
+ * `contract` supplies the runtime keys, because oRPC's implementer resolves
+ * its keys lazily and can't be enumerated. `builder` supplies the types and
+ * the middleware chain.
  */
-export function defineRouteBuilder<T extends object>(builder: T): Strictify<T> {
-    return builder as unknown as Strictify<T>;
+export function createDefineRouter<B extends object>(
+    contract: AnyContractRouter,
+    builder: B,
+): DefineRouter<B> {
+    return Object.fromEntries(
+        Object.keys(contract).map((group) => [
+            group,
+            (handlers: UntypedHandlers) =>
+                bindHandlers((builder as BuilderNode)[group], handlers, [
+                    group,
+                ]),
+        ]),
+    ) as DefineRouter<B>;
 }
