@@ -1,7 +1,7 @@
 import { and, desc, eq, pickColumns } from '@shipkit/db/pg';
 import { todos } from '@shipkit/db/pg/schema';
 
-import { defineRouter } from '../base';
+import { authed, defineRouter } from '../base';
 
 const todoColumns = pickColumns(todos, {
     id: true,
@@ -13,10 +13,7 @@ const todoColumns = pickColumns(todos, {
 });
 
 export const todo = defineRouter.todo({
-    list: async ({ context, errors }) => {
-        if (!context.session) {
-            throw errors.UNAUTHORIZED({ message: 'You must be logged in' });
-        }
+    list: authed(async ({ context }) => {
         const items = await context.db
             .select(todoColumns)
             .from(todos)
@@ -24,11 +21,8 @@ export const todo = defineRouter.todo({
             .orderBy(desc(todos.createdAt))
             .limit(50);
         return { status: 200, body: items };
-    },
-    byId: async ({ context, input, errors }) => {
-        if (!context.session) {
-            throw errors.UNAUTHORIZED({ message: 'You must be logged in' });
-        }
+    }),
+    byId: authed(async ({ context, input, errors }) => {
         const [result] = await context.db
             .select(todoColumns)
             .from(todos)
@@ -41,22 +35,16 @@ export const todo = defineRouter.todo({
             .limit(1);
         if (!result) throw errors.NOT_FOUND();
         return { status: 200, body: result };
-    },
-    create: async ({ context, input, errors }) => {
-        if (!context.session) {
-            throw errors.UNAUTHORIZED({ message: 'You must be logged in' });
-        }
+    }),
+    create: authed(async ({ context, input, errors }) => {
         const [row] = await context.db
             .insert(todos)
             .values({ ...input.body, userId: context.session.user.id })
             .returning(todoColumns);
         if (!row) throw errors.INTERNAL_SERVER_ERROR();
         return { status: 201, body: row };
-    },
-    update: async ({ context, input, errors }) => {
-        if (!context.session) {
-            throw errors.UNAUTHORIZED({ message: 'You must be logged in' });
-        }
+    }),
+    update: authed(async ({ context, input, errors }) => {
         const [row] = await context.db
             .update(todos)
             .set(input.body)
@@ -69,11 +57,8 @@ export const todo = defineRouter.todo({
             .returning(todoColumns);
         if (!row) throw errors.NOT_FOUND();
         return { status: 200, body: row };
-    },
-    delete: async ({ context, input, errors }) => {
-        if (!context.session) {
-            throw errors.UNAUTHORIZED({ message: 'You must be logged in' });
-        }
+    }),
+    delete: authed(async ({ context, input }) => {
         await context.db
             .delete(todos)
             .where(
@@ -83,5 +68,5 @@ export const todo = defineRouter.todo({
                 ),
             );
         return { status: 204 };
-    },
+    }),
 });

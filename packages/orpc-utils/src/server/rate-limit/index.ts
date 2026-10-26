@@ -6,6 +6,8 @@ import { normalizeEmail, sanitizeEmail } from '@shipkit/auth/email-validation';
 
 import type { Redis } from '@shipkit/db/redis';
 import type { Logger } from '@shipkit/telemetry/logger';
+import type { ErrorFactory } from '../guards';
+import type { ClientIpOptions } from './identity';
 import type { Dim } from './limiter';
 
 import { createClientIpConfig, resolveIpBucket } from './identity';
@@ -46,130 +48,197 @@ export const RATE_LIMIT_PRESETS = {
     },
 } as const;
 
+/** Every unidentifiable client shares one IP bucket, so it gets this multiple of the limit. */
+const UNKNOWN_IP_LIMIT_FACTOR = 20;
+const TOO_MANY_MESSAGE = 'Too many attempts';
+
+type Subjects = Record<string, string | null | undefined>;
+
+/** Everything the limiter needs for one request. Supplied by the app. */
+type RateLimitDeps = {
+    reqHeaders: Headers;
+    resHeaders: Headers;
+    redis: Redis;
+    logger: Logger;
+    /** TCP peer address of this request. */
+    socketIp?: string | undefined;
+    /** Signed-in user, if any. Adds a per-user bucket to every call. */
+    userId?: string | null | undefined;
+};
+
+type RateLimitOptions = {
+    tier: keyof typeof RATE_LIMIT_PRESETS;
+    /** Who is acting: one bucket per non-empty value. */
+    by?: Subjects;
+    /** Repeat offenders get exponentially longer blocks. */
+    escalate?: boolean;
+    /**
+     * Ceiling shared by every client of this route. Counts only requests
+     * that pass the IP and subject checks. Blocks everyone while tripped.
+     */
+    global?: Omit<Dim, 'name' | 'key'>;
+    /** Thrown instead of the default 429. A thunk, so it's only built when needed. */
+    error?: () => Error;
+};
+
+/** Sanitized so the path can't inject characters into Redis keys. */
+const sanitizePath = (path: readonly string[]): string =>
+    path
+        .join('.')
+        .replace(/[^\w.:/-]/g, '_')
+        .slice(0, 128);
+
 /**
- * Call once at startup. Validates the IP config (throws on bad input, so a
- * broken proxy setup fails the deploy) and returns a per-request factory.
+ * Hashed: no PII in Redis, bounded key length, and a value containing "|" or
+ * ":" can't forge another key.
  */
-export const createRateLimiter = (
-    config: {
-        /** Defaults to 'socket' (the TCP peer). Or a header name a trusted proxy sets. Case-insensitive. */
-        header?: string | undefined;
-        /** IPs or CIDRs, e.g. ['173.245.48.0/20', '2400:cb00::/32']. */
-        trustedProxies?: readonly string[];
-    } = {},
-) => {
-    const clientIp = createClientIpConfig(config);
+const hashValue = (value: string): string =>
+    createHash('sha256')
+        .update(value.normalize('NFKC').trim().toLowerCase())
+        .digest('base64url')
+        .slice(0, 22);
 
-    return (ctx: {
-        reqHeaders: Headers;
-        resHeaders: Headers;
-        redis: Redis;
-        logger: Logger;
-        /** Static procedure path, e.g. "auth.login". Never IDs or user input. */
-        pathKey: string;
-        /** Signed-in user, if any. Adds a per-user bucket to every call. */
-        userId?: string | null;
-        /** TCP peer address of this request. */
-        socketIp?: string;
-    }) => {
-        // Sanitized so the path can't inject characters into Redis keys.
-        const path = ctx.pathKey.replace(/[^\w.:/-]/g, '_').slice(0, 128);
-        return async ({
-            tier,
-            by = {},
-            escalate = false,
-            global,
-            error,
-        }: {
-            tier: keyof typeof RATE_LIMIT_PRESETS;
-            /** Who is acting: one bucket per non-empty value. */
-            by?: Record<string, string | null | undefined>;
-            /** Repeat offenders get exponentially longer blocks. */
-            escalate?: boolean;
-            /**
-             * Ceiling shared by every client of this route. Counts only requests
-             * that pass the IP and subject checks. Blocks everyone while tripped.
-             */
-            global?: Omit<Dim, 'name' | 'key'>;
-            /** Thrown instead of the default 429 when the limit is hit. */
-            error?: Error;
-        }) => {
-            const preset = RATE_LIMIT_PRESETS[tier];
-            const bucket = resolveIpBucket({
-                headers: ctx.reqHeaders,
-                config: clientIp,
-                socketIp: ctx.socketIp,
-                logger: ctx.logger,
+/**
+ * Low-level limiter. Call once at startup: validates the IP config (throws on
+ * bad input, so a broken proxy setup fails the deploy). Takes explicit deps,
+ * so it has no opinion about how the app shapes its context.
+ */
+const createRateLimiter = (options: ClientIpOptions = {}) => {
+    const clientIp = createClientIpConfig(options);
+    return async (
+        deps: RateLimitDeps & {
+            /** Procedure path, e.g. ['auth', 'email', 'signIn']. Never IDs or user input. */
+            path: readonly string[];
+        },
+        { tier, by = {}, escalate = false, global, error }: RateLimitOptions,
+    ): Promise<void> => {
+        const { reqHeaders, resHeaders, redis, logger, socketIp, userId } =
+            deps;
+        const path = sanitizePath(deps.path);
+        const preset = RATE_LIMIT_PRESETS[tier];
+        const bucket = resolveIpBucket({
+            headers: reqHeaders,
+            config: clientIp,
+            socketIp,
+            logger,
+        });
+
+        // IP-level gates, checked in this order. Burst goes first so a
+        // burst rejection never counts toward the longer IP block.
+        const gates = (['burst', 'ip'] as const).map((name): Dim => ({
+            name,
+            key: `${name}:${bucket ?? 'unknown'}|${path}`,
+            ...preset[name],
+            limit: bucket
+                ? preset[name].limit
+                : preset[name].limit * UNKNOWN_IP_LIMIT_FACTOR,
+        }));
+
+        // Signed-in user last, so a caller can't replace it through `by`.
+        const subjects = Object.entries({
+            ...by,
+            ...(userId && { user: userId }),
+        }).flatMap(([name, raw]): Dim[] => {
+            const value =
+                name === 'email' && raw
+                    ? normalizeEmail(sanitizeEmail(raw))
+                    : raw;
+            return value
+                ? [
+                      {
+                          name,
+                          key: `${name}:${hashValue(value)}|${path}`,
+                          ...preset.subject,
+                      },
+                  ]
+                : [];
+        });
+
+        let blockedBy: string | undefined;
+        try {
+            blockedBy = await enforce({
+                redis,
+                logger,
+                resHeaders,
+                escalate,
+                gates,
+                subjects,
+                global: global && {
+                    name: 'global',
+                    key: `global|${path}`,
+                    ...global,
+                },
             });
-
-            // IP-level gates, checked in this order. Burst goes first so a
-            // burst rejection never counts toward the longer IP block.
-            const gates: Dim[] = (['burst', 'ip'] as const).map((name) => ({
-                name,
-                key: `${name}:${bucket ?? 'unknown'}|${path}`,
-                ...preset[name],
-                // No IP: every unidentifiable client shares one bucket, so it gets 20x the limit.
-                limit: bucket ? preset[name].limit : preset[name].limit * 20,
-            }));
-
-            const subjects: Dim[] = [];
-            // Signed-in user last, so a caller can't replace it through `by`.
-            const entries = Object.entries({
-                ...by,
-                ...(ctx.userId ? { user: ctx.userId } : {}),
-            });
-            for (const [name, raw] of entries) {
-                const value =
-                    name === 'email' && raw
-                        ? normalizeEmail(sanitizeEmail(raw))
-                        : raw;
-                if (!value) continue;
-                // Hashed: no PII in Redis, bounded key length, and a value
-                // containing "|" or ":" can't forge another key.
-                const hash = createHash('sha256')
-                    .update(value.normalize('NFKC').trim().toLowerCase())
-                    .digest('base64url')
-                    .slice(0, 22);
-                subjects.push({
-                    name,
-                    key: `${name}:${hash}|${path}`,
-                    ...preset.subject,
-                });
-            }
-
-            const globalDim: Dim | undefined = global && {
-                name: 'global',
-                key: `global|${path}`,
-                ...global,
-            };
-
-            let blockedBy: string | undefined;
-            try {
-                blockedBy = await enforce({
-                    redis: ctx.redis,
-                    logger: ctx.logger,
-                    resHeaders: ctx.resHeaders,
-                    escalate,
-                    gates,
-                    subjects,
-                    global: globalDim,
-                });
-            } catch (err) {
-                // Redis and the in-memory fallback both failed: fail open, loudly.
-                ctx.logger.error('[RateLimit] Unexpected error', {
-                    error: err,
-                });
-                return;
-            }
-
-            if (blockedBy) {
-                throw (
-                    error ??
-                    new ORPCError('TOO_MANY_REQUESTS', {
-                        message: 'Too many attempts',
-                    })
-                );
-            }
-        };
+        } catch (err) {
+            // Redis and the in-memory fallback both failed: fail open, loudly.
+            logger.error('[RateLimit] Unexpected error', { error: err });
+            return;
+        }
+        if (blockedBy) {
+            throw (
+                error?.() ??
+                new ORPCError('TOO_MANY_REQUESTS', {
+                    message: TOO_MANY_MESSAGE,
+                })
+            );
+        }
     };
 };
+
+type LimitConfig<TInput> = Omit<RateLimitOptions, 'by' | 'error'> & {
+    by?: (input: TInput) => Subjects;
+};
+
+/**
+ * Builds a rate-limit wrapper for handlers, the same way `createContextGuard` builds
+ * `authed`. Nothing is injected into the context: `resolve` maps whatever
+ * context the app has to what the limiter needs, and a missing or mistyped
+ * field is a compile error right there.
+ *
+ * Two calls because TypeScript can't partially infer type arguments: the first
+ * fixes the context type, the second takes the runtime config.
+ *
+ * @example
+ * export const rateLimited = createRateLimit<HandlerContext>()({
+ *     header: env.CLIENT_IP_HEADER,
+ *     trustedProxies: env.TRUSTED_PROXIES,
+ *     resolve: (ctx) => ({ reqHeaders: ctx.reqHeaders, ... }),
+ * });
+ */
+export const createRateLimit =
+    <TContext extends object>() =>
+    ({
+        resolve,
+        ...ipOptions
+    }: ClientIpOptions & {
+        /** Maps the handler context to what the limiter needs. */
+        resolve: (context: TContext) => RateLimitDeps;
+    }) => {
+        const limit = createRateLimiter(ipOptions);
+        return <
+                O extends {
+                    input: unknown;
+                    path: readonly string[];
+                    context: TContext;
+                    errors: { TOO_MANY_REQUESTS: ErrorFactory };
+                },
+                R,
+            >(
+                { by, ...rest }: LimitConfig<O['input']>,
+                fn: (o: O) => R | Promise<R>,
+            ) =>
+            async (o: O): Promise<R> => {
+                await limit(
+                    { ...resolve(o.context), path: o.path },
+                    {
+                        ...rest,
+                        ...(by && { by: by(o.input) }),
+                        error: () =>
+                            o.errors.TOO_MANY_REQUESTS({
+                                message: TOO_MANY_MESSAGE,
+                            }),
+                    },
+                );
+                return fn(o);
+            };
+    };

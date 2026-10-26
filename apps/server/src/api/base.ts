@@ -1,4 +1,5 @@
 import {
+    createContextGuard,
     createDefineRouter,
     createImplementer,
 } from '@shipkit/orpc-utils/server';
@@ -6,7 +7,7 @@ import {
     routeLogging,
     simulateLatency,
 } from '@shipkit/orpc-utils/server/middlewares';
-import { createRateLimiter } from '@shipkit/orpc-utils/server/rate-limit';
+import { createRateLimit } from '@shipkit/orpc-utils/server/rate-limit';
 import { contract } from '@shipkit/shared/orpc-contract';
 import { captureORPCTemplate } from '@shipkit/telemetry/node/orpc';
 
@@ -15,6 +16,7 @@ import { env } from '@/env';
 import type { Auth } from '@shipkit/auth';
 import type { Database } from '@shipkit/db/pg';
 import type { Redis } from '@shipkit/db/redis';
+import type { ContextFromProcedures } from '@shipkit/orpc-utils/server';
 import type { Logger } from '@shipkit/telemetry/logger';
 
 type Context = {
@@ -31,39 +33,56 @@ type Context = {
 /** The contract bound to this app's context. Used to assemble the root router. */
 export const implementer = createImplementer<Context>()(contract);
 
-const rateLimitFor = createRateLimiter({
-    header: env.CLIENT_IP_HEADER,
-    trustedProxies: env.TRUSTED_PROXIES,
-});
-
-/** Resolves the session and exposes `context.rateLimit` to every handler. */
-const sessionMiddleware = implementer.middleware(
-    async ({ context, next, path }) => {
-        const session = await context.auth.getSession();
-        const rateLimit = rateLimitFor({
-            reqHeaders: context.reqHeaders,
-            resHeaders: context.resHeaders,
-            redis: context.redis,
-            logger: context.logger,
-            pathKey: path.join('.'),
-            userId: session?.user.id,
-            socketIp: context.socketIp,
-        });
-        return next({ context: { ...context, session, rateLimit } });
-    },
-);
-
-/** Every procedure in the contract, with tracing, logging, latency, session and rate limit applied. */
+/** Every procedure in the contract, with tracing, logging, latency and session applied. */
 const procedures = implementer
     .use(captureORPCTemplate)
-    .use(routeLogging({ logSuccess: env.NODE_ENV === 'development' }))
+    .use(
+        routeLogging({
+            logSuccess: env.NODE_ENV === 'development',
+            logger: (ctx) => ctx.logger,
+        }),
+    )
     .use(simulateLatency({ enabled: env.NODE_ENV === 'development' }))
-    .use(sessionMiddleware);
+    .use(async ({ context, next }) => {
+        const session = await context.auth.getSession();
+        return next({ context: { session } });
+    });
 
-/**
- * `defineRouter.auth({ ... })` defines the router for one top-level contract
- * group. Handlers mirror the contract's structure and run through the
- * middleware chain above. Return values are checked exactly against the
- * contract.
- */
 export const defineRouter = createDefineRouter(contract, procedures);
+
+/** What every handler receives once the middleware chain from procedures has run. */
+export type HandlerContext = ContextFromProcedures<typeof procedures>;
+
+export const authed = createContextGuard<HandlerContext>()({
+    key: 'session',
+    error: 'UNAUTHORIZED',
+    message: 'You must be logged in',
+});
+
+/** @public */
+export const requireAdmin = createContextGuard<HandlerContext>()({
+    key: 'session',
+    check: ({ session }) => session.user.roles.includes('admin'),
+    error: 'FORBIDDEN',
+    message: 'Admin access required',
+});
+
+export const guest = createContextGuard<HandlerContext>()({
+    key: 'session',
+    error: 'FORBIDDEN',
+    message: 'You must be logged out',
+    negate: true,
+});
+
+export const rateLimited = createRateLimit<HandlerContext>()({
+    header: env.CLIENT_IP_HEADER,
+    trustedProxies: env.TRUSTED_PROXIES,
+    resolve: (ctx) => ({
+        reqHeaders: ctx.reqHeaders,
+        resHeaders: ctx.resHeaders,
+        redis: ctx.redis,
+        logger: ctx.logger,
+        socketIp: ctx.socketIp,
+        userId: ctx.session?.user.id,
+    }),
+});

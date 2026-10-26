@@ -95,11 +95,36 @@ type BoundRouter<B> = B extends { handler: AnyFn }
     : { [K in ChildKeys<B>]: BoundRouter<B[K]> };
 
 /** One definer per top-level contract group: `defineRouter.auth({ ... })`. */
+type ExactCheck<T, B> = [T] extends [ExactTree<T, B>]
+    ? []
+    : [error: 'Handler return has keys the contract does not declare'];
+
 type DefineRouter<B> = {
     [K in ChildKeys<B>]: <T extends HandlerTree<ChildOf<B, K>>>(
-        handlers: T & ExactTree<NoInfer<T>, ChildOf<B, K>>,
+        // ExactTree is deliberately not intersected into the handlers parameter.
+        // An intersection or conditional there stops TypeScript inferring a wrapper's
+        // generics from the handler position, and someone will try to "simplify" it back otherwise.
+        handlers: T,
+        ...check: ExactCheck<T, ChildOf<B, K>>
     ) => BoundRouter<ChildOf<B, K>>;
 };
+
+/** Handler options of every procedure under a builder node, as a union. */
+type OptsOf<B> = B extends { handler: AnyFn }
+    ? HandlerOpts<B>
+    : { [K in ChildKeys<B>]: OptsOf<B[K]> }[ChildKeys<B>];
+
+/**
+ * The context a handler receives once every `.use(...)` on `B` has run.
+ * Middleware is global here, so every procedure yields the same context
+ * and the union collapses to one type.
+ */
+export type ContextFromProcedures<B> =
+    OptsOf<B> extends infer O
+        ? O extends { context: infer C }
+            ? C
+            : never
+        : never;
 
 // ─── Runtime ─────────────────────────────────────────────────────────────────
 
@@ -164,5 +189,5 @@ export function createDefineRouter<B extends object>(
                     group,
                 ]),
         ]),
-    ) as DefineRouter<B>;
+    ) as unknown as DefineRouter<B>;
 }

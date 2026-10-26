@@ -36,6 +36,7 @@ export const auth = group('/auth', {
                 }),
             })
             .errors({
+                FORBIDDEN: {},
                 TOO_MANY_REQUESTS: {},
             })
             .responses({

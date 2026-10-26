@@ -1,18 +1,30 @@
 import { ORPCError, os } from '@orpc/server';
 
+import type { Context } from '@orpc/server';
 import type { Logger } from '@shipkit/telemetry/logger';
 
 /** Timing for every route; failures are logged only when unexpected (non-4xx). */
-export function routeLogging({ logSuccess }: { logSuccess: boolean }) {
+export function routeLogging<TContext extends Context = Context>({
+    logSuccess,
+    logger: loggerOption,
+}: {
+    logSuccess: boolean;
+    /** A logger instance, or a function that resolves one from the context. */
+    logger: Logger | ((context: TContext) => Logger);
+}) {
     return os
-        .$context<{ logger: Logger }>()
+        .$context<TContext>()
         .middleware(async ({ context, next, path }) => {
+            const logger =
+                typeof loggerOption === 'function'
+                    ? loggerOption(context)
+                    : loggerOption;
             const start = Date.now();
             const orpcPath = path.join('.');
             try {
                 const result = await next();
                 if (logSuccess) {
-                    context.logger.info(
+                    logger.info(
                         `[oRPC] {orpcPath} executed in {durationMs}ms`,
                         { orpcPath, durationMs: Date.now() - start },
                     );
@@ -22,10 +34,10 @@ export function routeLogging({ logSuccess }: { logSuccess: boolean }) {
                 const expected =
                     error instanceof ORPCError && error.status < 500;
                 if (!expected) {
-                    context.logger.error(
-                        `[oRPC] {orpcPath} failed in {durationMs}ms`,
-                        { orpcPath, durationMs: Date.now() - start },
-                    );
+                    logger.error(`[oRPC] {orpcPath} failed in {durationMs}ms`, {
+                        orpcPath,
+                        durationMs: Date.now() - start,
+                    });
                 }
                 // rethrow to be handled by the global error handler
                 throw error;
