@@ -1,4 +1,5 @@
 import type { AnyContractRouter } from '@orpc/contract';
+import type { GuardedOpts, GuardMeta } from './guards';
 
 type AnyFn = (...args: never[]) => unknown;
 
@@ -73,10 +74,12 @@ type ChildKeys<B> = {
 
 type ChildOf<B, K> = K extends keyof B ? B[K] : never;
 
-/** Plain-function version of every procedure under a builder node. */
-type HandlerTree<B> = B extends { handler: AnyFn }
-    ? (opts: HandlerOpts<B>) => Promise<PadVariants<HandlerOutput<B>>>
-    : { [K in ChildKeys<B>]: HandlerTree<B[K]> };
+/** Plain-function version of every procedure under a builder node. `G` narrows the options. */
+type HandlerTree<B, G = undefined> = B extends { handler: AnyFn }
+    ? (
+          opts: GuardedOpts<HandlerOpts<B>, G>,
+      ) => Promise<PadVariants<HandlerOutput<B>>>
+    : { [K in ChildKeys<B>]: HandlerTree<B[K], G> };
 
 /** Exact-return check applied across the tree. Unknown keys become `never`. */
 type ExactTree<H, B> = B extends { handler: AnyFn }
@@ -94,20 +97,55 @@ type BoundRouter<B> = B extends { handler: AnyFn }
     ? HandlerReturn<B>
     : { [K in ChildKeys<B>]: BoundRouter<B[K]> };
 
-/** One definer per top-level contract group: `defineRouter.auth({ ... })`. */
 type ExactCheck<T, B> = [T] extends [ExactTree<T, B>]
     ? []
     : [error: 'Handler return has keys the contract does not declare'];
 
-type DefineRouter<B> = {
-    [K in ChildKeys<B>]: <T extends HandlerTree<ChildOf<B, K>>>(
+/** Dotted paths of procedures under `B` whose contract doesn't declare error `E`. */
+type MissingPaths<B, E extends string, P extends string> = B extends {
+    handler: AnyFn;
+}
+    ? HandlerOpts<B> extends { errors: infer Er }
+        ? E extends keyof Er
+            ? never
+            : P
+        : P
+    : {
+          [K in ChildKeys<B> & string]: MissingPaths<
+              ChildOf<B, K>,
+              E,
+              `${P}.${K}`
+          >;
+      }[ChildKeys<B> & string];
+
+/** A guarded group is only valid if every route declares the error the guard throws. */
+type GuardCheck<B, G, P extends string> = G extends {
+    meta: { error: infer E extends string };
+}
+    ? [MissingPaths<B, E, P>] extends [never]
+        ? []
+        : [
+              error: `Guard throws ${E}, but the contract doesn't declare it for: ${MissingPaths<B, E, P>}`,
+          ]
+    : [];
+
+type DefineChecks<T, B, G, P extends string> =
+    ExactCheck<T, B> extends [] ? GuardCheck<B, G, P> : ExactCheck<T, B>;
+
+// Type-only. Lets `createGuardedRouter` recover `B` from a definer, since `B`
+// can't be inferred from the mapped type itself. Never exists at runtime.
+declare const builderType: unique symbol;
+
+/** One definer per top-level contract group: `defineRouter.auth({ ... })`. */
+type DefineRouter<B, G = undefined> = {
+    [K in ChildKeys<B>]: <T extends HandlerTree<ChildOf<B, K>, G>>(
         // ExactTree is deliberately not intersected into the handlers parameter.
         // An intersection or conditional there stops TypeScript inferring a wrapper's
         // generics from the handler position, and someone will try to "simplify" it back otherwise.
         handlers: T,
-        ...check: ExactCheck<T, ChildOf<B, K>>
+        ...check: DefineChecks<T, ChildOf<B, K>, G, K & string>
     ) => BoundRouter<ChildOf<B, K>>;
-};
+} & { readonly [builderType]?: B };
 
 /** Handler options of every procedure under a builder node, as a union. */
 type OptsOf<B> = B extends { handler: AnyFn }
@@ -190,4 +228,39 @@ export function createDefineRouter<B extends object>(
                 ]),
         ]),
     ) as unknown as DefineRouter<B>;
+}
+
+/** Wraps every handler function in the tree with the guard, keeping the tree's shape. */
+function wrapHandlers(
+    handlers: UntypedHandlers,
+    wrap: (fn: AnyFn) => AnyFn,
+): UntypedHandlers {
+    if (typeof handlers === 'function') return wrap(handlers);
+    return Object.fromEntries(
+        Object.entries(handlers).map(([k, h]) => [k, wrapHandlers(h, wrap)]),
+    );
+}
+
+/**
+ * Applies a guard (from `createContextGuard`) to every handler of an existing
+ * definer. Handlers receive the narrowed context, and every procedure's
+ * contract must declare the guard's error code, or the call fails to compile.
+ *
+ * @example
+ * export const defineAuthedRouter = createGuardedRouter(defineRouter, authed);
+ */
+export function createGuardedRouter<
+    B extends object,
+    G extends { meta: GuardMeta },
+>(base: DefineRouter<B>, guard: G): DefineRouter<B, G> {
+    const wrap = guard as unknown as (fn: AnyFn) => AnyFn;
+    return Object.fromEntries(
+        Object.entries(base).map(([group, define]) => [
+            group,
+            (handlers: UntypedHandlers) =>
+                (define as (h: UntypedHandlers) => unknown)(
+                    wrapHandlers(handlers, wrap),
+                ),
+        ]),
+    ) as unknown as DefineRouter<B, G>;
 }

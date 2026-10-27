@@ -47,6 +47,40 @@ type Negated<O extends { context: object }, K extends PropertyKey> = Omit<
     context: NegatedContext<O['context'], K>;
 };
 
+export type GuardMeta = {
+    readonly key: PropertyKey;
+    readonly error: string;
+    readonly negate: boolean;
+};
+
+/** A guard function plus the static info needed to narrow a whole router with it. */
+export type ContextGuard<
+    TContext extends object,
+    K extends PropertyKey,
+    E extends CommonORPCErrorCode,
+    TNegate extends boolean,
+> = {
+    <O extends { context: TContext; errors: Record<E, ErrorFactory> }, R>(
+        fn: (
+            o: TNegate extends true ? Negated<O, K> : Narrowed<O, K>,
+        ) => R | Promise<R>,
+    ): (o: O) => Promise<R>;
+    readonly meta: {
+        readonly key: K;
+        readonly error: E;
+        readonly negate: TNegate;
+    };
+};
+
+/** Handler options `O` as they look inside a handler wrapped by guard `G`. */
+export type GuardedOpts<O, G> = O extends { context: object }
+    ? G extends { meta: { key: infer K extends PropertyKey; negate: infer N } }
+        ? N extends true
+            ? Negated<O, K>
+            : Narrowed<O, K>
+        : O
+    : O;
+
 /**
  * Builds a guard that checks `context[key]`:
  *
@@ -83,7 +117,6 @@ type Negated<O extends { context: object }, K extends PropertyKey> = Omit<
  * });
  */
 export function createContextGuard<TContext extends object>(): {
-    // negate: true — handler gets Negated<O, K> (falsy-only narrowing)
     <
         K extends FalsyableKeys<TContext> & string,
         E extends CommonORPCErrorCode,
@@ -92,10 +125,7 @@ export function createContextGuard<TContext extends object>(): {
         error: E;
         message?: string;
         negate: true;
-    }): <O extends { context: TContext; errors: Record<E, ErrorFactory> }, R>(
-        fn: (o: Negated<O, K>) => R | Promise<R>,
-    ) => (o: O) => Promise<R>;
-    // negate absent/false — handler gets Narrowed<O, K>
+    }): ContextGuard<TContext, K, E, true>;
     <
         K extends FalsyableKeys<TContext> & string,
         E extends CommonORPCErrorCode,
@@ -105,9 +135,7 @@ export function createContextGuard<TContext extends object>(): {
         error: E;
         message?: string;
         negate?: false;
-    }): <O extends { context: TContext; errors: Record<E, ErrorFactory> }, R>(
-        fn: (o: Narrowed<O, K>) => R | Promise<R>,
-    ) => (o: O) => Promise<R>;
+    }): ContextGuard<TContext, K, E, false>;
 } {
     return (<
         K extends FalsyableKeys<TContext> & string,
@@ -123,7 +151,8 @@ export function createContextGuard<TContext extends object>(): {
         const negate = config.negate ?? false;
         const check = negate ? undefined : config.check;
 
-        return <
+        const guard =
+            <
                 O extends {
                     context: TContext;
                     errors: Record<E, ErrorFactory>;
@@ -151,5 +180,8 @@ export function createContextGuard<TContext extends object>(): {
                 // Cast is type-level only: narrowing confirmed by the guard above.
                 return fn(o as unknown as Narrowed<O, K> & Negated<O, K>);
             };
-    }) as ReturnType<typeof createContextGuard<TContext>>;
+
+        return Object.assign(guard, { meta: { key, error, negate } });
+        // Cast is type-level only: the overloads above pick negate true/false.
+    }) as unknown as ReturnType<typeof createContextGuard<TContext>>;
 }

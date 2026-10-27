@@ -50,8 +50,10 @@ const procedures = implementer
 
 export const defineRouter = createDefineRouter(contract, procedures);
 
+// ----- Guards/wrappers for handlers -----
+
 /** What every handler receives once the middleware chain from procedures has run. */
-export type HandlerContext = ContextFromProcedures<typeof procedures>;
+type HandlerContext = ContextFromProcedures<typeof procedures>;
 
 export const authed = createContextGuard<HandlerContext>()({
     key: 'session',

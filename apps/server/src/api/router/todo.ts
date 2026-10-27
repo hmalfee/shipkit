@@ -1,7 +1,11 @@
 import { and, desc, eq, pickColumns } from '@shipkit/db/pg';
 import { todos } from '@shipkit/db/pg/schema';
+import { createGuardedRouter } from '@shipkit/orpc-utils/server';
 
 import { authed, defineRouter } from '../base';
+
+// Since `authed` throws `UNAUTHORIZED`, every route in `todo` must declare it in the contract.
+const defineAuthedRouter = createGuardedRouter(defineRouter, authed);
 
 const todoColumns = pickColumns(todos, {
     id: true,
@@ -12,8 +16,8 @@ const todoColumns = pickColumns(todos, {
     updatedAt: true,
 });
 
-export const todo = defineRouter.todo({
-    list: authed(async ({ context }) => {
+export const todo = defineAuthedRouter.todo({
+    list: async ({ context }) => {
         const items = await context.db
             .select(todoColumns)
             .from(todos)
@@ -21,8 +25,8 @@ export const todo = defineRouter.todo({
             .orderBy(desc(todos.createdAt))
             .limit(50);
         return { status: 200, body: items };
-    }),
-    byId: authed(async ({ context, input, errors }) => {
+    },
+    byId: async ({ context, input, errors }) => {
         const [result] = await context.db
             .select(todoColumns)
             .from(todos)
@@ -35,16 +39,16 @@ export const todo = defineRouter.todo({
             .limit(1);
         if (!result) throw errors.NOT_FOUND();
         return { status: 200, body: result };
-    }),
-    create: authed(async ({ context, input, errors }) => {
+    },
+    create: async ({ context, input, errors }) => {
         const [row] = await context.db
             .insert(todos)
             .values({ ...input.body, userId: context.session.user.id })
             .returning(todoColumns);
         if (!row) throw errors.INTERNAL_SERVER_ERROR();
         return { status: 201, body: row };
-    }),
-    update: authed(async ({ context, input, errors }) => {
+    },
+    update: async ({ context, input, errors }) => {
         const [row] = await context.db
             .update(todos)
             .set(input.body)
@@ -57,8 +61,8 @@ export const todo = defineRouter.todo({
             .returning(todoColumns);
         if (!row) throw errors.NOT_FOUND();
         return { status: 200, body: row };
-    }),
-    delete: authed(async ({ context, input }) => {
+    },
+    delete: async ({ context, input }) => {
         await context.db
             .delete(todos)
             .where(
@@ -68,5 +72,5 @@ export const todo = defineRouter.todo({
                 ),
             );
         return { status: 204 };
-    }),
+    },
 });
