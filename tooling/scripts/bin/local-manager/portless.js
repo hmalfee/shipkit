@@ -174,7 +174,21 @@ export async function ensureProxy(mode, lanIp) {
             if (result.exitCode === 0) break;
 
             if (attempt === maxAttempts - 1) {
-                echo(chalk.red(result.stdout + result.stderr));
+                const logPath = path.join(
+                    os.homedir(),
+                    '.portless',
+                    'proxy.log',
+                );
+                const log = await fs
+                    .readFile(logPath, 'utf8')
+                    .catch(() => null);
+                let tail = '';
+                if (log) {
+                    const sections = log.trim().split(/\n\s*\n/);
+                    const lastSection = sections[sections.length - 1]?.trim();
+                    tail = lastSection ? '\n\n' + lastSection : '';
+                }
+                echo(chalk.red(result.stdout + result.stderr + tail));
                 process.exit(result.exitCode ?? 1);
             }
             await run`sudo ${nodeBin} ${portlessCli} proxy stop`;
