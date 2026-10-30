@@ -1,3 +1,4 @@
+import net from 'node:net';
 import os from 'node:os';
 
 import { $, chalk, echo, fs } from 'zx';
@@ -84,15 +85,88 @@ export function getLanIp() {
     return null;
 }
 
+/** `my-app` → `MY_APP`. Used for every injected env var prefix. */
+export const toEnvKey = (name) => name.toUpperCase().replace(/-/g, '_');
+
+/** POSIX single-quote escaping for building `sh -c` strings. */
+export const shellQuote = (arg) => `'${String(arg).replace(/'/g, `'\\''`)}'`;
+
+// Lowercase hostname label that is also a valid env-var prefix once
+// upper-cased: starts with a letter, no leading/trailing hyphen.
+const MULTI_NAME_RE = /^[a-z]([a-z0-9-]*[a-z0-9])?$/;
+
 /**
- * Parses `--sslip`, `--name <value>`, `--persist` (order-independent, must
- * precede the command), plus `ENABLE_SSLIP` env fallback.
- * @returns {{mode:'sslip'|'local', name:string|null, persist:boolean, command:string[]}}
+ * Rejects duplicate names always, and (only when several names are given,
+ * where each becomes an env var prefix) names that aren't hostname/env safe.
+ * A lone `--name` keeps its previous permissive behaviour (e.g. `api.myapp`).
+ */
+export function validateNames(names) {
+    const dupes = [...new Set(names.filter((n, i) => names.indexOf(n) !== i))];
+    if (dupes.length) {
+        echo(chalk.red(`Duplicate --name value(s): ${dupes.join(', ')}`));
+        process.exit(1);
+    }
+    if (names.length > 1) {
+        const bad = names.filter((n) => !MULTI_NAME_RE.test(n));
+        if (bad.length) {
+            echo(
+                chalk.red(
+                    `Invalid --name value(s): ${bad.join(', ')}\n` +
+                        'With multiple names, each must be lowercase letters, digits and hyphens, ' +
+                        'start with a letter, and not end with a hyphen.',
+                ),
+            );
+            process.exit(1);
+        }
+    }
+}
+
+/**
+ * Reserves `count` distinct free ports. All sockets stay open until every
+ * port is chosen so the OS can't hand out the same one twice. There is still
+ * a small window between closing and the app binding; unavoidable without
+ * handing the socket over.
+ * @returns {Promise<number[]>}
+ */
+export async function allocatePorts(count) {
+    const servers = [];
+    try {
+        const ports = [];
+        for (let i = 0; i < count; i++) {
+            const srv = net.createServer();
+            servers.push(srv);
+            await new Promise((resolve, reject) => {
+                srv.once('error', reject);
+                srv.listen(0, resolve);
+            });
+            ports.push(
+                /** @type {import('node:net').AddressInfo} */ (srv.address())
+                    .port,
+            );
+        }
+        return ports;
+    } finally {
+        await Promise.all(
+            servers.map((s) => new Promise((r) => s.close(() => r()))),
+        );
+    }
+}
+
+/**
+ * Parses `--sslip`, `--name <value>` (repeatable), `--persist`
+ * (order-independent, must precede the command), plus `ENABLE_SSLIP` env fallback.
+ *
+ * Note on ports: with zero or one `--name`, the command runs under
+ * `portless run` and receives a single `PORT`. With two or more, it runs
+ * directly and receives one `<NAME>_PORT` per name and no `PORT`. Going from
+ * two names back to one therefore breaks anything reading `<NAME>_PORT`.
+ *
+ * @returns {{mode:'sslip'|'local', names:string[], persist:boolean, command:string[]}}
  */
 export function parseMode(rawArgs) {
     let args = [...rawArgs];
     let sslipFlagged = false;
-    let name = null;
+    const names = [];
     let persist = false;
 
     while (
@@ -107,14 +181,18 @@ export function parseMode(rawArgs) {
             persist = true;
             args = args.slice(1);
         } else {
-            name = args[1] ?? null;
+            if (!args[1] || args[1].startsWith('--')) {
+                echo(chalk.red('--name requires a value.'));
+                process.exit(1);
+            }
+            names.push(args[1]);
             args = args.slice(2);
         }
     }
 
     const mode =
         sslipFlagged || process.env.ENABLE_SSLIP === '1' ? 'sslip' : 'local';
-    return { mode, name, persist, command: args };
+    return { mode, names, persist, command: args };
 }
 
 /**

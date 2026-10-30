@@ -1,7 +1,7 @@
 import { chalk, echo, fs, path } from 'zx';
 
 import { resolveWorkspacePackages } from '../../lib/workspace.js';
-import { run } from './utils.js';
+import { run, toEnvKey } from './utils.js';
 
 /**
  * Finds all workspace packages; warns on short-name collisions (e.g.
@@ -33,7 +33,7 @@ export async function discoverWorkspacePackages(rootDir) {
             echo(
                 chalk.red(
                     `Name collision: "${name}" (${relDir}) and "${prior.name}" (${prior.relDir}) ` +
-                        `both resolve to "${short}" — their ${short.toUpperCase().replace(/-/g, '_')}_URL env vars will collide. Rename one of the packages.`,
+                        `both resolve to "${short}" — their ${toEnvKey(short)}_URL env vars will collide. Rename one of the packages.`,
                 ),
             );
         }
@@ -59,7 +59,7 @@ export function injectAppUrls(shortNames, mode, lanIp) {
                 ? `http://${name}.${lanIp}.sslip.io`
                 : `http://${name}.local`;
 
-        const key = name.toUpperCase().replace(/-/g, '_');
+        const key = toEnvKey(name);
         process.env[`${key}_URL`] = url;
         process.env[`INTERNAL_${key}_URL`] = url;
     }

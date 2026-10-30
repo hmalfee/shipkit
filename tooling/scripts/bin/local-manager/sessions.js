@@ -2,10 +2,22 @@ import os from 'node:os';
 
 import { fs, path } from 'zx';
 
+import { removeAliases, removeAliasesSync } from './aliases.js';
 import { PROXY_STATE_FILE, SOCAT_STATE_FILE } from './portless.js';
 import { run, runSync } from './utils.js';
 
 const SESSIONS_DIR = path.join(os.tmpdir(), 'portless-scripts-sessions');
+
+/**
+ * Everything one dev session must tear down on exit.
+ * @typedef {object} SessionState
+ * @property {string} sessionFile Registry file for this PID.
+ * @property {string|null} nodeBin
+ * @property {string|null} portlessCli
+ * @property {number|null} socatPid
+ * @property {string[]} aliasNames Static routes owned by this session.
+ *   Mutated as aliases are registered, so cleanup always sees the live list.
+ */
 
 /**
  * Registers this process as an active dev session by writing a JSON file
@@ -43,15 +55,16 @@ export async function otherActiveSessions() {
 }
 
 /**
- * Prunes portless routes, removes this session's registry file, and tears
- * down the shared proxy/socat if no other sessions remain.
+ * Removes this session's aliases, prunes portless routes, removes this
+ * session's registry file, and tears down the shared proxy/socat if no
+ * other sessions remain.
+ * @param {SessionState} state
  */
-export async function cleanupSession(
-    sessionFile,
-    nodeBin,
-    portlessCli,
-    socatPid,
-) {
+export async function cleanupSession(state) {
+    const { sessionFile, nodeBin, portlessCli, socatPid, aliasNames } = state;
+
+    // Per-session routes go first; they're ours regardless of who else is running.
+    await removeAliases(aliasNames);
     await run`portless prune`;
     await fs.remove(sessionFile).catch(() => {});
 
@@ -72,13 +85,12 @@ export async function cleanupSession(
 /**
  * Sync twin of {@link cleanupSession}, for `process.on('exit')` handlers.
  * Sudo calls use `-n` so a missing password never hangs process exit.
+ * @param {SessionState} state
  */
-export function cleanupSessionSync(
-    sessionFile,
-    nodeBin,
-    portlessCli,
-    socatPid,
-) {
+export function cleanupSessionSync(state) {
+    const { sessionFile, nodeBin, portlessCli, socatPid, aliasNames } = state;
+
+    removeAliasesSync(aliasNames);
     runSync`portless prune`;
     try {
         fs.removeSync(sessionFile);
