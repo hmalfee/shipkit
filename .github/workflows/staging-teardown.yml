@@ -14,7 +14,7 @@ jobs:
     teardown:
         name: Stop Staging Environment
         runs-on: ubuntu-latest
-        if: github.event.pull_request.merged == true && github.event.pull_request.head.ref == 'staging'
+        if: github.event_name == 'workflow_dispatch' || (github.event.pull_request.merged == true && github.event.pull_request.head.ref == 'staging')
         env:
             SSH_USER: ${{ secrets.SSH_USER || 'root' }}
             SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
@@ -27,7 +27,6 @@ jobs:
         steps:
             - uses: actions/checkout@v7
               with:
-                  ref: main
                   fetch-depth: 0
 
             - name: Read versions from package.json
@@ -40,6 +39,9 @@ jobs:
             - uses: pnpm/action-setup@v6
               with:
                   version: ${{ steps.versions.outputs.pnpm }}
+
+            - name: Configure pnpm store
+              run: pnpm config set store-dir ~/.local/share/pnpm/store
 
             - uses: actions/setup-node@v7
               with:
