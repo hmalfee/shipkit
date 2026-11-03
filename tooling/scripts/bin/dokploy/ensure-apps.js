@@ -12,10 +12,7 @@ async function ensureApplication({ envId, applications, app }) {
     const existing = applications.find((a) => a.name === app);
     if (existing) {
         echo(`  ${app} -> existing application ${existing.applicationId}`);
-        return {
-            applicationId: existing.applicationId,
-            appName: existing.appName,
-        };
+        return existing.applicationId;
     }
 
     const created = await dp.applicationCreate({
@@ -30,12 +27,13 @@ async function ensureApplication({ envId, applications, app }) {
         process.exit(1);
     }
     echo(`  ${app} -> created application ${created.applicationId}`);
-    return { applicationId: created.applicationId, appName: undefined };
+    return created.applicationId;
 }
 
 const WWW_REGEX = '^https?://www\\.(.+)';
 const WWW_REPLACEMENT = 'https://${1}';
 
+// --- Domain strategy 1: explicit base domain (dokploy.json host templates) ---
 async function ensureDomainsAndRedirect({
     app,
     applicationId,
@@ -126,6 +124,44 @@ async function ensureDomainsAndRedirect({
     return bare; // canonical domain
 }
 
+// --- Domain strategy 2: no base domain, let Dokploy generate a traefik.me host ---
+function extractHost(res) {
+    // The SDK's OpenAPI types leave this response untyped, so accept
+    // either a bare string or an object with a domain/host field.
+    const host = typeof res === 'string' ? res : (res?.domain ?? res?.host);
+    return typeof host === 'string' ? host.trim().toLowerCase() : '';
+}
+async function ensureGeneratedDomain({ app, applicationId, appName }) {
+    const existing =
+        (await dp.domainByApplicationId({ query: { applicationId } })) ?? [];
+    // generateDomain embeds a random hash, so calling it on every run would
+    // create a new host on each deploy. Reuse whatever is already attached.
+    if (existing.length > 0) {
+        const host = existing[0].host;
+        echo(`  ${app} -> domain already exists: http://${host}`);
+        return host;
+    }
+    const host = extractHost(
+        await dp.domainGenerateDomain({ body: { appName } }),
+    );
+    if (!host) {
+        throw new Error(`domain.generateDomain returned no host for ${app}`);
+    }
+    await dp.domainCreate({
+        body: {
+            host,
+            port: 3000,
+            https: false,
+            certificateType: 'none',
+            path: '/',
+            applicationId,
+            domainType: 'application',
+        },
+    });
+    echo(chalk.green(`  ${app} -> created generated domain http://${host}`));
+    return host;
+}
+
 export async function ensureApps({
     projectId,
     appsDir = './apps',
@@ -141,6 +177,14 @@ export async function ensureApps({
     const apps = [...appPackages.keys()].sort();
     echo('Apps to ensure:', apps);
 
+    if (!baseDomain) {
+        echo(
+            chalk.yellow(
+                '  No --base-domain: using Dokploy-generated domains (dokploy.json domain config is ignored).',
+            ),
+        );
+    }
+
     const project = await dp.projectOne({ query: { projectId } });
     const projectName = project.name;
     const envId = requireEnvironmentId(
@@ -152,28 +196,32 @@ export async function ensureApps({
             ?.applications ?? [];
 
     const lines = [];
-
     for (const app of apps) {
-        const { applicationId, appName: existingAppName } =
-            await ensureApplication({ envId, applications, app });
-        const host = await ensureDomainsAndRedirect({
+        const applicationId = await ensureApplication({
+            envId,
+            applications,
             app,
-            applicationId,
-            projectName,
-            baseDomain,
-            staging: Boolean(staging),
-            repoRoot,
-            appDir: appPackages.get(app),
         });
+        // appName is Dokploy's internal name (needed both for the generated
+        // domain and for the internal URL), so fetch it before the domain step.
+        const { appName } = await dp.applicationOne({
+            query: { applicationId },
+        });
+        const host = baseDomain
+            ? await ensureDomainsAndRedirect({
+                  app,
+                  applicationId,
+                  projectName,
+                  baseDomain,
+                  staging: Boolean(staging),
+                  repoRoot,
+                  appDir: appPackages.get(app),
+              })
+            : await ensureGeneratedDomain({ app, applicationId, appName });
 
         if (staging) {
             await applyTraefikStagingConfig({ appId: applicationId });
         }
-
-        const appDetails = await dp.applicationOne({
-            query: { applicationId },
-        });
-        const appName = existingAppName || appDetails.appName;
 
         const key = app.toUpperCase().replace(/-/g, '_');
         lines.push(
