@@ -5,25 +5,14 @@ on:
     # pull_request:
     #     types: [closed]
     #     branches: [main]
-
 concurrency:
     group: staging-teardown
     cancel-in-progress: false
-
 jobs:
     teardown:
         name: Stop Staging Environment
         runs-on: ubuntu-latest
         if: github.event_name == 'workflow_dispatch' || (github.event.pull_request.merged == true && github.event.pull_request.head.ref == 'staging')
-        env:
-            SSH_USER: ${{ secrets.SSH_USER || 'root' }}
-            SSH_PORT: ${{ secrets.SSH_PORT || '22' }}
-            SSH_HOST: ${{ secrets.SSH_HOST }}
-            SSH_KEY: ${{ secrets.SSH_KEY }}
-            DOKPLOY_PORT: ${{ secrets.DOKPLOY_PORT || '3000' }}
-            DOKPLOY_URL: http://127.0.0.1:${{ secrets.DOKPLOY_PORT || '3000' }}
-            DOKPLOY_API_KEY: ${{ secrets.DOKPLOY_API_KEY }}
-            DOKPLOY_GENERATED: /tmp/dokploy_generated.env
         steps:
             - uses: actions/checkout@v7
               with:
@@ -59,6 +48,38 @@ jobs:
                   --config.audit=false 
                   --network-concurrency=64
 
+            # Validates the required secrets and exports them to $GITHUB_ENV so
+            # every later step can read them.
+            - name: Validate & export required secrets
+              env:
+                  SECRETS_JSON: ${{ toJSON(secrets) }}
+              run: |
+                  required=(
+                      SSH_KEY
+                      SSH_HOST
+                      DOKPLOY_API_KEY
+                  )
+
+                  missing=()
+                  for var in "${required[@]}"; do
+                      value=$(jq -r --arg k "$var" '.[$k] // ""' <<< "$SECRETS_JSON")
+                      if [ -z "$value" ]; then
+                          missing+=("$var")
+                      fi
+                  done
+                  if [ ${#missing[@]} -gt 0 ]; then
+                      echo "::error::Missing required secrets: ${missing[*]}"
+                      exit 1
+                  fi
+
+                  # Heredoc syntax is needed because SSH_KEY can be multi-line.
+                  # The random delimiter prevents a secret from ending the block early.
+                  delim="EOF_$(openssl rand -hex 8)"
+                  for var in "${required[@]}"; do
+                      value=$(jq -r --arg k "$var" '.[$k]' <<< "$SECRETS_JSON")
+                      printf '%s<<%s\n%s\n%s\n' "$var" "$delim" "$value" "$delim" >> "$GITHUB_ENV"
+                  done
+
             - name: Setup SSH key & tunnel to Dokploy
               run: |
                   mkdir -p ~/.ssh
@@ -68,16 +89,19 @@ jobs:
                       echo "$SSH_KEY" | base64 -d > ~/.ssh/dokploy_ci
                   fi
                   chmod 600 ~/.ssh/dokploy_ci
-                  ssh-keyscan -p "$SSH_PORT" -H "$SSH_HOST" >> ~/.ssh/known_hosts
+                  ssh-keyscan -H "$SSH_HOST" >> ~/.ssh/known_hosts
                   ssh -4 -fNMS /tmp/dokploy_ssh.sock \
-                      -p "$SSH_PORT" \
-                      -L 127.0.0.1:"$DOKPLOY_PORT":localhost:"$DOKPLOY_PORT" \
+                      -L 127.0.0.1:3000:localhost:3000 \
                       -i ~/.ssh/dokploy_ci \
-                      "$SSH_USER@$SSH_HOST"
+                      "root@$SSH_HOST"
                   sleep 1
+
+                  # `dokploy` CLI script requires DOKPLOY_URL to be present.
+                  echo "DOKPLOY_URL=http://127.0.0.1:3000" >> "$GITHUB_ENV"
 
             - name: Find staging project and stop
               run: |
+                  export DOKPLOY_GENERATED=/tmp/dokploy_generated.env
                   pnpm exec dokploy ensure-project --name "${{ steps.versions.outputs.name }}" --staging
                   PROJECT_ID=$(grep "^DOKPLOY_PROJECT_ID=" "$DOKPLOY_GENERATED" | cut -d= -f2)
                   pnpm exec dokploy stop-project --project "$PROJECT_ID" --staging
