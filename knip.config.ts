@@ -9,6 +9,7 @@ const config: KnipConfig = {
         },
         'tooling/scripts': {
             entry: ['bin/*.js', 'bin/**/index.js'],
+            ignoreBinaries: [/.*/],
         },
     },
     exclude: ['optionalPeerDependencies'], // Allows setting peer dependencies as optional
