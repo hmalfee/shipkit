@@ -58,7 +58,7 @@ jobs:
                       AFFECTED_APPS="$AFFECTED_APPS_OVERRIDE"
                   else
                       # turbo ls --affected does not allow --filter, so we filter by path in jq
-                      AFFECTED_APPS=$(pnpm dlx turbo@${{ steps.versions.outputs.turbo }} ls --affected --output=json 2>/dev/null | sed -n '/^{/,$p' | jq -r '.packages.items[] | select(.path | startswith("apps/")) | .name' | xargs | tr ' ' ',')
+                      AFFECTED_APPS=$(pnpm exec turbo ls --affected --output=json 2>/dev/null | sed -n '/^{/,$p' | jq -r '.packages.items[] | select(.path | startswith("apps/")) | .name' | xargs | tr ' ' ',')
                   fi
                   echo "affected_apps=$AFFECTED_APPS" >> "$GITHUB_OUTPUT"
                   echo "Affected apps: $AFFECTED_APPS"
@@ -177,13 +177,18 @@ jobs:
                       PUSH_IMAGE="${REG_HOST}/shipkit/${app}:${TAG}"
                       CACHE_REF="${REG_HOST}/shipkit/${app}:buildcache-${{ github.ref_name }}"
                       
+                      # Fall back to main's cache on non-main branches if branch cache is cold
+                      CACHE_FROM_MAIN_ARG=""
+                      if [ "${{ github.ref_name }}" != "main" ]; then
+                          CACHE_FROM_MAIN_ARG="--cache-from-ref=${REG_HOST}/shipkit/${app}:buildcache-main"
+                      fi
+
                       pnpm exec docker-build "$app" \
                           --build-env-file=/tmp/dokploy_generated.env \
-                          --cache-ref="${CACHE_REF}"
+                          --cache-ref="${CACHE_REF}" \
+                          --push-ref="${PUSH_IMAGE}" \
+                          ${CACHE_FROM_MAIN_ARG}
 
-                      docker tag "$app" "$PUSH_IMAGE"
-                      docker push "$PUSH_IMAGE"
-                      
                       APPS_BUILT="${APPS_BUILT}${app}:${APP_ID}:${PUSH_IMAGE},"
                   done
 

@@ -4,8 +4,9 @@ A wrapper around `docker build` that ensures a clean working tree and automatica
 
 ## Usage
 
+<!-- prettier-ignore -->
 ```sh
-pnpm docker-build [--cache-ref= < app-name > [--build-env-file= < path > ] < image-ref > ]
+pnpm docker-build <app-name> [--build-env-file=<path>] [--cache-ref=<image-ref>] [--push-ref=<image-ref>] [--cache-from-ref=<image-ref>]
 ```
 
 ## Arguments
@@ -16,6 +17,13 @@ pnpm docker-build [--cache-ref= < app-name > [--build-env-file= < path > ] < ima
     - Example: `--build-env-file={APP_FOLDER}/.env`
 - `--cache-ref`: _(Optional)_ Registry image reference to use as a BuildKit cache backend to persist build layers across CI runs.
     - Example: `--cache-ref=registry.example.com/myapp/web:buildcache`
+- `--push-ref`: _(Optional)_ Full registry image reference to stream the built image to directly.
+    - When provided, the image streams straight to the registry via BuildKit — skips local daemon load/decompress/recompress.
+    - When omitted, the image loads into the local Docker daemon as `<app-name>`, so you can run or inspect it locally (`docker run <app-name>`).
+    - Use `--push-ref` in CI; omit it for local development runs where you want the image available in your local daemon.
+- `--cache-from-ref`: _(Optional)_ Additional read-only registry cache source (e.g. the `main` branch cache).
+    - Used as a warm-up fallback when the branch-specific cache is cold (e.g. a new feature branch).
+    - Example: `--cache-from-ref=registry.example.com/myapp/web:buildcache-main`
 
 ## How it works
 
@@ -26,7 +34,9 @@ pnpm docker-build [--cache-ref= < app-name > [--build-env-file= < path > ] < ima
 5. It automatically injects the following arguments into the Docker build:
     - `--build-arg NODE_VERSION` (extracted from the root `package.json` engines field)
     - `--build-arg PNPM_VERSION` (extracted from the root `package.json` packageManager field)
-    - `--build-arg APP_NAME` (the `<app-name>` argument)
+    - `--build-arg TURBO_VERSION` (extracted from the root `package.json` devDependencies field)
+    - `--build-arg APP_NAME` (the app name being built)
+    - `--build-arg ENV_HASH` (SHA-256 of the env file, when `--build-env-file` is provided — invalidates cached layers when env changes)
 
 ## Writing a Dockerfile for this script
 

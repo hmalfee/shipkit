@@ -10,12 +10,17 @@ RUN apk add --no-cache libc6-compat bash
 RUN : "${PNPM_VERSION:?PNPM_VERSION build-arg is required}" \
     && corepack enable pnpm && corepack install -g "pnpm@${PNPM_VERSION}"
 
-FROM base AS pruner
+FROM base AS turbo
+ARG TURBO_VERSION
+RUN : "${TURBO_VERSION:?TURBO_VERSION build-arg is required}" \
+    && pnpm config set global-bin-dir /pnpm \
+    && pnpm add --global turbo@${TURBO_VERSION}
+
+FROM turbo AS pruner
 WORKDIR /app
 COPY . .
 ARG APP_NAME
-ARG TURBO_VERSION
-RUN pnpm dlx turbo@${TURBO_VERSION} prune ${APP_NAME} --docker
+RUN turbo prune ${APP_NAME} --docker
 
 FROM base AS installer
 WORKDIR /app

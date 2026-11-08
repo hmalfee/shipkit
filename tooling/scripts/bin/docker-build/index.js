@@ -10,11 +10,15 @@ const appName = args.find((a) => !a.startsWith('--'));
 const envFileArg = args.find((a) => a.startsWith('--build-env-file='));
 const cacheRefArg = args.find((a) => a.startsWith('--cache-ref='));
 const cacheRef = cacheRefArg?.split('=').slice(1).join('=') ?? null;
+const pushRefArg = args.find((a) => a.startsWith('--push-ref='));
+const pushRef = pushRefArg?.split('=').slice(1).join('=') ?? null;
+const cacheFromRefArg = args.find((a) => a.startsWith('--cache-from-ref='));
+const cacheFromRef = cacheFromRefArg?.split('=').slice(1).join('=') ?? null;
 
 if (!appName) {
     echo(
         chalk.red(
-            'Usage: docker-build <app-name> [--build-env-file=<path>] [--cache-ref=<image-ref>]',
+            'Usage: docker-build <app-name> [--build-env-file=<path>] [--cache-ref=<image-ref>] [--push-ref=<image-ref>] [--cache-from-ref=<image-ref>]',
         ),
     );
     process.exit(1);
@@ -122,13 +126,17 @@ try {
         const content = await fs.readFile(envFilePath, 'utf8');
         const hash = crypto.createHash('sha256').update(content).digest('hex');
         envHashArgs = ['--build-arg', `ENV_HASH=${hash}`];
+        echo(chalk.blue(`ENV_HASH: ${hash.slice(0, 12)}…`));
     }
     const cacheArgs = cacheRef
         ? [
               '--cache-from',
               `type=registry,ref=${cacheRef}`,
+              ...(cacheFromRef
+                  ? ['--cache-from', `type=registry,ref=${cacheFromRef}`]
+                  : []),
               '--cache-to',
-              `type=registry,ref=${cacheRef},mode=min`,
+              `type=registry,ref=${cacheRef},mode=max`,
           ]
         : [];
     echo(chalk.blue(`Packaging build context for ${appName}...`));
@@ -178,8 +186,12 @@ try {
         }
 
         echo(chalk.green(`Running docker buildx build for ${appName}...`));
-        // --load: write the built image into the local Docker image store
-        // (docker-container driver doesn't do this by default)
+        // If --push-ref given: stream directly to registry (skips local daemon load/decompress/recompress).
+        // Otherwise: load into local daemon for manual tagging/pushing.
+        const outputArgs = pushRef
+            ? ['--push', '-t', pushRef]
+            : ['--load', '-t', appName];
+
         await $({
             cwd: tmp,
             stdio: 'inherit',
@@ -192,9 +204,8 @@ try {
             ${envHashArgs} \
             ${secretArgs} \
             ${cacheArgs} \
-            --load \
+            ${outputArgs} \
             -f ${dockerfilePath} \
-            -t ${appName} \
             .`;
     } finally {
         await fs.rm(tmp, { recursive: true, force: true });
