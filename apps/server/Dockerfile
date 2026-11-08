@@ -20,6 +20,7 @@ RUN pnpm dlx turbo@${TURBO_VERSION} prune ${APP_NAME} --docker
 FROM base AS installer
 WORKDIR /app
 COPY --from=pruner /app/out/json/ .
+# Local cache mount: no-op in ephemeral CI runners, speeds up repeated local builds
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
     pnpm install \
     --frozen-lockfile \

@@ -23,6 +23,7 @@ WORKDIR /app
 # better-sqlite3 requires Python and build tools to compile native addons
 RUN apk add --no-cache python3 make g++
 COPY --from=pruner /app/out/json/ .
+# Local cache mount: no-op in ephemeral CI runners, speeds up repeated local builds
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
     pnpm install \
     --frozen-lockfile \
@@ -45,6 +46,7 @@ COPY --from=pruner /app/out/full/ .
 ARG APP_NAME
 ENV PORT=3000
 ARG ENV_HASH
+# next-cache mount: no-op in ephemeral CI runners, speeds up repeated local builds
 RUN --mount=type=cache,id=next-cache-${APP_NAME},target=/app/apps/${APP_NAME}/.next/cache \
     --mount=type=secret,id=env_build,target=/tmp/.env.build \
     # Force cache bust on env changes
