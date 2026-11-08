@@ -1,3 +1,4 @@
 {
-    "extends": "@shipkit/ts-config/base"
+    "extends": "@shipkit/ts-config/base",
+    "include": ["lib", "oxlint.config.ts"]
 }
