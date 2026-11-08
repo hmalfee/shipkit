@@ -6,12 +6,12 @@ A wrapper around `docker build` that ensures a clean working tree and automatica
 
 <!-- prettier-ignore -->
 ```sh
-pnpm docker-build <app-name> [--build-env-file=<path>] [--cache-ref=<image-ref>] [--push-ref=<image-ref>] [--cache-from-ref=<image-ref>]
+pnpm docker-build [<app-name>] [--build-env-file=<path>] [--cache-ref=<image-ref>] [--push-ref=<image-ref>] [--cache-from-ref=<image-ref>]
 ```
 
 ## Arguments
 
-- `<app-name>`: The name of the app in `apps/` to build (e.g., `web`).
+- `<app-name>`: _(Optional)_ The name of the app in `apps/` to build (e.g., `web`). When omitted, prompts interactively to select from apps with a `Dockerfile` (or selects automatically if only one exists).
 - `--build-env-file`: _(Optional)_ Path to an `.env` file to inject as a build secret.
     - You can use `{APP_FOLDER}` in the path, which will dynamically reference the app's directory.
     - Example: `--build-env-file={APP_FOLDER}/.env`
@@ -27,7 +27,7 @@ pnpm docker-build <app-name> [--build-env-file=<path>] [--cache-ref=<image-ref>]
 
 ## How it works
 
-1. It searches the `apps/` directory to find an app that matches the `<app-name>` argument.
+1. It resolves the app to build — from the `<app-name>` argument if provided, or via an interactive prompt listing all apps that have a `Dockerfile`.
 2. It looks for a `Dockerfile` inside that app's directory.
 3. It creates a temporary clean git tree (in the system's temp directory) to avoid sending ignored files to the Docker daemon.
 4. **Crucial:** The `docker build` command is executed from the **root of the monorepo**, so the build context contains the entire clean repository, not just the app folder.

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { cancel, isCancel, select } from '@clack/prompts';
 import { $, chalk, echo, fs, os, path } from 'zx';
 
 import { resolvePackagesUnder } from '../../lib/workspace.js';
@@ -6,7 +7,7 @@ import { resolvePackagesUnder } from '../../lib/workspace.js';
 $.verbose = false;
 
 const args = process.argv.slice(2);
-const appName = args.find((a) => !a.startsWith('--'));
+let appName = args.find((a) => !a.startsWith('--'));
 const envFileArg = args.find((a) => a.startsWith('--build-env-file='));
 const cacheRefArg = args.find((a) => a.startsWith('--cache-ref='));
 const cacheRef = cacheRefArg?.split('=').slice(1).join('=') ?? null;
@@ -14,15 +15,6 @@ const pushRefArg = args.find((a) => a.startsWith('--push-ref='));
 const pushRef = pushRefArg?.split('=').slice(1).join('=') ?? null;
 const cacheFromRefArg = args.find((a) => a.startsWith('--cache-from-ref='));
 const cacheFromRef = cacheFromRefArg?.split('=').slice(1).join('=') ?? null;
-
-if (!appName) {
-    echo(
-        chalk.red(
-            'Usage: docker-build <app-name> [--build-env-file=<path>] [--cache-ref=<image-ref>] [--push-ref=<image-ref>] [--cache-from-ref=<image-ref>]',
-        ),
-    );
-    process.exit(1);
-}
 
 try {
     await $`git rev-parse --is-inside-work-tree`.quiet();
@@ -51,9 +43,8 @@ if (!nodeVersion || !pnpmVersion || !turboVersion) {
 }
 
 const appsPackages = await resolvePackagesUnder(root, 'apps');
-const appFolder = appsPackages.get(appName);
 
-// Build the Dockerfile-filtered list once — used in both error paths below.
+// Build the Dockerfile-filtered list once — used for interactive selection and validation.
 const appsWithDockerfile = (
     await Promise.all(
         [...appsPackages.entries()].map(async ([name, dir]) => {
@@ -66,6 +57,28 @@ const appsWithDockerfile = (
 )
     .filter(Boolean)
     .sort();
+
+if (!appName) {
+    if (appsWithDockerfile.length === 0) {
+        echo(chalk.red('No apps with a Dockerfile found.'));
+        process.exit(1);
+    }
+    if (appsWithDockerfile.length === 1) {
+        appName = appsWithDockerfile[0];
+    } else {
+        const selected = await select({
+            message: 'Select an app to build',
+            options: appsWithDockerfile.map((n) => ({ value: n, label: n })),
+        });
+        if (isCancel(selected)) {
+            cancel('Operation cancelled.');
+            process.exit(0);
+        }
+        appName = selected;
+    }
+}
+
+const appFolder = appsPackages.get(appName);
 
 if (!appFolder) {
     echo(
