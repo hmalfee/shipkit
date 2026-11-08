@@ -17,6 +17,7 @@
         "typecheck": "tsc"
     },
     "dependencies": {
+        "@clack/prompts": "^1.7.0",
         "micromatch": "^4.0.8",
         "openapi-fetch": "^0.17.0",
         "zx": "^8.8.5"

@@ -2,9 +2,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { parseEnv } from 'node:util';
 
+import { cancel, isCancel, select } from '@clack/prompts';
 import { $, chalk, echo, fs } from 'zx';
 
-import { chooseOne } from '../../lib/prompt.js';
 import {
     assertSandboxRunning,
     detectDokployUrl,
@@ -128,11 +128,22 @@ export async function runAct(requestedName, opts = {}) {
 
     const workflowName = (file) => file.replace(/\.ya?ml$/, '');
     const names = workflowFiles.map(workflowName);
-    const name =
-        requestedName ??
-        (names.length === 1
-            ? names[0]
-            : await chooseOne('Select a workflow', names));
+    let name = requestedName;
+    if (!name) {
+        if (names.length === 1) {
+            name = names[0];
+        } else {
+            const selected = await select({
+                message: 'Select a workflow',
+                options: names.map((n) => ({ value: n, label: n })),
+            });
+            if (isCancel(selected)) {
+                cancel('Operation cancelled.');
+                process.exit(0);
+            }
+            name = selected;
+        }
+    }
     const workflowFile = workflowFiles.find((f) => workflowName(f) === name);
     if (!workflowFile)
         throw new Error(
