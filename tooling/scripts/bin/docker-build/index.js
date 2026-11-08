@@ -138,7 +138,7 @@ try {
     ).stdout
         .trim()
         .split('\n')
-        .filter(Boolean);
+        .filter((f) => f && fs.existsSync(path.join(root, f)));
 
     // Build context breakdown by top-level path — cheap insurance against
     // silent bloat (e.g. a store-dir or cache folder landing in the repo
