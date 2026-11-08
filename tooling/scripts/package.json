@@ -11,15 +11,19 @@
         "sandbox": "./bin/sandbox/index.js"
     },
     "scripts": {
+        "generate:dokploy": "openapi-typescript https://raw.githubusercontent.com/Dokploy/sdk/main/openapi.json -o ./lib/dokploy/schema.d.ts",
         "postinstall": "chmod +x ./bin/*.js ./bin/*/index.js",
+        "pretypecheck": "pnpm generate:dokploy",
         "typecheck": "tsc"
     },
     "dependencies": {
-        "@dokploy/sdk": "^0.29.4",
         "micromatch": "^4.0.8",
+        "openapi-fetch": "^0.17.0",
         "zx": "^8.8.5"
     },
     "devDependencies": {
-        "@shipkit/ts-config": "workspace:*"
+        "@shipkit/ts-config": "workspace:*",
+        "openapi-typescript": "^7.13.0",
+        "openapi-typescript-helpers": "^0.1.0"
     }
 }

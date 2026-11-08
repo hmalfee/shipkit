@@ -1,10 +1,10 @@
 import { chalk, echo } from 'zx';
 
-import { dp } from './dp.js';
+import { dokploy as dp } from '../../lib/dokploy/index.js';
 import { requireEnvironmentId } from './utils.js';
 
 export async function stopProject({ projectId, staging = false }) {
-    const project = await dp.projectOne({ query: { projectId } });
+    const project = await dp.project.One({ query: { projectId } });
 
     const envName = staging ? 'staging' : 'production';
     const envId = requireEnvironmentId(project, envName);
@@ -17,7 +17,7 @@ export async function stopProject({ projectId, staging = false }) {
     for (const app of env.applications ?? []) {
         echo(`  Stopping app ${app.name}...`);
         try {
-            await dp.applicationStop({
+            await dp.application.Stop({
                 body: { applicationId: app.applicationId },
             });
             echo(chalk.green(`  Stopped app ${app.name}`));
@@ -33,7 +33,7 @@ export async function stopProject({ projectId, staging = false }) {
     for (const db of env.postgres ?? []) {
         echo(`  Stopping postgres ${db.name}...`);
         try {
-            await dp.postgresStop({ body: { postgresId: db.postgresId } });
+            await dp.postgres.Stop({ body: { postgresId: db.postgresId } });
             echo(chalk.green(`  Stopped postgres ${db.name}`));
         } catch (e) {
             echo(
@@ -47,7 +47,7 @@ export async function stopProject({ projectId, staging = false }) {
     for (const db of env.redis ?? []) {
         echo(`  Stopping redis ${db.name}...`);
         try {
-            await dp.redisStop({ body: { redisId: db.redisId } });
+            await dp.redis.Stop({ body: { redisId: db.redisId } });
             echo(chalk.green(`  Stopped redis ${db.name}`));
         } catch (e) {
             echo(
@@ -61,7 +61,7 @@ export async function stopProject({ projectId, staging = false }) {
     for (const db of env.mongos ?? []) {
         echo(`  Stopping mongo ${db.name}...`);
         try {
-            await dp.mongoStop({ body: { mongoId: db.mongoId } });
+            await dp.mongo.Stop({ body: { mongoId: db.mongoId } });
             echo(chalk.green(`  Stopped mongo ${db.name}`));
         } catch (e) {
             echo(

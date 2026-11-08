@@ -2,7 +2,7 @@ import { randomBytes } from 'crypto';
 
 import { chalk, echo } from 'zx';
 
-import { dp } from './dp.js';
+import { dokploy as dp } from '../../lib/dokploy/index.js';
 import { appendGeneratedVars, requireEnvironmentId } from './utils.js';
 
 const rndPass = () => randomBytes(16).toString('hex');
@@ -39,10 +39,10 @@ const DB_TYPES = {
     postgres: {
         label: 'Postgres',
         idField: 'postgresId',
-        search: (q) => dp.postgresSearch(q),
-        create: (b) => dp.postgresCreate(b),
-        deploy: (b) => dp.postgresDeploy(b),
-        one: (q) => dp.postgresOne(q),
+        search: (q) => dp.postgres.Search(q),
+        create: (b) => dp.postgres.Create(b),
+        deploy: (b) => dp.postgres.Deploy(b),
+        one: (q) => dp.postgres.One(q),
         buildCreateBody: (envId) => ({
             name: 'postgres',
             databaseName: 'app',
@@ -61,10 +61,10 @@ const DB_TYPES = {
     redis: {
         label: 'Redis',
         idField: 'redisId',
-        search: (q) => dp.redisSearch(q),
-        create: (b) => dp.redisCreate(b),
-        deploy: (b) => dp.redisDeploy(b),
-        one: (q) => dp.redisOne(q),
+        search: (q) => dp.redis.Search(q),
+        create: (b) => dp.redis.Create(b),
+        deploy: (b) => dp.redis.Deploy(b),
+        one: (q) => dp.redis.One(q),
         buildCreateBody: (envId) => ({
             name: 'redis',
             databasePassword: rndPass(),
@@ -77,10 +77,10 @@ const DB_TYPES = {
     mongodb: {
         label: 'MongoDB',
         idField: 'mongoId',
-        search: (q) => dp.mongoSearch(q),
-        create: (b) => dp.mongoCreate(b),
-        deploy: (b) => dp.mongoDeploy(b),
-        one: (q) => dp.mongoOne(q),
+        search: (q) => dp.mongo.Search(q),
+        create: (b) => dp.mongo.Create(b),
+        deploy: (b) => dp.mongo.Deploy(b),
+        one: (q) => dp.mongo.One(q),
         buildCreateBody: (envId) => ({
             name: 'mongodb',
             databaseUser: 'app',
@@ -149,7 +149,7 @@ async function ensureDatabase(type, { projectId, envId }) {
 }
 
 export async function ensureDb({ projectId, dbs, staging = false }) {
-    const project = await dp.projectOne({ query: { projectId } });
+    const project = await dp.project.One({ query: { projectId } });
     const envId = requireEnvironmentId(
         project,
         staging ? 'staging' : 'production',

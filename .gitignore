@@ -69,3 +69,5 @@ repomix-output.md
 
 .codegraph/
 repomix-output.xml
+
+tooling/scripts/lib/dokploy/schema.d.ts

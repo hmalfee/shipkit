@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-import { client } from '@dokploy/sdk';
 import { chalk, echo, fs, minimist } from 'zx';
 
 import { deploy } from './deploy.js';
@@ -7,17 +6,6 @@ import { ensureApps } from './ensure-apps.js';
 import { ensureDb } from './ensure-db.js';
 import { ensureProject } from './ensure-project.js';
 import { stopProject } from './stop-project.js';
-
-const { DOKPLOY_URL, DOKPLOY_API_KEY } = process.env;
-
-if (!DOKPLOY_URL || !DOKPLOY_API_KEY) {
-    echo(
-        chalk.red(
-            'Missing required Dokploy env vars (DOKPLOY_URL, DOKPLOY_API_KEY)',
-        ),
-    );
-    process.exit(1);
-}
 
 const argv = minimist(process.argv.slice(2), {
     string: [
@@ -61,11 +49,6 @@ const command = argv._[0];
 if (!USAGE[command]) {
     usageExit(`dokploy <${Object.keys(USAGE).join('|')}>`);
 }
-
-client.setConfig({
-    baseUrl: `${DOKPLOY_URL}/api`,
-    headers: { 'x-api-key': DOKPLOY_API_KEY },
-});
 
 async function run() {
     switch (command) {

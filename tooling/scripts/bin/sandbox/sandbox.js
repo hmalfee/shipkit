@@ -1,10 +1,9 @@
 import os from 'node:os';
 import path from 'node:path';
 
-import { client } from '@dokploy/sdk';
 import { $, chalk, echo, fs, spinner } from 'zx';
 
-import { dp } from '../dokploy/dp.js';
+import { dokploy as dp } from '../../lib/dokploy/index.js';
 
 // Ports
 export const DEFAULT_DOKPLOY_PORT = 3000;
@@ -339,18 +338,18 @@ async function waitForDokploy(url, timeoutMs = 20 * 60 * 1000) {
 
 /** Cached admin API key; creates the admin account + key on first use. */
 export async function getOrCreateApiKey(url) {
+    // The dp client reads its config from process.env on first use; feed it the
+    // sandbox URL here since this is the only place that knows it.
+    process.env.DOKPLOY_URL = url;
     if (fs.existsSync(DOKPLOY_APIKEY_FILE)) {
         try {
             const cached = JSON.parse(
                 await fs.readFile(DOKPLOY_APIKEY_FILE, 'utf8'),
             );
             if (cached.apiKey && cached.userId) {
+                process.env.DOKPLOY_API_KEY = cached.apiKey;
                 // Validate before trusting: cheap authenticated call; throws on a stale key.
-                client.setConfig({
-                    baseUrl: `${url}/api`,
-                    headers: { 'x-api-key': cached.apiKey },
-                });
-                await dp.projectAll();
+                await dp.project.All();
                 return cached;
             }
         } catch {}
@@ -382,8 +381,9 @@ export async function getOrCreateApiKey(url) {
     }).then((r) => r.json());
     if (!data?.user || !data?.session)
         throw new Error('Could not read the Dokploy admin session.');
-    client.setConfig({ baseUrl: `${url}/api`, headers: { Cookie: cookie } });
-    const keyData = await dp.userCreateApiKey({
+    // Bootstrap: no API key yet, authenticate with session cookie.
+    process.env.DOKPLOY_COOKIE = cookie;
+    const keyData = await dp.user.CreateApiKey({
         body: {
             name: 'sandbox-bootstrap',
             rateLimitEnabled: false,
@@ -391,12 +391,11 @@ export async function getOrCreateApiKey(url) {
         },
     });
     const created = { apiKey: keyData.key, userId: data.user.id };
+    // Switch to API key auth for all subsequent dp.* calls.
+    process.env.DOKPLOY_API_KEY = created.apiKey;
+    delete process.env.DOKPLOY_COOKIE;
     await fs.writeFile(DOKPLOY_APIKEY_FILE, JSON.stringify(created, null, 2), {
         mode: 0o600,
-    });
-    client.setConfig({
-        baseUrl: `${url}/api`,
-        headers: { 'x-api-key': created.apiKey },
     });
     echo(chalk.green('✓ Dokploy API key created and cached'));
     return created;
@@ -527,15 +526,15 @@ export async function startSandbox({ port, registryUiPort, clean }) {
             const { userId } = await getOrCreateApiKey(dokployUrl);
 
             // Registry project + compose service
-            let project = (await dp.projectAll()).find(
+            let project = (await dp.project.All()).find(
                 (p) => p.name === 'registry',
             );
             if (!project) {
                 echo(chalk.blue('Creating registry project...'));
-                await dp.projectCreate({
+                await dp.project.Create({
                     body: { name: 'registry', description: 'Local registry' },
                 });
-                project = (await dp.projectAll()).find(
+                project = (await dp.project.All()).find(
                     (p) => p.name === 'registry',
                 );
             }
@@ -544,7 +543,7 @@ export async function startSandbox({ port, registryUiPort, clean }) {
             );
             if (!environment?.compose?.some((c) => c.name === 'registry')) {
                 echo(chalk.blue('Creating registry compose service...'));
-                const registryCompose = await dp.composeCreate({
+                const registryCompose = await dp.compose.Create({
                     body: {
                         name: 'registry',
                         environmentId: environment?.environmentId,
@@ -553,7 +552,7 @@ export async function startSandbox({ port, registryUiPort, clean }) {
                         composeFile: REGISTRY_COMPOSE_YAML,
                     },
                 });
-                await dp.composeDeploy({
+                await dp.compose.Deploy({
                     body: { composeId: registryCompose.composeId },
                 });
                 echo(chalk.green('✓ Registry compose deployed'));
@@ -562,12 +561,12 @@ export async function startSandbox({ port, registryUiPort, clean }) {
             }
 
             // Registry GC cron
-            const schedules = await dp.scheduleList({
+            const schedules = await dp.schedule.List({
                 query: { id: userId, scheduleType: 'dokploy-server' },
             });
             if (!schedules.some((s) => s.name === 'Registry GC')) {
                 echo(chalk.blue('Creating registry GC cron schedule...'));
-                await dp.scheduleCreate({
+                await dp.schedule.Create({
                     body: {
                         name: 'Registry GC',
                         scheduleType: 'dokploy-server',

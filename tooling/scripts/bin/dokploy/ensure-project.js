@@ -2,7 +2,7 @@ import path from 'node:path';
 
 import { chalk, echo, fs } from 'zx';
 
-import { dp } from './dp.js';
+import { dokploy as dp } from '../../lib/dokploy/index.js';
 import { appendGeneratedVars } from './utils.js';
 
 export async function ensureProject({ projectDir = '.', staging = false }) {
@@ -22,7 +22,7 @@ export async function ensureProject({ projectDir = '.', staging = false }) {
         );
     }
 
-    const projects = await dp.projectAll();
+    const projects = await dp.project.All();
     let project = projects.find((p) => p.name === name);
 
     if (project) {
@@ -32,9 +32,9 @@ export async function ensureProject({ projectDir = '.', staging = false }) {
             ),
         );
     } else {
-        await dp.projectCreate({ body: { name, description: '' } });
+        await dp.project.Create({ body: { name, description: '' } });
 
-        const updatedProjects = await dp.projectAll();
+        const updatedProjects = await dp.project.All();
         project = updatedProjects.find((p) => p.name === name);
 
         if (!project) {
@@ -60,7 +60,7 @@ async function ensureEnvironment(projectId, staging) {
         return;
     }
 
-    const environments = await dp.environmentByProjectId({
+    const environments = await dp.environment.ByProjectId({
         query: { projectId },
     });
 
@@ -72,11 +72,11 @@ async function ensureEnvironment(projectId, staging) {
             ),
         );
     } else {
-        await dp.environmentCreate({
+        await dp.environment.Create({
             body: { name: 'staging', projectId },
         });
 
-        const updated = await dp.environmentByProjectId({
+        const updated = await dp.environment.ByProjectId({
             query: { projectId },
         });
         env = updated.find((e) => e.name === 'staging');

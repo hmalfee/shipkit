@@ -2,13 +2,13 @@ import { createHash, randomBytes } from 'node:crypto';
 
 import { chalk, echo, fs, YAML } from 'zx';
 
-import { dp } from './dp.js';
+import { dokploy as dp } from '../../lib/dokploy/index.js';
 import { parseEnv, stringifyEnv } from './utils.js';
 
 export async function deploy({ appId, image, envFile, staging = false }) {
     // 1. Resolve app's environment directly from the app record
     echo('Fetching app...');
-    const app = await dp.applicationOne({ query: { applicationId: appId } });
+    const app = await dp.application.One({ query: { applicationId: appId } });
     const envId = app.environmentId;
     if (!envId) {
         echo(chalk.red(`App ${appId} has no environmentId`));
@@ -26,13 +26,13 @@ export async function deploy({ appId, image, envFile, staging = false }) {
 
     // 3. Merge into the environment-level vars (not project-level), so
     //    staging and production never collide.
-    const environment = await dp.environmentOne({
+    const environment = await dp.environment.One({
         query: { environmentId: envId },
     });
     const envObj = { ...parseEnv(environment.env ?? ''), ...buildEnv };
 
     echo(`Pushing consolidated variables to environment ${envId}...`);
-    await dp.environmentUpdate({
+    await dp.environment.Update({
         body: { environmentId: envId, env: stringifyEnv(envObj) },
     });
 
@@ -42,7 +42,7 @@ export async function deploy({ appId, image, envFile, staging = false }) {
         .join('');
 
     echo(`Sending all vars to app (${appId})...`);
-    await dp.applicationSaveEnvironment({
+    await dp.application.SaveEnvironment({
         body: {
             applicationId: appId,
             env: appEnvString,
@@ -55,7 +55,7 @@ export async function deploy({ appId, image, envFile, staging = false }) {
     // 5. Deploy app
     echo(`Deploying ${image} (applicationId: ${appId})`);
 
-    await dp.applicationSaveDockerProvider({
+    await dp.application.SaveDockerProvider({
         body: {
             applicationId: appId,
             dockerImage: image,
@@ -64,7 +64,7 @@ export async function deploy({ appId, image, envFile, staging = false }) {
             registryUrl: '',
         },
     });
-    const deployRes = await dp.applicationDeploy({
+    const deployRes = await dp.application.Deploy({
         body: { applicationId: appId },
     });
     echo(`deploy response: ${JSON.stringify(deployRes)}`);
@@ -75,7 +75,7 @@ export async function deploy({ appId, image, envFile, staging = false }) {
 }
 
 async function applyCredentials({ appId }) {
-    const app = await dp.applicationOne({ query: { applicationId: appId } });
+    const app = await dp.application.One({ query: { applicationId: appId } });
 
     const username = randomBytes(4).toString('hex');
     const password = randomBytes(16).toString('hex');
@@ -83,7 +83,7 @@ async function applyCredentials({ appId }) {
     const hash = createHash('sha1').update(password).digest('base64');
     const htpasswd = `${username}:{SHA}${hash}`;
 
-    const data = await dp.applicationReadTraefikConfig({
+    const data = await dp.application.ReadTraefikConfig({
         query: { applicationId: appId },
     });
     const currentConfigStr =
@@ -120,7 +120,7 @@ async function applyCredentials({ appId }) {
         }
     }
 
-    await dp.applicationUpdateTraefikConfig({
+    await dp.application.UpdateTraefikConfig({
         body: { applicationId: appId, traefikConfig: YAML.stringify(config) },
     });
 

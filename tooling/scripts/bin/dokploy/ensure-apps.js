@@ -1,7 +1,7 @@
 import { chalk, echo, YAML } from 'zx';
 
+import { dokploy as dp } from '../../lib/dokploy/index.js';
 import { getWorkspaceRoot, resolvePackagesUnder } from '../../lib/workspace.js';
-import { dp } from './dp.js';
 import {
     appendGeneratedVars,
     requireEnvironmentId,
@@ -15,7 +15,7 @@ async function ensureApplication({ envId, applications, app }) {
         return existing.applicationId;
     }
 
-    const created = await dp.applicationCreate({
+    const created = await dp.application.Create({
         body: { name: app, appName: app, environmentId: envId },
     });
     if (!created.applicationId) {
@@ -69,7 +69,8 @@ async function ensureDomainsAndRedirect({
 
     const existing = new Set(
         (
-            (await dp.domainByApplicationId({ query: { applicationId } })) ?? []
+            (await dp.domain.ByApplicationId({ query: { applicationId } })) ??
+            []
         ).map((d) => d.host),
     );
 
@@ -77,7 +78,7 @@ async function ensureDomainsAndRedirect({
 
     for (const h of domainsToEnsure) {
         if (!existing.has(h)) {
-            await dp.domainCreate({
+            await dp.domain.Create({
                 body: {
                     host: h,
                     port: 3000,
@@ -96,7 +97,7 @@ async function ensureDomainsAndRedirect({
 
     // Configure www redirect if applicable
     if (www) {
-        const appDetails = await dp.applicationOne({
+        const appDetails = await dp.application.One({
             query: { applicationId },
         });
         if (
@@ -105,7 +106,7 @@ async function ensureDomainsAndRedirect({
                     r.regex === WWW_REGEX && r.replacement === WWW_REPLACEMENT,
             )
         ) {
-            await dp.redirectsCreate({
+            await dp.redirects.Create({
                 body: {
                     regex: WWW_REGEX,
                     replacement: WWW_REPLACEMENT,
@@ -133,7 +134,7 @@ function extractHost(res) {
 }
 async function ensureGeneratedDomain({ app, applicationId, appName }) {
     const existing =
-        (await dp.domainByApplicationId({ query: { applicationId } })) ?? [];
+        (await dp.domain.ByApplicationId({ query: { applicationId } })) ?? [];
     // generateDomain embeds a random hash, so calling it on every run would
     // create a new host on each deploy. Reuse whatever is already attached.
     if (existing.length > 0) {
@@ -142,12 +143,12 @@ async function ensureGeneratedDomain({ app, applicationId, appName }) {
         return host;
     }
     const host = extractHost(
-        await dp.domainGenerateDomain({ body: { appName } }),
+        await dp.domain.GenerateDomain({ body: { appName } }),
     );
     if (!host) {
         throw new Error(`domain.generateDomain returned no host for ${app}`);
     }
-    await dp.domainCreate({
+    await dp.domain.Create({
         body: {
             host,
             port: 3000,
@@ -185,7 +186,7 @@ export async function ensureApps({
         );
     }
 
-    const project = await dp.projectOne({ query: { projectId } });
+    const project = await dp.project.One({ query: { projectId } });
     const projectName = project.name;
     const envId = requireEnvironmentId(
         project,
@@ -204,7 +205,7 @@ export async function ensureApps({
         });
         // appName is Dokploy's internal name (needed both for the generated
         // domain and for the internal URL), so fetch it before the domain step.
-        const { appName } = await dp.applicationOne({
+        const { appName } = await dp.application.One({
             query: { applicationId },
         });
         const host = baseDomain
@@ -238,11 +239,11 @@ export async function ensureApps({
 }
 
 async function applyTraefikStagingConfig({ appId }) {
-    const app = await dp.applicationOne({ query: { applicationId: appId } });
+    const app = await dp.application.One({ query: { applicationId: appId } });
     const { name: appName } = app;
 
     // Load existing config; fall back to empty object if it's missing/unparsable
-    const data = await dp.applicationReadTraefikConfig({
+    const data = await dp.application.ReadTraefikConfig({
         query: { applicationId: appId },
     });
     const currentConfigStr =
@@ -296,7 +297,7 @@ async function applyTraefikStagingConfig({ appId }) {
         };
     }
 
-    await dp.applicationUpdateTraefikConfig({
+    await dp.application.UpdateTraefikConfig({
         body: { applicationId: appId, traefikConfig: YAML.stringify(config) },
     });
     echo(
