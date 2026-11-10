@@ -1,4 +1,3 @@
-import os from 'node:os';
 import path from 'node:path';
 import { parseEnv } from 'node:util';
 
@@ -13,13 +12,15 @@ import {
     JOB_IMAGE,
     loadSshKey,
     resetRunner,
-    runnerDockerHost,
+    RUNNER_CONTAINER,
 } from './sandbox.js';
 
 const WORKFLOWS_DIR = '.github/workflows';
 // Default to workflow_dispatch when no event is explicitly provided.
 const DEFAULT_EVENT = 'workflow_dispatch';
 const ENV_KEY = /^[A-Za-z_][A-Za-z0-9_]*$/;
+// Persistent cache volume mount path inside the runner container.
+const ACT_CACHE_PATH = '/root/.cache/act-cache';
 const ACT_BASE_ARGS = [
     // Job shares the runner's network namespace, like a process on a VM: the
     // ssh -L tunnels, dockerd and buildkit all see the same 127.0.0.1.
@@ -29,6 +30,18 @@ const ACT_BASE_ARGS = [
     '--container-daemon-socket=unix:///var/run/docker.sock',
     '-P',
     `ubuntu-latest=${JOB_IMAGE}`,
+];
+
+// Cache server flags: bound to 127.0.0.1 inside the runner; reachable from
+// job containers via --network=host. Port 0 = random free port; act injects
+// ACTIONS_CACHE_URL automatically so actions/cache just works.
+const ACT_CACHE_ARGS = [
+    '--cache-server-addr',
+    '127.0.0.1',
+    '--cache-server-port',
+    '0',
+    '--cache-server-path',
+    ACT_CACHE_PATH,
 ];
 
 /**
@@ -99,6 +112,7 @@ async function applyLayers(target, { cwd, flag, files, inline }) {
  *   ref?: string,             // --ref: pretend to run on this branch (e.g. 'staging')
  *   event?: string,           // --event: GitHub event to trigger (default: 'workflow_dispatch')
  *   useCache?: boolean,       // --use-cache: skip the cold-runner reset (faster, less faithful)
+ *   disableActionsCache?: boolean, // --disable-actions-cache: don't start the cache server (actions/cache steps become no-ops)
  *   envFiles?: string[],      // --env-from (repeatable)
  *   secretsFiles?: string[],  // --secrets-from (repeatable)
  *   appsEnv?: boolean,        // --secrets-from-apps-env: merge every apps/<dir>/.env into secrets
@@ -111,8 +125,13 @@ export async function runAct(requestedName, opts = {}) {
         await $`git rev-parse --show-toplevel`.nothrow().quiet()
     ).stdout.trim();
     if (!root) throw new Error('Not inside a git repository.');
-    if ((await $`which act`.nothrow().quiet()).exitCode !== 0)
-        throw new Error('`act` is not installed (https://nektosact.com).');
+
+    // Preflight: host commands required before any container work.
+    for (const cmd of ['tar', 'docker']) {
+        if ((await $`which ${cmd}`.nothrow().quiet()).exitCode !== 0)
+            throw new Error(`\`${cmd}\` is not installed or not in PATH.`);
+    }
+
     await assertSandboxRunning();
 
     // --- resolve workflow ---------------------------------------------------
@@ -150,9 +169,7 @@ export async function runAct(requestedName, opts = {}) {
             `No workflow "${name}" in ${WORKFLOWS_DIR}/\nAvailable: ${names.join(', ')}`,
         );
 
-    const workflowPath = path.join(workflowsDir, workflowFile); // absolute path
     const dokployUrl = await detectDokployUrl();
-    const dockerHost = await runnerDockerHost();
     const cwd = process.cwd();
 
     // --- env + secrets ------------------------------------------------------
@@ -230,27 +247,31 @@ export async function runAct(requestedName, opts = {}) {
         await resetRunner();
     }
 
-    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'act-run-'));
+    // Workspace lives inside the runner container; no host tmpdir needed.
+    const workdir = `/tmp/act-run-${Date.now()}`;
     try {
-        const workspace = path.join(tmp, 'workspace');
-        const secretsFile = path.join(tmp, 'secrets');
-        const envFile = path.join(tmp, 'env');
-        await fs.writeFile(secretsFile, formatEnv(secrets), { mode: 0o600 });
-        await fs.writeFile(envFile, formatEnv(userEnv), { mode: 0o600 });
+        const secretsFile = `${workdir}/.secrets`;
+        const envFile = `${workdir}/.env`;
 
         // --- workspace snapshot ---------------------------------------------
-        // The local equivalent of `actions/checkout`: a throwaway clone of HEAD
-        // plus your uncommitted work (staged, unstaged, untracked-but-not-
+        // The local equivalent of `actions/checkout`: a throwaway snapshot of
+        // HEAD plus your uncommitted work (staged, unstaged, untracked-but-not-
         // ignored). Ignored files (node_modules, .env, .secrets) are left out,
-        // like on a real runner. If `ref` is given, the clone is checked out on
-        // that branch name so act derives github.ref / github.ref_name from git.
-        await $`git clone --quiet --local ${root} ${workspace}`;
-        // Keep github.repository correct (the clone's origin is a local path).
+        // like on a real runner. If `ref` is given, the branch is checked out
+        // so act derives github.ref / github.ref_name from git.
+        await $`docker exec ${RUNNER_CONTAINER} mkdir -p ${workdir}`;
+        await $`git -C ${root} archive HEAD`.pipe(
+            $`docker exec -i ${RUNNER_CONTAINER} tar -x -C ${workdir}`,
+        );
+        await $`tar -C ${root} -c .git`.pipe(
+            $`docker exec -i ${RUNNER_CONTAINER} tar -x -C ${workdir}`,
+        );
+        // Keep github.repository correct (the archive's origin is a local path).
         const origin = await $`git -C ${root} remote get-url origin`
             .nothrow()
             .quiet();
         if (origin.exitCode === 0) {
-            await $`git -C ${workspace} remote set-url origin ${origin.stdout.trim()}`;
+            await $`docker exec ${RUNNER_CONTAINER} git -C ${workdir} remote set-url origin ${origin.stdout.trim()}`;
         }
         // Overlay uncommitted work. --no-renames lists both sides of a rename
         // so the old path is removed and the new one is copied.
@@ -266,46 +287,54 @@ export async function runAct(requestedName, opts = {}) {
         ]);
         for (const file of changed) {
             const src = path.join(root, file);
-            const dest = path.join(workspace, file);
             if (fs.existsSync(src)) {
-                await fs.ensureDir(path.dirname(dest));
-                await fs.copy(src, dest);
+                // tar -x creates parent dirs automatically; same pattern as git archive streaming.
+                await $`tar -C ${root} -c ${file}`.pipe(
+                    $`docker exec -i ${RUNNER_CONTAINER} tar -x -C ${workdir}`,
+                );
             } else {
-                await fs.remove(dest); // deleted locally
+                await $`docker exec ${RUNNER_CONTAINER} rm -f ${workdir}/${file}`;
             }
         }
         if (opts.ref)
-            await $`git -C ${workspace} checkout --quiet -B ${opts.ref}`;
+            await $`docker exec ${RUNNER_CONTAINER} git -C ${workdir} checkout --quiet -B ${opts.ref}`;
+
+        // Write secrets and env files inside the runner (never touch the host fs).
+        await $({
+            input: formatEnv(secrets),
+        })`docker exec -i ${RUNNER_CONTAINER} sh -c ${'cat > ' + secretsFile + ' && chmod 600 ' + secretsFile}`;
+        await $({
+            input: formatEnv(userEnv),
+        })`docker exec -i ${RUNNER_CONTAINER} sh -c ${'cat > ' + envFile}`;
 
         // --- run act --------------------------------------------------------
         const event = opts.event || DEFAULT_EVENT;
         const args = [
             event,
+            '--directory',
+            workdir,
             '-W',
-            workflowPath,
+            `.github/workflows/${workflowFile}`,
             '--secret-file',
             secretsFile,
             '--env-file',
             envFile,
             ...ACT_BASE_ARGS,
+            ...(opts.disableActionsCache ? [] : ACT_CACHE_ARGS),
         ];
         echo(chalk.blue(`Running ${name} (${event}) with act`));
         const result = await $({
-            cwd: workspace,
             stdio: 'inherit',
             nothrow: true,
-            env: {
-                ...process.env,
-                DOCKER_HOST: dockerHost,
-                DOCKER_TLS_VERIFY: '',
-            },
-        })`act ${args}`;
+        })`docker exec -i ${RUNNER_CONTAINER} act ${args}`;
         if (result.exitCode !== 0)
             throw new Error(
                 `${name} failed (act exited with code ${result.exitCode})`,
             );
         echo(chalk.green(`✓ ${name} finished`));
     } finally {
-        await fs.remove(tmp).catch(() => {});
+        await $`docker exec ${RUNNER_CONTAINER} rm -rf ${workdir}`.catch(
+            () => {},
+        );
     }
 }

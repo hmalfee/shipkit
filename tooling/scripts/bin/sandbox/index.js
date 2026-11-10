@@ -30,6 +30,7 @@ Commands:
               --ref <branch>           Branch name to simulate (e.g. staging)
               --event <name>           GitHub event (default: workflow_dispatch)
               --use-cache              Fast iteration: skip cold runner reset (not true-to-CI)
+              --disable-actions-cache  Don't start the cache server (actions/cache steps become no-ops)
               --env-from <path>        Load extra env vars from file (repeatable)
               --secrets-from <path>    Load extra secrets from file (repeatable)
               --secrets-from-apps-env  Load secrets from apps/*/.env
@@ -92,6 +93,7 @@ const commands = {
                 ref: { type: 'string' },
                 event: { type: 'string' },
                 'use-cache': { type: 'boolean' },
+                'disable-actions-cache': { type: 'boolean' },
                 'env-from': { type: 'string', multiple: true },
                 'secrets-from': { type: 'string', multiple: true },
                 'secrets-from-apps-env': { type: 'boolean' },
@@ -108,6 +110,7 @@ const commands = {
             ref: values.ref,
             event: values.event,
             useCache: Boolean(values['use-cache']),
+            disableActionsCache: Boolean(values['disable-actions-cache']),
             envFiles: values['env-from'] ?? [],
             secretsFiles: values['secrets-from'] ?? [],
             appsEnv: Boolean(values['secrets-from-apps-env']),

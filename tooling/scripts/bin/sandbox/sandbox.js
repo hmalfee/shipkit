@@ -12,10 +12,10 @@ export const DEFAULT_REGISTRY_UI_PORT = 5001;
 const SANDBOX_PROJECT = 'shipkit-sandbox';
 const COMPOSE_DIR = path.join(os.tmpdir(), 'shipkit-sandbox');
 const COMPOSE_FILE = path.join(COMPOSE_DIR, 'compose.yml');
-const DOCKERFILE = path.join(COMPOSE_DIR, 'Dockerfile');
 // 1. Dokploy Instance (Deployment Server VM)
 const DOKPLOY_SERVICE = 'dokploy';
 const DOKPLOY_CONTAINER = 'dokploy-server';
+const DOKPLOY_DOCKERFILE = path.join(COMPOSE_DIR, 'Dockerfile.dokploy');
 export const DOKPLOY_HOST = DOKPLOY_SERVICE; // compose-network DNS name
 const DOKPLOY_IMAGE = 'shipkit/dokploy-server:local';
 const DOKPLOY_DATA_VOLUME = `${SANDBOX_PROJECT}_dokploy-data`;
@@ -24,8 +24,8 @@ const DOKPLOY_ADMIN_PASSWORD = 'dokploy-admin-pw';
 const DOKPLOY_APIKEY_FILE = path.join(os.tmpdir(), 'dokploy-server.apikey');
 // 2. Runner Instance (GitHub Actions Runner VM)
 const RUNNER_SERVICE = 'runner';
-const RUNNER_CONTAINER = 'runner-server';
-const RUNNER_DOCKERD_PORT = 2375; // container side only; host side is ephemeral
+export const RUNNER_CONTAINER = 'runner-server';
+const RUNNER_DOCKERFILE = path.join(COMPOSE_DIR, 'Dockerfile.runner');
 export const JOB_IMAGE = 'catthehacker/ubuntu:act-latest';
 // Inter-VM SSH keypair: generated once, stored in user cache
 const CI_SSH_KEY_FILE = path.join(
@@ -52,6 +52,15 @@ RUN apk upgrade --no-cache \\
  && sed -i 's/^AllowTcpForwarding no/AllowTcpForwarding yes/g' /etc/ssh/sshd_config
 `;
 
+// Runner image: DinD base with act pre-installed so act runs inside the
+// runner container (cache server binds to 127.0.0.1, no host ports needed).
+const RUNNER_DOCKERFILE_CONTENT = `FROM docker:27-dind
+RUN apk add --no-cache curl git bash \\
+ && curl -sSL https://github.com/nektos/act/releases/download/v0.2.94/act_Linux_x86_64.tar.gz \\
+    | tar -xz -C /usr/local/bin act \\
+ && git config --global --add safe.directory '*'
+`;
+
 // The host ports are injected through DOKPLOY_PORT and
 // REGISTRY_UI_PORT so the compose file itself stays static. Only the host side
 // is configurable; the container side is always the DEFAULT_*_PORT value.
@@ -60,7 +69,7 @@ const COMPOSE_YAML = `services:
         image: ${DOKPLOY_IMAGE}
         build:
             context: .
-            dockerfile: Dockerfile
+            dockerfile: Dockerfile.dokploy
         container_name: ${DOKPLOY_CONTAINER}
         hostname: ${DOKPLOY_SERVICE}
         restart: 'no'
@@ -120,7 +129,9 @@ const COMPOSE_YAML = `services:
                 fi
                 wait $$DOCKERD_PID
     ${RUNNER_SERVICE}:
-        image: docker:27-dind
+        build:
+            context: .
+            dockerfile: Dockerfile.runner
         container_name: ${RUNNER_CONTAINER}
         hostname: ${RUNNER_SERVICE}
         restart: 'no'
@@ -128,11 +139,9 @@ const COMPOSE_YAML = `services:
         stop_grace_period: 30s
         environment:
             - DOCKER_TLS_CERTDIR=
-        ports:
-            # Loopback-only, ephemeral host port: only act (on the host) uses it.
-            - '127.0.0.1::${RUNNER_DOCKERD_PORT}'
         volumes:
             - runner-data:/var/lib/docker
+            - runner-cache:/root/.cache/act-cache
         healthcheck:
             test: ['CMD-SHELL', 'docker info >/dev/null 2>&1 || exit 1']
             interval: 2s
@@ -143,6 +152,7 @@ volumes:
     dokploy-data:
     dokploy-etc:
     runner-data:
+    runner-cache:
 `;
 
 const REGISTRY_COMPOSE_YAML = `services:
@@ -288,16 +298,6 @@ async function detectHostPort(container, containerPort, fallback) {
 export const detectDokployUrl = async () =>
     `http://localhost:${await detectHostPort(DOKPLOY_CONTAINER, DEFAULT_DOKPLOY_PORT, DEFAULT_DOKPLOY_PORT)}`;
 
-/** DOCKER_HOST act must use so every job lands in the runner instance's daemon. */
-export async function runnerDockerHost() {
-    const port = await detectHostPort(RUNNER_CONTAINER, RUNNER_DOCKERD_PORT, 0);
-    if (!port)
-        throw new Error(
-            'Could not find the runner Docker port.\nRecreate it: `pnpm sandbox stop --rm` then `pnpm sandbox start`.',
-        );
-    return `tcp://127.0.0.1:${port}`;
-}
-
 export async function resetRunner() {
     await $`docker exec ${RUNNER_CONTAINER} sh -c ${`
 docker buildx rm --force shipkit-builder >/dev/null 2>&1 || true
@@ -314,7 +314,8 @@ docker builder prune -af >/dev/null || true
 async function writeComposeFile() {
     await fs.ensureDir(COMPOSE_DIR);
     await fs.writeFile(COMPOSE_FILE, COMPOSE_YAML);
-    await fs.writeFile(DOCKERFILE, DOCKERFILE_CONTENT);
+    await fs.writeFile(DOKPLOY_DOCKERFILE, DOCKERFILE_CONTENT);
+    await fs.writeFile(RUNNER_DOCKERFILE, RUNNER_DOCKERFILE_CONTENT);
 }
 
 async function waitForDokploy(url, timeoutMs = 20 * 60 * 1000) {

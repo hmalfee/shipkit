@@ -8,8 +8,8 @@ The sandbox spins up **two virtual server instances (VMs)** on a private Docker 
     - Runs Dokploy UI/API, Traefik, Postgres, Redis, and SSH server (port 22).
     - Hosts the local Docker Registry (`:5000`) and Registry UI (`:5001`).
 2. **`runner-server` (`runner`)**: Emulates a GitHub-hosted runner (`ubuntu-latest`).
-    - Runs an isolated Docker-in-Docker daemon (`:2375`).
-    - Executes workflow jobs using [`act`](https://nektosact.com), connecting to `dokploy-server` via SSH tunnels.
+    - Runs an isolated Docker-in-Docker daemon (no host ports exposed).
+    - Has [`act`](https://nektosact.com) pre-installed; executes workflow jobs entirely inside the container.
 
 ---
 
@@ -36,6 +36,8 @@ pnpm sandbox start
 - **Dokploy Dashboard:** [http://localhost:3000](http://localhost:3000) (Login: `admin@dokploy.local` / `dokploy-admin-pw`)
 - **Docker Registry UI:** [http://localhost:5001](http://localhost:5001)
 
+**Prerequisites:** `docker` and `tar` must be on your host `PATH` (checked automatically before each run).
+
 ### 2. Run a CI Workflow Locally
 
 Run any workflow from `.github/workflows/` inside the runner instance:
@@ -47,8 +49,6 @@ pnpm sandbox run-act
 # Or pass a workflow file name directly (e.g. .github/workflows/deploy.yml)
 pnpm sandbox run-act deploy
 ```
-
-_Requires [`act`](https://nektosact.com) to be installed on your machine._
 
 ### 3. Stop the Sandbox
 
@@ -86,6 +86,7 @@ pnpm sandbox stop --rm
 | `--ref <branch>`          | `HEAD`              | Branch name to simulate (e.g. `staging`, `main`)                                                                                                  |
 | `--event <name>`          | `workflow_dispatch` | GitHub event trigger                                                                                                                              |
 | `--use-cache`             | `false`             | **Fast iteration only**: skip cold runner reset (reuses cached layers, not true-to-CI)                                                            |
+| `--disable-actions-cache` | `false`             | Don't start the cache server (`actions/cache` steps become no-ops)                                                                                |
 | `--secrets-from-apps-env` | `false`             | Automatically load secrets from `apps/*/.env` files                                                                                               |
 | `--env-from <path>`       | _none_              | Load additional environment variables from file                                                                                                   |
 | `--secrets-from <path>`   | _none_              | Load additional secrets from file                                                                                                                 |
@@ -94,6 +95,9 @@ pnpm sandbox stop --rm
 
 > [!TIP]
 > **Understanding `--use-cache`**: Real GitHub Actions runners always spin up as clean, fresh VMs with zero pre-existing cache. By default, `run-act` mirrors this faithfully by resetting `runner-server` to a cold state before every job. Use `--use-cache` only when you are in a tight debugging loop and need fast turnaround. Avoid relying on `--use-cache` for final deployment verification.
+
+> [!NOTE]
+> **`actions/cache` persistence**: The `runner-cache` Docker volume (`/root/.cache/act-cache` inside the runner) stores `actions/cache` artifacts and persists across runs and sandbox restarts — independent of `--use-cache`. To clear it: `docker volume rm shipkit-sandbox_runner-cache`.
 
 ---
 
@@ -104,6 +108,4 @@ pnpm sandbox stop --rm
     - Injects the public key into `dokploy-server` (`/root/.ssh/authorized_keys`).
     - Automatically initializes an admin account and caches an API token at `/tmp/dokploy-server.apikey`.
 2. **Workflow Execution**:
-    - Creates a temporary git snapshot of your working tree (including unstaged changes, excluding ignored files).
-    - Directs `act` to the `runner-server`'s isolated Docker daemon via `DOCKER_HOST`.
-    - Injects `SSH_HOST=dokploy`, `SSH_KEY`, and `DOKPLOY_API_KEY` into the workflow runner, which the workflows can then use to connect to the `dokploy-server` via SSH and push images, complete deployments, etc.
+    - Runs your workflow against a git snapshot of your working tree (including uncommitted changes, excluding ignored files) inside the runner VM. Injects `SSH_HOST=dokploy`, `SSH_KEY`, and `DOKPLOY_API_KEY` so workflows can connect to `dokploy-server` via SSH, push images, and complete deployments.
