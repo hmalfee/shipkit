@@ -14,7 +14,7 @@ import {
 const USAGE = `Usage: pnpm sandbox <command> [options]
 
 Commands:
-  start     Start the sandbox (Dokploy server instance + GitHub runner instance)
+  start     Start the sandbox (Dokploy server instance; builds the runner image)
             Options:
               --dokploy-port <N>       Dokploy web/API port on host (default: 3000)
               --registry-ui-port <N>   Docker registry UI port on host (default: 5001)
@@ -24,12 +24,11 @@ Commands:
             Options:
               --rm                     Remove containers and network (volumes kept)
 
-  run-act   Run a GitHub Actions workflow on the runner instance against Dokploy
+  run-act   Run a GitHub Actions workflow in an ephemeral runner container against Dokploy
             Options:
               [<workflow>]             Workflow name without .yml (omit to choose interactively)
               --ref <branch>           Branch name to simulate (e.g. staging)
               --event <name>           GitHub event (default: workflow_dispatch)
-              --use-cache              Fast iteration: skip cold runner reset (not true-to-CI)
               --disable-actions-cache  Don't start the cache server (actions/cache steps become no-ops)
               --env-from <path>        Load extra env vars from file (repeatable)
               --secrets-from <path>    Load extra secrets from file (repeatable)
@@ -77,13 +76,13 @@ const commands = {
         await startSandbox({
             port: dokployPort,
             registryUiPort,
-            clean: Boolean(values.clean),
+            clean: values.clean,
         });
     },
 
     async stop(args) {
         const { values } = parseFlags(args, { rm: { type: 'boolean' } });
-        await stopSandbox({ rm: Boolean(values.rm) });
+        await stopSandbox({ rm: values.rm });
     },
 
     async 'run-act'(args) {
@@ -92,7 +91,6 @@ const commands = {
             {
                 ref: { type: 'string' },
                 event: { type: 'string' },
-                'use-cache': { type: 'boolean' },
                 'disable-actions-cache': { type: 'boolean' },
                 'env-from': { type: 'string', multiple: true },
                 'secrets-from': { type: 'string', multiple: true },
@@ -109,13 +107,12 @@ const commands = {
         await runAct(positionals[0], {
             ref: values.ref,
             event: values.event,
-            useCache: Boolean(values['use-cache']),
-            disableActionsCache: Boolean(values['disable-actions-cache']),
-            envFiles: values['env-from'] ?? [],
-            secretsFiles: values['secrets-from'] ?? [],
-            appsEnv: Boolean(values['secrets-from-apps-env']),
-            env: values.env ?? [],
-            secrets: values.secret ?? [],
+            disableActionsCache: values['disable-actions-cache'],
+            envFiles: values['env-from'],
+            secretsFiles: values['secrets-from'],
+            appsEnv: values['secrets-from-apps-env'],
+            env: values.env,
+            secrets: values.secret,
         });
     },
 };

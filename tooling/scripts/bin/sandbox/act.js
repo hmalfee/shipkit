@@ -1,48 +1,24 @@
+import os from 'node:os';
 import path from 'node:path';
 import { parseEnv } from 'node:util';
 
 import { cancel, isCancel, select } from '@clack/prompts';
-import { $, chalk, echo, fs } from 'zx';
+import { $, chalk, echo, fs, which } from 'zx';
 
 import {
     assertSandboxRunning,
     detectDokployUrl,
     DOKPLOY_HOST,
     getOrCreateApiKey,
-    JOB_IMAGE,
     loadSshKey,
-    resetRunner,
-    RUNNER_CONTAINER,
+    RUNNER_CACHE_VOLUME,
+    RUNNER_IMAGE,
+    SANDBOX_NETWORK,
 } from './sandbox.js';
 
 const WORKFLOWS_DIR = '.github/workflows';
-// Default to workflow_dispatch when no event is explicitly provided.
-const DEFAULT_EVENT = 'workflow_dispatch';
-const ENV_KEY = /^[A-Za-z_][A-Za-z0-9_]*$/;
-// Persistent cache volume mount path inside the runner container.
-const ACT_CACHE_PATH = '/root/.cache/act-cache';
-const ACT_BASE_ARGS = [
-    // Job shares the runner's network namespace, like a process on a VM: the
-    // ssh -L tunnels, dockerd and buildkit all see the same 127.0.0.1.
-    '--network=host',
-    // Mount the *runner's* docker.sock (a path inside the runner container)
-    // into the job. act talks to the runner's daemon through DOCKER_HOST.
-    '--container-daemon-socket=unix:///var/run/docker.sock',
-    '-P',
-    `ubuntu-latest=${JOB_IMAGE}`,
-];
-
-// Cache server flags: bound to 127.0.0.1 inside the runner; reachable from
-// job containers via --network=host. Port 0 = random free port; act injects
-// ACTIONS_CACHE_URL automatically so actions/cache just works.
-const ACT_CACHE_ARGS = [
-    '--cache-server-addr',
-    '127.0.0.1',
-    '--cache-server-port',
-    '0',
-    '--cache-server-path',
-    ACT_CACHE_PATH,
-];
+// Where the runner keeps actions/cache artifacts (backed by RUNNER_CACHE_VOLUME).
+const CACHE_DIR = '/act-cache';
 
 /**
  * Serialises env values for act's --env-file / --secret-file.
@@ -69,7 +45,7 @@ function formatEnv(obj) {
 function parseAssignment(flag, raw) {
     const eq = raw.indexOf('=');
     const key = eq === -1 ? raw : raw.slice(0, eq);
-    if (!ENV_KEY.test(key)) {
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) {
         throw new Error(`--${flag} "${raw}": expected KEY=VALUE`);
     }
     if (eq !== -1) return [key, raw.slice(eq + 1)];
@@ -79,7 +55,7 @@ function parseAssignment(flag, raw) {
     return [key, process.env[key]];
 }
 
-async function readEnvFile(file, { required }) {
+async function readEnvFile(file, { required = false } = {}) {
     if (!fs.existsSync(file)) {
         if (required) throw new Error(`File not found: ${file}`);
         return {};
@@ -88,129 +64,112 @@ async function readEnvFile(file, { required }) {
     return parseEnv(await fs.readFile(file, 'utf8'));
 }
 
-/**
- * Applies `files` (must exist, relative to `cwd`) then `inline` KEY=VALUE
- * assignments on top of `target`, in order.
- */
-async function applyLayers(target, { cwd, flag, files, inline }) {
+/** `--*-from` files (must exist; relative to cwd), then inline `KEY=VALUE`s on top. */
+async function loadLayer(flag, files, inline) {
+    const layer = {};
     for (const file of files) {
         Object.assign(
-            target,
-            await readEnvFile(path.resolve(cwd, file), { required: true }),
+            layer,
+            await readEnvFile(path.resolve(file), { required: true }),
         );
     }
     for (const raw of inline) {
         const [key, value] = parseAssignment(flag, raw);
-        target[key] = value;
+        layer[key] = value;
     }
-    return target;
+    return layer;
 }
 
 /**
  * @param {string} [requestedName]  workflow file name without extension
  * @param {{
- *   ref?: string,             // --ref: pretend to run on this branch (e.g. 'staging')
- *   event?: string,           // --event: GitHub event to trigger (default: 'workflow_dispatch')
- *   useCache?: boolean,       // --use-cache: skip the cold-runner reset (faster, less faithful)
- *   disableActionsCache?: boolean, // --disable-actions-cache: don't start the cache server (actions/cache steps become no-ops)
- *   envFiles?: string[],      // --env-from (repeatable)
- *   secretsFiles?: string[],  // --secrets-from (repeatable)
- *   appsEnv?: boolean,        // --secrets-from-apps-env: merge every apps/<dir>/.env into secrets
- *   env?: string[],           // --env KEY=VALUE, or bare KEY (repeatable)
- *   secrets?: string[],       // --secret KEY=VALUE, or bare KEY (repeatable)
+ *   ref?: string,                  // pretend to run on this branch (e.g. 'staging')
+ *   event?: string,                // GitHub event to trigger
+ *   disableActionsCache?: boolean, // don't start the cache server
+ *   envFiles?: string[],           // --env-from (repeatable)
+ *   secretsFiles?: string[],       // --secrets-from (repeatable)
+ *   appsEnv?: boolean,             // merge every apps/<dir>/.env into secrets
+ *   env?: string[],                // --env KEY=VALUE, or bare KEY (repeatable)
+ *   secrets?: string[],            // --secret KEY=VALUE, or bare KEY (repeatable)
  * }} [opts]
  */
-export async function runAct(requestedName, opts = {}) {
+export async function runAct(
+    requestedName,
+    {
+        ref,
+        event = 'workflow_dispatch',
+        disableActionsCache,
+        envFiles = [],
+        secretsFiles = [],
+        appsEnv,
+        env: inlineEnv = [],
+        secrets: inlineSecrets = [],
+    } = {},
+) {
     const root = (
         await $`git rev-parse --show-toplevel`.nothrow().quiet()
     ).stdout.trim();
     if (!root) throw new Error('Not inside a git repository.');
-
-    // Preflight: host commands required before any container work.
     for (const cmd of ['tar', 'docker']) {
-        if ((await $`which ${cmd}`.nothrow().quiet()).exitCode !== 0)
+        if (!(await which(cmd, { nothrow: true })))
             throw new Error(`\`${cmd}\` is not installed or not in PATH.`);
     }
-
     await assertSandboxRunning();
 
     // --- resolve workflow ---------------------------------------------------
     const workflowsDir = path.join(root, WORKFLOWS_DIR);
-    const workflowFiles = fs.existsSync(workflowsDir)
+    const files = fs.existsSync(workflowsDir)
         ? fs
               .readdirSync(workflowsDir)
               .filter((f) => /\.ya?ml$/.test(f))
               .sort()
         : [];
-    if (!workflowFiles.length)
+    if (!files.length)
         throw new Error(`No workflows found in ${WORKFLOWS_DIR}/`);
+    const names = files.map((f) => f.replace(/\.ya?ml$/, ''));
 
-    const workflowName = (file) => file.replace(/\.ya?ml$/, '');
-    const names = workflowFiles.map(workflowName);
     let name = requestedName;
+    if (!name && names.length === 1) name = names[0];
     if (!name) {
-        if (names.length === 1) {
-            name = names[0];
-        } else {
-            const selected = await select({
-                message: 'Select a workflow',
-                options: names.map((n) => ({ value: n, label: n })),
-            });
-            if (isCancel(selected)) {
-                cancel('Operation cancelled.');
-                process.exit(0);
-            }
-            name = selected;
+        const selected = await select({
+            message: 'Select a workflow',
+            options: names.map((n) => ({ value: n, label: n })),
+        });
+        if (isCancel(selected)) {
+            cancel('Operation cancelled.');
+            process.exit(0);
         }
+        name = selected;
     }
-    const workflowFile = workflowFiles.find((f) => workflowName(f) === name);
+    const workflowFile = files[names.indexOf(name)];
     if (!workflowFile)
         throw new Error(
             `No workflow "${name}" in ${WORKFLOWS_DIR}/\nAvailable: ${names.join(', ')}`,
         );
 
-    const dokployUrl = await detectDokployUrl();
-    const cwd = process.cwd();
-
     // --- env + secrets ------------------------------------------------------
     // Read from the real root: `.env` and `.secrets` are gitignored, so they
     // are not in the workspace snapshot.
     echo(chalk.blue('Loading env and secrets...'));
-    const userEnv = await applyLayers(
-        await readEnvFile(path.join(root, '.env'), { required: false }),
-        {
-            cwd,
-            flag: 'env',
-            files: opts.envFiles ?? [],
-            inline: opts.env ?? [],
-        },
-    );
-
-    const userSecrets = await readEnvFile(path.join(root, '.secrets'), {
-        required: false,
-    });
-    if (opts.appsEnv) {
-        // Every apps/<dir>/.env, sorted by dir name. Latest dir wins on collisions.
-        const appsDir = path.join(root, 'apps');
-        if (fs.existsSync(appsDir)) {
-            for (const dir of fs.readdirSync(appsDir).sort()) {
-                Object.assign(
-                    userSecrets,
-                    await readEnvFile(path.join(appsDir, dir, '.env'), {
-                        required: false,
-                    }),
-                );
-            }
+    const env = {
+        ...(await readEnvFile(path.join(root, '.env'))),
+        ...(await loadLayer('env', envFiles, inlineEnv)),
+    };
+    const userSecrets = await readEnvFile(path.join(root, '.secrets'));
+    const appsDir = path.join(root, 'apps');
+    if (appsEnv && fs.existsSync(appsDir)) {
+        // Latest dir (by name) wins on collisions.
+        for (const app of fs.readdirSync(appsDir).sort()) {
+            Object.assign(
+                userSecrets,
+                await readEnvFile(path.join(appsDir, app, '.env')),
+            );
         }
     }
-
-    await applyLayers(userSecrets, {
-        cwd,
-        flag: 'secret',
-        files: opts.secretsFiles ?? [],
-        inline: opts.secrets ?? [],
-    });
-
+    Object.assign(
+        userSecrets,
+        await loadLayer('secret', secretsFiles, inlineSecrets),
+    );
     if (!Object.keys(userSecrets).length) {
         echo(
             chalk.yellow(
@@ -221,7 +180,7 @@ export async function runAct(requestedName, opts = {}) {
 
     // The only values injected: how to reach the sandbox over SSH (by name,
     // port 22, like a remote server), the SSH key and the API key.
-    const { apiKey } = await getOrCreateApiKey(dokployUrl);
+    const { apiKey } = await getOrCreateApiKey(await detectDokployUrl());
     const { privateKey } = await loadSshKey();
     const injected = {
         SSH_HOST: DOKPLOY_HOST,
@@ -237,104 +196,88 @@ export async function runAct(requestedName, opts = {}) {
         );
     }
 
-    const secrets = { ...userSecrets, ...injected };
-    if (!opts.useCache) {
-        echo(
-            chalk.blue(
-                'Resetting Runner instance to a cold state (--use-cache to skip)...',
-            ),
-        );
-        await resetRunner();
-    }
+    // --- workspace bundle ---------------------------------------------------
+    // One tar: the working tree as git sees it (tracked + untracked-not-ignored,
+    // minus files deleted on disk) plus .git, with .secrets/.env appended.
+    // The stage dir holds secrets, so it is removed on every exit path
+    // (normal, process.exit, Ctrl-C).
+    const stageDir = await fs.mkdtemp(path.join(os.tmpdir(), 'act-stage-'));
+    process.once('exit', () => fs.removeSync(stageDir));
+    process.once('SIGINT', () => process.exit(130));
 
-    // Workspace lives inside the runner container; no host tmpdir needed.
-    const workdir = `/tmp/act-run-${Date.now()}`;
-    try {
-        const secretsFile = `${workdir}/.secrets`;
-        const envFile = `${workdir}/.env`;
+    await fs.writeFile(
+        path.join(stageDir, '.secrets'),
+        formatEnv({ ...userSecrets, ...injected }),
+        { mode: 0o600 },
+    );
+    await fs.writeFile(path.join(stageDir, '.env'), formatEnv(env));
 
-        // --- workspace snapshot ---------------------------------------------
-        // The local equivalent of `actions/checkout`: a throwaway snapshot of
-        // HEAD plus your uncommitted work (staged, unstaged, untracked-but-not-
-        // ignored). Ignored files (node_modules, .env, .secrets) are left out,
-        // like on a real runner. If `ref` is given, the branch is checked out
-        // so act derives github.ref / github.ref_name from git.
-        await $`docker exec ${RUNNER_CONTAINER} mkdir -p ${workdir}`;
-        await $`git -C ${root} archive HEAD`.pipe(
-            $`docker exec -i ${RUNNER_CONTAINER} tar -x -C ${workdir}`,
-        );
-        await $`tar -C ${root} -c .git`.pipe(
-            $`docker exec -i ${RUNNER_CONTAINER} tar -x -C ${workdir}`,
-        );
-        // Keep github.repository correct (the archive's origin is a local path).
-        const origin = await $`git -C ${root} remote get-url origin`
-            .nothrow()
-            .quiet();
-        if (origin.exitCode === 0) {
-            await $`docker exec ${RUNNER_CONTAINER} git -C ${workdir} remote set-url origin ${origin.stdout.trim()}`;
-        }
-        // Overlay uncommitted work. --no-renames lists both sides of a rename
-        // so the old path is removed and the new one is copied.
-        const list = async (cmd) =>
-            (await cmd).stdout.split('\0').filter(Boolean);
-        const changed = new Set([
-            ...(await list(
-                $`git -C ${root} diff --name-only --no-renames -z HEAD`.quiet(),
-            )),
-            ...(await list(
-                $`git -C ${root} ls-files -z -o --exclude-standard`.quiet(),
-            )),
-        ]);
-        for (const file of changed) {
-            const src = path.join(root, file);
-            if (fs.existsSync(src)) {
-                // tar -x creates parent dirs automatically; same pattern as git archive streaming.
-                await $`tar -C ${root} -c ${file}`.pipe(
-                    $`docker exec -i ${RUNNER_CONTAINER} tar -x -C ${workdir}`,
-                );
-            } else {
-                await $`docker exec ${RUNNER_CONTAINER} rm -f ${workdir}/${file}`;
-            }
-        }
-        if (opts.ref)
-            await $`docker exec ${RUNNER_CONTAINER} git -C ${workdir} checkout --quiet -B ${opts.ref}`;
+    const listed = (
+        await $`git -C ${root} ls-files -z --cached --others --exclude-standard`.quiet()
+    ).stdout.split('\0');
+    // --cached also lists files deleted on disk; lstat drops those (and, unlike
+    // existsSync, keeps dangling symlinks). The Set dedupes merge-conflict entries.
+    const snapshot = [...new Set(listed)].filter(
+        (f) => f && fs.lstatSync(path.join(root, f), { throwIfNoEntry: false }),
+    );
+    const bundle = path.join(stageDir, 'bundle.tar');
+    await $({
+        input: [...snapshot, '.git'].join('\0') + '\0',
+    })`tar -C ${root} -cf ${bundle} --null -T -`;
+    await $`tar -C ${stageDir} -rf ${bundle} .secrets .env`;
 
-        // Write secrets and env files inside the runner (never touch the host fs).
-        await $({
-            input: formatEnv(secrets),
-        })`docker exec -i ${RUNNER_CONTAINER} sh -c ${'cat > ' + secretsFile + ' && chmod 600 ' + secretsFile}`;
-        await $({
-            input: formatEnv(userEnv),
-        })`docker exec -i ${RUNNER_CONTAINER} sh -c ${'cat > ' + envFile}`;
+    // --- run ----------------------------------------------------------------
+    // Static script: the bundle arrives on stdin, $REF via -e, act's args as "$@".
+    // cwd is /workspace (docker run -w creates it).
+    const script = `
+set -e
+tar -xf - --no-same-owner
+[ -z "$REF" ] || git checkout --quiet -B "$REF"
+dockerd --storage-driver=fuse-overlayfs >/var/log/dockerd.log 2>&1 &
+timeout 60 sh -c 'until docker info >/dev/null 2>&1; do sleep 1; done' \\
+  || { echo "dockerd failed to start:" >&2; cat /var/log/dockerd.log >&2; exit 1; }
+exec act "$@"
+`;
+    const actArgs = [
+        event,
+        '-W',
+        `${WORKFLOWS_DIR}/${workflowFile}`,
+        '--secret-file',
+        '.secrets',
+        '--env-file',
+        '.env',
+        // Run steps directly on the runner's own filesystem (no job container)
+        // so the workspace and $HOME share a root fs and pnpm hardlinks work.
+        '-P',
+        'ubuntu-latest=-self-hosted',
+        // Cache server on a random free port; act injects ACTIONS_CACHE_URL.
+        ...(disableActionsCache
+            ? []
+            : [
+                  '--cache-server-addr',
+                  '127.0.0.1',
+                  '--cache-server-port',
+                  '0',
+                  '--cache-server-path',
+                  CACHE_DIR,
+              ]),
+    ];
 
-        // --- run act --------------------------------------------------------
-        const event = opts.event || DEFAULT_EVENT;
-        const args = [
-            event,
-            '--directory',
-            workdir,
-            '-W',
-            `.github/workflows/${workflowFile}`,
-            '--secret-file',
-            secretsFile,
-            '--env-file',
-            envFile,
-            ...ACT_BASE_ARGS,
-            ...(opts.disableActionsCache ? [] : ACT_CACHE_ARGS),
-        ];
-        echo(chalk.blue(`Running ${name} (${event}) with act`));
-        const result = await $({
-            stdio: 'inherit',
-            nothrow: true,
-        })`docker exec -i ${RUNNER_CONTAINER} act ${args}`;
-        if (result.exitCode !== 0)
-            throw new Error(
-                `${name} failed (act exited with code ${result.exitCode})`,
-            );
-        echo(chalk.green(`✓ ${name} finished`));
-    } finally {
-        await $`docker exec ${RUNNER_CONTAINER} rm -rf ${workdir}`.catch(
-            () => {},
+    echo(chalk.blue(`Running ${name} (${event}) in ephemeral runner`));
+    const result = await $({
+        input: fs.createReadStream(bundle),
+        stdio: ['pipe', 'inherit', 'inherit'],
+        nothrow: true,
+    })`docker run --rm -i --init --privileged \
+        --network ${SANDBOX_NETWORK} \
+        -w /workspace \
+        -v ${RUNNER_CACHE_VOLUME}:${CACHE_DIR} \
+        -e REF=${ref ?? ''} \
+        ${RUNNER_IMAGE} bash -c ${script} runner ${actArgs}`;
+
+    if (result.exitCode !== 0)
+        throw new Error(
+            `${name} failed (act exited with code ${result.exitCode})`,
         );
-    }
+    echo(chalk.green(`✓ ${name} finished`));
 }

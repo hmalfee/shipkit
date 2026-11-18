@@ -1,33 +1,32 @@
 import os from 'node:os';
 import path from 'node:path';
 
-import { $, chalk, echo, fs, spinner } from 'zx';
+import { $, chalk, echo, fs, sleep, spinner } from 'zx';
 
 import { dokploy as dp } from '../../lib/dokploy/index.js';
+import { timed } from '../../lib/timed.js';
 
 // Ports
 export const DEFAULT_DOKPLOY_PORT = 3000;
 export const DEFAULT_REGISTRY_UI_PORT = 5001;
-// Top-level Sandbox project
+
 const SANDBOX_PROJECT = 'shipkit-sandbox';
-const COMPOSE_DIR = path.join(os.tmpdir(), 'shipkit-sandbox');
-const COMPOSE_FILE = path.join(COMPOSE_DIR, 'compose.yml');
-// 1. Dokploy Instance (Deployment Server VM)
-const DOKPLOY_SERVICE = 'dokploy';
+export const SANDBOX_NETWORK = `${SANDBOX_PROJECT}_default`;
+
+// Dokploy server instance: stands in for the deployment target (VPS).
 const DOKPLOY_CONTAINER = 'dokploy-server';
-const DOKPLOY_DOCKERFILE = path.join(COMPOSE_DIR, 'Dockerfile.dokploy');
-export const DOKPLOY_HOST = DOKPLOY_SERVICE; // compose-network DNS name
+export const DOKPLOY_HOST = 'dokploy'; // compose service name + hostname on the sandbox network
 const DOKPLOY_IMAGE = 'shipkit/dokploy-server:local';
 const DOKPLOY_DATA_VOLUME = `${SANDBOX_PROJECT}_dokploy-data`;
 const DOKPLOY_ADMIN_EMAIL = 'admin@dokploy.local';
 const DOKPLOY_ADMIN_PASSWORD = 'dokploy-admin-pw';
 const DOKPLOY_APIKEY_FILE = path.join(os.tmpdir(), 'dokploy-server.apikey');
-// 2. Runner Instance (GitHub Actions Runner VM)
-const RUNNER_SERVICE = 'runner';
-export const RUNNER_CONTAINER = 'runner-server';
-const RUNNER_DOCKERFILE = path.join(COMPOSE_DIR, 'Dockerfile.runner');
-export const JOB_IMAGE = 'catthehacker/ubuntu:act-latest';
-// Inter-VM SSH keypair: generated once, stored in user cache
+
+// Runner image: an ephemeral container per `run-act`, not managed by compose.
+export const RUNNER_IMAGE = 'shipkit/runner:local';
+export const RUNNER_CACHE_VOLUME = `${SANDBOX_PROJECT}_runner-cache`;
+
+// Runner → Dokploy SSH keypair: generated once, stored in the user cache.
 const CI_SSH_KEY_FILE = path.join(
     os.homedir(),
     '.cache',
@@ -43,7 +42,7 @@ const CI_SSH_KEY_FILE = path.join(
 // `apk upgrade` runs first to resolve an Alpine openssh-client conflict when
 // installing `openssh`. SSH host keys and sshd configuration (key-based root
 // login, TCP forwarding) are set up at build time.
-const DOCKERFILE_CONTENT = `FROM docker:27-dind
+const DOKPLOY_DOCKERFILE = `FROM docker:27-dind
 RUN apk upgrade --no-cache \\
  && apk add --no-cache openssh curl iproute2 \\
  && ssh-keygen -A \\
@@ -52,12 +51,14 @@ RUN apk upgrade --no-cache \\
  && sed -i 's/^AllowTcpForwarding no/AllowTcpForwarding yes/g' /etc/ssh/sshd_config
 `;
 
-// Runner image: DinD base with act pre-installed so act runs inside the
-// runner container (cache server binds to 127.0.0.1, no host ports needed).
-const RUNNER_DOCKERFILE_CONTENT = `FROM docker:27-dind
-RUN apk add --no-cache curl git bash \\
- && curl -sSL https://github.com/nektos/act/releases/download/v0.2.94/act_Linux_x86_64.tar.gz \\
+// Runner: catthehacker's ubuntu-latest lookalike plus act and a DinD-capable
+// storage driver. act runs in -self-hosted mode on this container's own fs.
+const RUNNER_DOCKERFILE = `FROM catthehacker/ubuntu:act-latest
+RUN curl -sSL "https://github.com/nektos/act/releases/download/v0.2.94/act_Linux_$(uname -m | sed s/aarch64/arm64/).tar.gz" \\
     | tar -xz -C /usr/local/bin act \\
+ && apt-get update -qq \\
+ && apt-get install -y --no-install-recommends fuse3 fuse-overlayfs \\
+ && rm -rf /var/lib/apt/lists/* \\
  && git config --global --add safe.directory '*'
 `;
 
@@ -65,13 +66,10 @@ RUN apk add --no-cache curl git bash \\
 // REGISTRY_UI_PORT so the compose file itself stays static. Only the host side
 // is configurable; the container side is always the DEFAULT_*_PORT value.
 const COMPOSE_YAML = `services:
-    ${DOKPLOY_SERVICE}:
+    ${DOKPLOY_HOST}:
         image: ${DOKPLOY_IMAGE}
-        build:
-            context: .
-            dockerfile: Dockerfile.dokploy
         container_name: ${DOKPLOY_CONTAINER}
-        hostname: ${DOKPLOY_SERVICE}
+        hostname: ${DOKPLOY_HOST}
         restart: 'no'
         privileged: true
         stop_grace_period: 30s
@@ -128,31 +126,9 @@ const COMPOSE_YAML = `services:
                   echo "Dokploy already installed — skipping installer, just starting daemon."
                 fi
                 wait $$DOCKERD_PID
-    ${RUNNER_SERVICE}:
-        build:
-            context: .
-            dockerfile: Dockerfile.runner
-        container_name: ${RUNNER_CONTAINER}
-        hostname: ${RUNNER_SERVICE}
-        restart: 'no'
-        privileged: true
-        stop_grace_period: 30s
-        environment:
-            - DOCKER_TLS_CERTDIR=
-        volumes:
-            - runner-data:/var/lib/docker
-            - runner-cache:/root/.cache/act-cache
-        healthcheck:
-            test: ['CMD-SHELL', 'docker info >/dev/null 2>&1 || exit 1']
-            interval: 2s
-            timeout: 5s
-            retries: 60
-            start_period: 5s
 volumes:
     dokploy-data:
     dokploy-etc:
-    runner-data:
-    runner-cache:
 `;
 
 const REGISTRY_COMPOSE_YAML = `services:
@@ -213,34 +189,13 @@ docker service update --detach --force dokploy
 // helpers
 // ---------------------------------------------------------------------------
 
-/** `docker compose` for the sandbox project; env fills the compose file's variables. */
+/** `docker compose` for the sandbox project; YAML comes in on stdin, env fills its variables. */
 const compose = (env, ...args) =>
     $({
-        stdio: 'inherit',
+        input: COMPOSE_YAML,
+        stdio: ['pipe', 'inherit', 'inherit'],
         env: { ...process.env, ...env },
-    })`docker compose -f ${COMPOSE_FILE} -p ${SANDBOX_PROJECT} ${args}`;
-
-/** Runs fn and prints how long it took. */
-async function timed(label, fn) {
-    const t0 = Date.now();
-    try {
-        return await fn();
-    } finally {
-        const secs = ((Date.now() - t0) / 1000).toFixed(1);
-        echo(chalk.gray(`  ⏱ ${label}: ${secs}s`));
-    }
-}
-
-async function waitFor(label, check, { timeoutMs, intervalMs = 1000 }) {
-    const deadline = Date.now() + timeoutMs;
-    while (Date.now() < deadline) {
-        try {
-            if (await check()) return;
-        } catch {}
-        await new Promise((r) => setTimeout(r, intervalMs));
-    }
-    throw new Error(`Timed out waiting for ${label}`);
-}
+    })`docker compose -f - -p ${SANDBOX_PROJECT} ${args}`;
 
 /** Reads the CI keypair, or null if it hasn't been generated yet. */
 async function readSshKey() {
@@ -272,64 +227,38 @@ async function containerRunning(name) {
 }
 
 export async function assertSandboxRunning() {
-    const instances = [
-        { name: DOKPLOY_CONTAINER, label: 'Dokploy server instance' },
-        { name: RUNNER_CONTAINER, label: 'GitHub runner instance' },
-    ];
-    for (const { name, label } of instances) {
-        if (!(await containerRunning(name)))
-            throw new Error(
-                `${label} ("${name}") is not running.\nStart the sandbox with \`pnpm sandbox start\`.`,
-            );
-    }
-}
-
-/** Host port `container` publishes `containerPort` on, or `fallback`. */
-async function detectHostPort(container, containerPort, fallback) {
-    const res = await $`docker port ${container} ${containerPort}/tcp`
-        .nothrow()
-        .quiet();
-    const first = res.stdout.trim().split('\n')[0] ?? '';
-    const port = Number(first.split(':').pop());
-    return Number.isInteger(port) && port > 0 ? port : fallback;
+    if (!(await containerRunning(DOKPLOY_CONTAINER)))
+        throw new Error(
+            `Dokploy server instance ("${DOKPLOY_CONTAINER}") is not running.\nStart the sandbox with \`pnpm sandbox start\`.`,
+        );
 }
 
 /** Where Dokploy is published on the host. */
-export const detectDokployUrl = async () =>
-    `http://localhost:${await detectHostPort(DOKPLOY_CONTAINER, DEFAULT_DOKPLOY_PORT, DEFAULT_DOKPLOY_PORT)}`;
-
-export async function resetRunner() {
-    await $`docker exec ${RUNNER_CONTAINER} sh -c ${`
-docker buildx rm --force shipkit-builder >/dev/null 2>&1 || true
-docker ps -aq | xargs -r docker rm -f
-docker image prune -f >/dev/null
-docker images --format '{{.Repository}}:{{.Tag}}' \\
-  | grep -v -E '^(catthehacker/|moby/buildkit:)' \\
-  | xargs -r docker rmi -f || true
-docker volume prune -af >/dev/null
-docker builder prune -af >/dev/null || true
-`}`;
+export async function detectDokployUrl() {
+    const res =
+        await $`docker port ${DOKPLOY_CONTAINER} ${DEFAULT_DOKPLOY_PORT}/tcp`
+            .nothrow()
+            .quiet();
+    const port = Number(res.stdout.split('\n')[0].split(':').pop());
+    return `http://localhost:${port > 0 ? port : DEFAULT_DOKPLOY_PORT}`;
 }
 
-async function writeComposeFile() {
-    await fs.ensureDir(COMPOSE_DIR);
-    await fs.writeFile(COMPOSE_FILE, COMPOSE_YAML);
-    await fs.writeFile(DOKPLOY_DOCKERFILE, DOCKERFILE_CONTENT);
-    await fs.writeFile(RUNNER_DOCKERFILE, RUNNER_DOCKERFILE_CONTENT);
-}
-
-async function waitForDokploy(url, timeoutMs = 20 * 60 * 1000) {
+async function waitForDokploy(url) {
     const title = 'Waiting for Dokploy to be ready...';
     if (process.env.CI) echo(chalk.blue(title));
-    await spinner(chalk.blue(title), () =>
-        waitFor(
-            'Dokploy',
-            async () =>
-                (await fetch(url, { signal: AbortSignal.timeout(3000) }))
-                    .status < 500,
-            { timeoutMs, intervalMs: 2000 },
-        ),
-    );
+    const deadline = Date.now() + 20 * 60_000;
+    await spinner(chalk.blue(title), async () => {
+        while (Date.now() < deadline) {
+            try {
+                const res = await fetch(url, {
+                    signal: AbortSignal.timeout(3000),
+                });
+                if (res.status < 500) return;
+            } catch {}
+            await sleep(2000);
+        }
+        throw new Error('Timed out waiting for Dokploy');
+    });
     echo(chalk.green(`✓ Dokploy is ready at ${url}`));
 }
 
@@ -406,22 +335,16 @@ export async function getOrCreateApiKey(url) {
 // public commands
 // ---------------------------------------------------------------------------
 export async function startSandbox({ port, registryUiPort, clean }) {
-    if (
-        (await containerRunning(DOKPLOY_CONTAINER)) ||
-        (await containerRunning(RUNNER_CONTAINER))
-    )
+    if (await containerRunning(DOKPLOY_CONTAINER))
         throw new Error(
             'Sandbox is already running.\nUse `pnpm sandbox stop` to stop it first.',
         );
     const dokployUrl = `http://localhost:${port}`;
     // True if the Dokploy data volume exists (i.e. Dokploy was installed before).
-    const hadData =
-        (
-            await $`docker volume inspect ${DOKPLOY_DATA_VOLUME}`
-                .nothrow()
-                .quiet()
-        ).exitCode === 0;
-    if (!hadData) await fs.remove(DOKPLOY_APIKEY_FILE).catch(() => {});
+    const hadData = (
+        await $`docker volume inspect ${DOKPLOY_DATA_VOLUME}`.nothrow().quiet()
+    ).ok;
+    if (!hadData) await fs.remove(DOKPLOY_APIKEY_FILE);
     if (clean && !hadData)
         echo(chalk.gray('· No existing Dokploy data — nothing to clean'));
 
@@ -432,8 +355,8 @@ export async function startSandbox({ port, registryUiPort, clean }) {
     if (!sshKey) {
         echo(chalk.blue('Generating CI SSH keypair for sandbox...'));
         await fs.ensureDir(path.dirname(CI_SSH_KEY_FILE));
-        await fs.remove(CI_SSH_KEY_FILE).catch(() => {});
-        await fs.remove(`${CI_SSH_KEY_FILE}.pub`).catch(() => {});
+        await fs.remove(CI_SSH_KEY_FILE);
+        await fs.remove(`${CI_SSH_KEY_FILE}.pub`);
         await $`ssh-keygen -q -t ed25519 -N ${''} -C sandbox-ci -f ${CI_SSH_KEY_FILE}`;
         sshKey = await readSshKey();
     }
@@ -458,13 +381,19 @@ export async function startSandbox({ port, registryUiPort, clean }) {
         echo(chalk.green('✓ ip_vs modules ready'));
     }
 
-    await writeComposeFile();
     echo(
         chalk.blue(
             `Starting sandbox environment (Dokploy server :${port}, registry UI :${registryUiPort})...`,
         ),
     );
     try {
+        await timed(
+            'build dokploy image',
+            () =>
+                $({
+                    input: DOKPLOY_DOCKERFILE,
+                })`docker build -t ${DOKPLOY_IMAGE} -`,
+        );
         await timed('compose up', () =>
             compose(
                 {
@@ -474,31 +403,16 @@ export async function startSandbox({ port, registryUiPort, clean }) {
                 },
                 'up',
                 '-d',
-                '--build',
             ),
         );
-        await timed('runner ready', () =>
-            waitFor(
-                'the runner instance daemon',
-                async () => {
-                    await $`docker exec ${RUNNER_CONTAINER} docker info`.quiet();
-                    return true;
-                },
-                { timeoutMs: 60_000 },
-            ),
+        // Overlaps with Dokploy's first-run installer.
+        await timed(
+            'build runner image',
+            () =>
+                $({
+                    input: RUNNER_DOCKERFILE,
+                })`docker build -t ${RUNNER_IMAGE} -`,
         );
-        await timed('pull job image', async () => {
-            const pull = await $({
-                stdio: 'inherit',
-                nothrow: true,
-            })`docker exec ${RUNNER_CONTAINER} docker pull ${JOB_IMAGE}`;
-            if (pull.exitCode !== 0)
-                echo(
-                    chalk.yellow(
-                        'Could not pre-pull the job image; act will pull it later.',
-                    ),
-                );
-        });
         await timed('dokploy ready', () => waitForDokploy(dokployUrl));
         if (clean && hadData) {
             // Wipes Dokploy's DB + files but keeps the inner Docker layer, so
@@ -511,7 +425,7 @@ export async function startSandbox({ port, registryUiPort, clean }) {
                     ),
                 );
                 await $`docker exec ${DOKPLOY_CONTAINER} sh -c ${DOKPLOY_RESET}`;
-                await fs.remove(DOKPLOY_APIKEY_FILE).catch(() => {});
+                await fs.remove(DOKPLOY_APIKEY_FILE);
                 echo(
                     chalk.green(
                         '✓ Dokploy state wiped — waiting for fresh startup...',
@@ -594,18 +508,17 @@ export async function startSandbox({ port, registryUiPort, clean }) {
         });
     } catch (err) {
         throw new Error(
-            `${err?.message ?? String(err)}\nInstances left running. Inspect with \`docker logs ${DOKPLOY_CONTAINER}\` or \`docker logs ${RUNNER_CONTAINER}\`, or run \`pnpm sandbox stop\` to clean up.`,
+            `${err?.message ?? String(err)}\nInstance left running. Inspect with \`docker logs ${DOKPLOY_CONTAINER}\`, or run \`pnpm sandbox stop\` to clean up.`,
         );
     }
     echo(
         chalk.cyan(
-            '\nSandbox is running (Dokploy server + GitHub runner).\nRun a workflow: `pnpm sandbox run-act`.\nStop: `pnpm sandbox stop` (keeps containers) or `pnpm sandbox stop --rm` (removes containers).',
+            '\nSandbox is running (Dokploy server). A fresh runner container is created for each `run-act`.\nRun a workflow: `pnpm sandbox run-act`.\nStop: `pnpm sandbox stop` (keeps containers) or `pnpm sandbox stop --rm` (removes containers).',
         ),
     );
 }
 
 export async function stopSandbox({ rm }) {
-    await writeComposeFile();
     if (rm) {
         echo(chalk.blue('Removing sandbox (containers + network)...'));
         await compose({}, 'down');
