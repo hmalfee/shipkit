@@ -1,7 +1,10 @@
 #!/usr/bin/env node
+import crypto from 'node:crypto';
+
 import { cancel, isCancel, select } from '@clack/prompts';
 import { $, chalk, echo, fs, os, path } from 'zx';
 
+import { timed } from '../../lib/timed.js';
 import { resolvePackagesUnder } from '../../lib/workspace.js';
 
 $.verbose = false;
@@ -15,6 +18,7 @@ const pushRefArg = args.find((a) => a.startsWith('--push-ref='));
 const pushRef = pushRefArg?.split('=').slice(1).join('=') ?? null;
 const cacheFromRefArg = args.find((a) => a.startsWith('--cache-from-ref='));
 const cacheFromRef = cacheFromRefArg?.split('=').slice(1).join('=') ?? null;
+const noPnpmSeed = args.includes('--no-pnpm-seed');
 
 try {
     await $`git rev-parse --is-inside-work-tree`.quiet();
@@ -113,9 +117,8 @@ if (envFileArg) {
     }
 }
 
-// Ensure a docker-container builder exists — required for type=registry cache and
-// cross-build --mount=type=cache persistence. Uses network=host so it can reach
-// insecure registries on 127.0.0.1 (the SSH-tunneled registry in CI).
+// Ensure a docker-container builder exists — required for type=registry cache.
+// Uses network=host so it can reach insecure registries on 127.0.0.1 (the SSH-tunneled registry in CI).
 const BUILDER_NAME = 'shipkit-builder';
 try {
     await $`docker buildx inspect ${BUILDER_NAME}`.quiet();
@@ -129,13 +132,146 @@ try {
         --bootstrap`;
 }
 
+// ── pnpm store seeding ──────────────────────────────────────────────────────
+
+// Matches `id=` on the pnpm cache mount in app Dockerfiles
+const PNPM_CACHE_ID = 'pnpm';
+const PNPM_CACHE_MOUNT = `--mount=type=cache,id=${PNPM_CACHE_ID},target=/pnpm/store,sharing=locked`;
+
+// Pre-populates the BuildKit cache mount from the host pnpm store.
+// Runs as an isolated build so it doesn't affect the app's layer cache,
+// and skips via a lockfile-hash marker if already seeded on this builder.
+async function seedPnpmCache(storeDir) {
+    const versionDir = path.basename(storeDir);
+    try {
+        const lockHash = crypto
+            .createHash('sha256')
+            .update(await fs.readFile(path.join(root, 'pnpm-lock.yaml')))
+            .digest('hex')
+            .slice(0, 16);
+
+        const header = `# syntax=docker/dockerfile:1\nFROM node:${nodeVersion}-alpine\nARG LOCK_HASH\n`;
+        const baseArgs = [
+            '--builder',
+            BUILDER_NAME,
+            '--no-cache',
+            '--build-arg',
+            `LOCK_HASH=${lockHash}`,
+            '--output',
+            'type=cacheonly',
+            '-f',
+            '-',
+        ];
+
+        // Check if cache mount is already seeded for this lockfile
+        const probeCtx = await fs.mkdtemp(
+            path.join(os.tmpdir(), 'pnpm-seed-probe-'),
+        );
+        try {
+            const probe = await $({
+                input: `${header}RUN ${PNPM_CACHE_MOUNT} test "$(cat /pnpm/store/.seeded 2>/dev/null)" = "$LOCK_HASH"\n`,
+                nothrow: true,
+                quiet: true,
+            })`docker buildx build ${baseArgs} ${probeCtx}`;
+            if (probe.exitCode === 0) {
+                echo(chalk.blue('pnpm cache mount already seeded; skipping.'));
+                return;
+            }
+        } finally {
+            await fs.rm(probeCtx, { recursive: true, force: true });
+        }
+
+        // Copy host store into the cache mount
+        echo(chalk.blue(`Seeding pnpm cache mount from ${storeDir}...`));
+        const seedDockerfile =
+            `${header}RUN ${PNPM_CACHE_MOUNT} \\\n` +
+            `    --mount=type=bind,target=/seed \\\n` +
+            `    mkdir -p /pnpm/store/${versionDir} \\\n` +
+            `    && cp -a /seed/. /pnpm/store/${versionDir}/ \\\n` +
+            `    && echo "$LOCK_HASH" > /pnpm/store/.seeded\n`;
+        await $({
+            input: seedDockerfile,
+            stdio: ['pipe', 'inherit', 'inherit'],
+        })`docker buildx build ${baseArgs} --progress=plain ${storeDir}`;
+        echo(chalk.green('pnpm cache mount seeded.'));
+    } catch (e) {
+        echo(
+            chalk.yellow(
+                `pnpm cache seed failed, continuing without it: ${e.message ?? e}`,
+            ),
+        );
+    }
+}
+
+// Checks if pnpm-lock.yaml is untracked, modified, or changed in HEAD~1
+async function lockfileChanged() {
+    const tracked =
+        await $`git -C ${root} ls-files --error-unmatch pnpm-lock.yaml`
+            .nothrow()
+            .quiet();
+    if (tracked.exitCode !== 0) return true;
+
+    const diff = await $`git -C ${root} diff --quiet HEAD~1 -- pnpm-lock.yaml`
+        .nothrow()
+        .quiet();
+    return diff.exitCode !== 0;
+}
+
+async function shouldSeedPnpm() {
+    if (noPnpmSeed) return false;
+
+    if (!(await fs.pathExists(path.join(root, 'pnpm-lock.yaml')))) {
+        echo(chalk.blue('No pnpm-lock.yaml; skipping pnpm cache seed.'));
+        return false;
+    }
+
+    if (await lockfileChanged()) {
+        echo(chalk.blue('pnpm-lock.yaml changed; seeding pnpm cache mount.'));
+        return true;
+    }
+
+    // Skip seeding if lockfile is unchanged and remote cache is available
+    for (const ref of [cacheRef, cacheFromRef].filter(Boolean)) {
+        const res = await $`docker buildx imagetools inspect ${ref}`
+            .nothrow()
+            .quiet();
+        if (res.exitCode === 0) {
+            echo(
+                chalk.blue(
+                    'pnpm-lock.yaml unchanged and registry cache is warm; skipping pnpm cache seed.',
+                ),
+            );
+            return false;
+        }
+    }
+    echo(chalk.yellow('Registry cache is cold; seeding pnpm store anyway.'));
+    return true;
+}
+
+if (await shouldSeedPnpm()) {
+    const major = `v${pnpmVersion.split('.')[0]}`;
+    let storeDir = null;
+    try {
+        const p = (await $`pnpm store path --silent`.quiet()).stdout.trim();
+        const dir = path.basename(p) === major ? p : path.join(p, major);
+        if ((await fs.pathExists(dir)) && (await fs.readdir(dir)).length > 0)
+            storeDir = dir;
+    } catch {}
+    if (storeDir) await timed('pnpm cache seed', () => seedPnpmCache(storeDir));
+    else
+        echo(
+            chalk.yellow(
+                'Could not locate active pnpm store; skipping cache seed.',
+            ),
+        );
+}
+
 try {
     const secretArgs = envFilePath
         ? ['--secret', `id=env_build,src=${envFilePath}`]
         : [];
     let envHashArgs = [];
     if (envFilePath) {
-        const crypto = await import('crypto');
         const content = await fs.readFile(envFilePath, 'utf8');
         const hash = crypto.createHash('sha256').update(content).digest('hex');
         envHashArgs = ['--build-arg', `ENV_HASH=${hash}`];
@@ -149,21 +285,19 @@ try {
                   ? ['--cache-from', `type=registry,ref=${cacheFromRef}`]
                   : []),
               '--cache-to',
-              `type=registry,ref=${cacheRef},mode=max`,
+              `type=registry,ref=${cacheRef},mode=max,compression=zstd,compression-level=3`,
           ]
         : [];
     echo(chalk.blue(`Packaging build context for ${appName}...`));
 
-    const files = (
-        await $`git -C ${root} ls-files -c -o --exclude-standard`
-    ).stdout
-        .trim()
-        .split('\n')
-        .filter((f) => f && fs.existsSync(path.join(root, f)));
+    const files = await timed('context file listing', async () =>
+        (await $`git -C ${root} ls-files -c -o --exclude-standard`).stdout
+            .trim()
+            .split('\n')
+            .filter((f) => f && fs.existsSync(path.join(root, f))),
+    );
 
-    // Build context breakdown by top-level path — cheap insurance against
-    // silent bloat (e.g. a store-dir or cache folder landing in the repo
-    // and slipping past .gitignore).
+    // Report top-level directory sizes in build context to spot unexpected bloat
     const dirSizes = {};
     for (const f of files) {
         let size = 0;
@@ -183,43 +317,49 @@ try {
     let fallbackToCopy = false;
     try {
         echo(chalk.blue(`Creating clean working tree in ${tmp}...`));
-        for (const f of files) {
-            const src = path.join(root, f);
-            const dest = path.join(tmp, f);
-            await fs.ensureDir(path.dirname(dest));
-            try {
-                if (!fallbackToCopy) await fs.link(src, dest);
-                else await fs.copy(src, dest);
-            } catch (e) {
-                if (e.code === 'EXDEV') {
-                    fallbackToCopy = true;
-                    await fs.copy(src, dest);
-                } else throw e;
+        await timed('context packaging', async () => {
+            for (const f of files) {
+                const src = path.join(root, f);
+                const dest = path.join(tmp, f);
+                await fs.ensureDir(path.dirname(dest));
+                try {
+                    if (!fallbackToCopy) await fs.link(src, dest);
+                    else await fs.copy(src, dest);
+                } catch (e) {
+                    if (e.code === 'EXDEV') {
+                        fallbackToCopy = true;
+                        await fs.copy(src, dest);
+                    } else throw e;
+                }
             }
-        }
+        });
 
         echo(chalk.green(`Running docker buildx build for ${appName}...`));
-        // If --push-ref given: stream directly to registry (skips local daemon load/decompress/recompress).
-        // Otherwise: load into local daemon for manual tagging/pushing.
+        // Stream directly to registry if --push-ref is provided; otherwise load locally
         const outputArgs = pushRef
             ? ['--push', '-t', pushRef]
             : ['--load', '-t', appName];
 
-        await $({
-            cwd: tmp,
-            stdio: 'inherit',
-        })`docker buildx build \
-            --builder ${BUILDER_NAME} \
-            --build-arg NODE_VERSION=${nodeVersion} \
-            --build-arg PNPM_VERSION=${pnpmVersion} \
-            --build-arg TURBO_VERSION=${turboVersion.replace('^', '').replace('~', '')} \
-            --build-arg APP_NAME=${appName} \
-            ${envHashArgs} \
-            ${secretArgs} \
-            ${cacheArgs} \
-            ${outputArgs} \
-            -f ${dockerfilePath} \
-            .`;
+        await timed(
+            'docker buildx build',
+            () =>
+                $({
+                    cwd: tmp,
+                    stdio: 'inherit',
+                })`docker buildx build \
+                --builder ${BUILDER_NAME} \
+                --progress plain \
+                --build-arg NODE_VERSION=${nodeVersion} \
+                --build-arg PNPM_VERSION=${pnpmVersion} \
+                --build-arg TURBO_VERSION=${turboVersion.replace('^', '').replace('~', '')} \
+                --build-arg APP_NAME=${appName} \
+                ${envHashArgs} \
+                ${secretArgs} \
+                ${cacheArgs} \
+                ${outputArgs} \
+                -f ${dockerfilePath} \
+                .`,
+        );
     } finally {
         await fs.rm(tmp, { recursive: true, force: true });
     }

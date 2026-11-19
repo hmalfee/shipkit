@@ -6,7 +6,7 @@ A wrapper around `docker build` that ensures a clean working tree and automatica
 
 <!-- prettier-ignore -->
 ```sh
-pnpm docker-build [<app-name>] [--build-env-file=<path>] [--cache-ref=<image-ref>] [--push-ref=<image-ref>] [--cache-from-ref=<image-ref>]
+pnpm docker-build [<app-name>] [--build-env-file=<path>] [--cache-ref=<image-ref>] [--push-ref=<image-ref>] [--cache-from-ref=<image-ref>] [--no-pnpm-seed]
 ```
 
 ## Arguments
@@ -24,6 +24,7 @@ pnpm docker-build [<app-name>] [--build-env-file=<path>] [--cache-ref=<image-ref
 - `--cache-from-ref`: _(Optional)_ Additional read-only registry cache source (e.g. the `main` branch cache).
     - Used as a warm-up fallback when the branch-specific cache is cold (e.g. a new feature branch).
     - Example: `--cache-from-ref=registry.example.com/myapp/web:buildcache-main`
+- `--no-pnpm-seed`: _(Optional)_ Disables pnpm cache mount seeding entirely. Without it, seeding is automatic (see below).
 
 ## How it works
 
@@ -37,6 +38,12 @@ pnpm docker-build [<app-name>] [--build-env-file=<path>] [--cache-ref=<image-ref
     - `--build-arg TURBO_VERSION` (extracted from the root `package.json` devDependencies field)
     - `--build-arg APP_NAME` (the app name being built)
     - `--build-arg ENV_HASH` (SHA-256 of the env file, when `--build-env-file` is provided — invalidates cached layers when env changes)
+
+### pnpm store seeding
+
+Before building, `docker-build` automatically seeds the builder's cache mount from your host's pnpm store when dependencies change or when the remote build cache is cold. This avoids re-downloading packages during container builds, and skips automatically when already cached.
+
+To use the seeded store, your Dockerfile must use `id=pnpm` on its cache mount (e.g. `--mount=type=cache,id=pnpm,target=/pnpm/store`).
 
 ## Writing a Dockerfile for this script
 
@@ -56,6 +63,10 @@ ARG PNPM_VERSION
 ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 RUN npm install -g "pnpm@${PNPM_VERSION}"
+
+# To use the seeded pnpm store cache:
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store,sharing=locked \
+    pnpm install --store-dir=/pnpm/store
 
 # To use the optional build environment secret:
 RUN --mount=type=secret,id=env_build,target=/tmp/.env.build \

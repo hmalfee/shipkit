@@ -28,11 +28,13 @@ WORKDIR /app
 # better-sqlite3 requires Python and build tools to compile native addons
 RUN apk add --no-cache python3 make g++
 COPY --from=pruner /app/out/json/ .
-# Local cache mount: no-op in ephemeral CI runners, speeds up repeated local builds
-RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
+# Shared pnpm store cache mount (requires id=pnpm to match docker-build seeding)
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store,sharing=locked \
     pnpm install \
+    --store-dir=/pnpm/store \
     --frozen-lockfile \
     --network-concurrency=64 \
+    --prefer-offline \
     --config.trustLockfile=true \
     --config.audit=false
 

@@ -19,35 +19,29 @@ jobs:
               with:
                   fetch-depth: 0 # Fetches all history for all branches and tags
 
-            - name: Read versions from package.json
-              id: versions
-              run: |
-                  echo "node=$(jq -r '.engines.node | split(".")[0]' package.json)" >> $GITHUB_OUTPUT
-                  echo "pnpm=$(jq -r '.packageManager | split("@")[1]' package.json)" >> $GITHUB_OUTPUT
-                  echo "turbo=$(jq -r '.devDependencies.turbo' package.json)" >> $GITHUB_OUTPUT
-
             - uses: pnpm/action-setup@v6
-              with:
-                  version: ${{ steps.versions.outputs.pnpm }}
-
-            - name: Configure pnpm store
-              run: pnpm config set store-dir ~/.local/share/pnpm/store
 
             - uses: actions/setup-node@v7
               with:
-                  node-version: ${{ steps.versions.outputs.node }}
+                  node-version-file: package.json
                   cache: pnpm
 
-            - name: Install dependencies
+            - name: Fetch all dependencies into the store
+              run: >
+                  pnpm fetch
+                  --config.supportedArchitectures='{"os":["linux"],"cpu":["x64"],"libc":["glibc","musl"]}'
+                  --config.trustLockfile=true
+
+            - name: Install dependencies (offline)
               run: >
                   pnpm install
-                  --filter shipkit... 
-                  --filter @shipkit/db... 
-                  --frozen-lockfile 
-                  --ignore-scripts 
-                  --config.trustLockfile=true 
-                  --config.audit=false 
-                  --network-concurrency=64
+                  --filter shipkit...
+                  --filter @shipkit/db...
+                  --offline
+                  --frozen-lockfile
+                  --ignore-scripts
+                  --config.trustLockfile=true
+                  --config.audit=false
 
             - name: Detect affected apps
               id: detect
@@ -176,7 +170,7 @@ jobs:
                       TAG="${{ github.sha }}-${{ github.ref_name }}"
                       PUSH_IMAGE="${REG_HOST}/shipkit/${app}:${TAG}"
                       CACHE_REF="${REG_HOST}/shipkit/${app}:buildcache-${{ github.ref_name }}"
-                      
+
                       # Fall back to main's cache on non-main branches if branch cache is cold
                       CACHE_FROM_MAIN_ARG=""
                       if [ "${{ github.ref_name }}" != "main" ]; then

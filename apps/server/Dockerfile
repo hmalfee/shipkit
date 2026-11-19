@@ -25,11 +25,13 @@ RUN turbo prune ${APP_NAME} --docker
 FROM base AS installer
 WORKDIR /app
 COPY --from=pruner /app/out/json/ .
-# Local cache mount: no-op in ephemeral CI runners, speeds up repeated local builds
-RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
+# Shared pnpm store cache mount (requires id=pnpm to match docker-build seeding)
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store,sharing=locked \
     pnpm install \
+    --store-dir=/pnpm/store \
     --frozen-lockfile \
     --network-concurrency=64 \
+    --prefer-offline \
     --config.trustLockfile=true \
     --config.audit=false
 
