@@ -11,13 +11,14 @@ import {
     DOKPLOY_HOST,
     getOrCreateApiKey,
     loadSshKey,
-    RUNNER_CACHE_VOLUME,
+    RUNNER_ACTION_CACHE_VOLUME,
     RUNNER_IMAGE,
+    RUNNER_TOOL_CACHE_VOLUME,
     SANDBOX_NETWORK,
 } from './sandbox.js';
 
 const WORKFLOWS_DIR = '.github/workflows';
-// Where the runner keeps actions/cache artifacts (backed by RUNNER_CACHE_VOLUME).
+// Where the runner keeps actions/cache artifacts (backed by RUNNER_ACTION_CACHE_VOLUME).
 const CACHE_DIR = '/act-cache';
 
 /**
@@ -236,6 +237,11 @@ tar -xf - --no-same-owner
 dockerd --storage-driver=fuse-overlayfs >/var/log/dockerd.log 2>&1 &
 timeout 60 sh -c 'until docker info >/dev/null 2>&1; do sleep 1; done' \\
   || { echo "dockerd failed to start:" >&2; cat /var/log/dockerd.log >&2; exit 1; }
+if [ -d /opt/docker-images ]; then
+  for tar in /opt/docker-images/*.tar; do
+    [ -f "$tar" ] && docker load -i "$tar"
+  done
+fi
 exec act "$@"
 `;
     const actArgs = [
@@ -271,7 +277,8 @@ exec act "$@"
     })`docker run --rm -i --init --privileged \
         --network ${SANDBOX_NETWORK} \
         -w /workspace \
-        -v ${RUNNER_CACHE_VOLUME}:${CACHE_DIR} \
+        -v ${RUNNER_ACTION_CACHE_VOLUME}:${CACHE_DIR} \
+        -v ${RUNNER_TOOL_CACHE_VOLUME}:/root/.cache/act \
         -e REF=${ref ?? ''} \
         ${RUNNER_IMAGE} bash -c ${script} runner ${actArgs}`;
 

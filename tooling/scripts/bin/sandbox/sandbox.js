@@ -1,3 +1,5 @@
+import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -5,6 +7,14 @@ import { $, chalk, echo, fs, sleep, spinner } from 'zx';
 
 import { dokploy as dp } from '../../lib/dokploy/index.js';
 import { timed } from '../../lib/timed.js';
+
+const repoRoot = execFileSync('git', ['rev-parse', '--show-toplevel'], {
+    encoding: 'utf8',
+}).trim();
+const { packageManager = '' } = JSON.parse(
+    readFileSync(path.join(repoRoot, 'package.json'), 'utf8'),
+);
+const PNPM_VERSION = packageManager.replace(/^pnpm@/, '') || 'latest';
 
 // Ports
 export const DEFAULT_DOKPLOY_PORT = 3000;
@@ -24,7 +34,13 @@ const DOKPLOY_APIKEY_FILE = path.join(os.tmpdir(), 'dokploy-server.apikey');
 
 // Runner image: an ephemeral container per `run-act`, not managed by compose.
 export const RUNNER_IMAGE = 'shipkit/runner:local';
-export const RUNNER_CACHE_VOLUME = `${SANDBOX_PROJECT}_runner-cache`;
+// Persists actions/cache artifacts across ephemeral runs.
+export const RUNNER_ACTION_CACHE_VOLUME = `${SANDBOX_PROJECT}_runner-action-cache`;
+// Persists act's tool cache (node binary, cloned actions) across ephemeral runs.
+export const RUNNER_TOOL_CACHE_VOLUME = `${SANDBOX_PROJECT}_runner-tool-cache`;
+// Images pre-baked into the runner image filesystem and loaded into the inner
+// dockerd on startup. Avoids remote pulls while keeping the runner ephemeral.
+const RUNNER_PREBAKED_IMAGES = ['moby/buildkit:buildx-stable-1'];
 
 // Runner → Dokploy SSH keypair: generated once, stored in the user cache.
 const CI_SSH_KEY_FILE = path.join(
@@ -51,15 +67,26 @@ RUN apk upgrade --no-cache \\
  && sed -i 's/^AllowTcpForwarding no/AllowTcpForwarding yes/g' /etc/ssh/sshd_config
 `;
 
+const PREBAKED_IMAGES_CMD = RUNNER_PREBAKED_IMAGES.length
+    ? ` && mkdir -p /opt/docker-images \\\n` +
+      RUNNER_PREBAKED_IMAGES.map(
+          (img) =>
+              ` && echo "Pre-baking ${img} into runner image..." \\\n` +
+              ` && skopeo copy docker://${img} docker-archive:/opt/docker-images/${img.replace(/[/:]/g, '_')}.tar:${img}`,
+      ).join(' \\\n')
+    : '';
+
 // Runner: catthehacker's ubuntu-latest lookalike plus act and a DinD-capable
 // storage driver. act runs in -self-hosted mode on this container's own fs.
 const RUNNER_DOCKERFILE = `FROM catthehacker/ubuntu:act-latest
 RUN curl -sSL "https://github.com/nektos/act/releases/download/v0.2.94/act_Linux_$(uname -m | sed s/aarch64/arm64/).tar.gz" \\
     | tar -xz -C /usr/local/bin act \\
  && apt-get update -qq \\
- && apt-get install -y --no-install-recommends fuse3 fuse-overlayfs \\
+ && apt-get install -y --no-install-recommends fuse3 fuse-overlayfs skopeo \\
  && rm -rf /var/lib/apt/lists/* \\
- && git config --global --add safe.directory '*'
+ && git config --global --add safe.directory '*' \\
+ && corepack enable \\
+ && corepack install -g pnpm@${PNPM_VERSION}${PREBAKED_IMAGES_CMD}
 `;
 
 // The host ports are injected through DOKPLOY_PORT and

@@ -93,9 +93,12 @@ pnpm sandbox stop --rm
 | `--secret KEY=VALUE`      | _none_              | Set an individual secret                                                                                                                          |
 
 > [!NOTE]
-> **`actions/cache` persistence**: The `runner-cache` Docker volume (`/act-cache` inside the runner) stores `actions/cache` artifacts and persists across runs and sandbox restarts. To clear it: `docker volume rm shipkit-sandbox_runner-cache`.
+> **Cache persistence**:
 >
-> Note that the inner Docker layer and buildx builder are cold on every run (no persistent `runner-data` volume).
+> - **`actions/cache`**: Stored in the `runner-action-cache` volume (`/act-cache` inside the runner). To clear: `docker volume rm shipkit-sandbox_runner-action-cache`.
+> - **Tool cache**: Stored in the `runner-tool-cache` volume (`/root/.cache/act` inside the runner). To clear: `docker volume rm shipkit-sandbox_runner-tool-cache`.
+>
+> Note that the inner Docker layer and buildx builder are cold on every run (no persistent Docker data volume).
 
 ---
 
